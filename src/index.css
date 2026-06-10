@@ -1,0 +1,64 @@
+:root {
+  --bg: #f7f9f8;
+  --surface: #ffffff;
+  --surface-muted: #f1f4f3;
+  --ink: #11191d;
+  --text: #364246;
+  --muted: #6f7d80;
+  --border: #dce3e1;
+  --border-strong: #c6d0cd;
+  --teal: #008476;
+  --blue: #386c8f;
+  --green: #3f7d56;
+  --amber: #b17018;
+  --red: #b5483e;
+  --display: 'Aptos Display', 'Segoe UI Variable Display', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Aptos', 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'SFMono-Regular', 'Cascadia Mono', 'Roboto Mono', Consolas, monospace;
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--bg);
+}
+
+body {
+  min-width: 320px;
+  min-height: 100svh;
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgba(0, 132, 118, 0.25);
+  outline-offset: 2px;
+}
+
+button,
+label {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: #f8fbfa;
+  background: var(--teal);
+}
