@@ -54,6 +54,24 @@ npm run package:win:dir
 
 Windows artifacts are written to `release/`.
 
+## macOS Build
+
+Build the universal macOS desktop package for Apple Silicon and Intel Macs:
+
+```bash
+npm run package:mac
+```
+
+Build an unpacked macOS app directory, which is useful for quick packaging checks:
+
+```bash
+npm run package:mac:dir
+```
+
+macOS artifacts are written to `release/`.
+
+Production macOS distribution should use Apple Developer ID signing and notarization. Unsigned local builds may trigger Gatekeeper warnings.
+
 ## Checks
 
 ```bash
