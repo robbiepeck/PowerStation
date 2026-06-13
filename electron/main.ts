@@ -1,6 +1,10 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import { loadState } from './config.js'
+import { registerIpc } from './ipc.js'
+import { startTelemetry, stopTelemetry } from './telemetry.js'
+import { unloadModel } from './llm.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
@@ -26,6 +30,14 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
+    startTelemetry((snapshot) => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('telemetry:update', snapshot)
+    })
+  })
+
+  mainWindow.on('closed', () => {
+    stopTelemetry()
+    mainWindow = null
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -43,7 +55,9 @@ function createMainWindow() {
 
 app.setAppUserModelId('com.powerstation.desktop')
 
-void app.whenReady().then(() => {
+void app.whenReady().then(async () => {
+  await loadState()
+  registerIpc(() => mainWindow)
   createMainWindow()
 
   app.on('activate', () => {
@@ -57,4 +71,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  stopTelemetry()
+  void unloadModel()
 })

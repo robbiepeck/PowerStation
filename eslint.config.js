@@ -25,4 +25,10 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  {
+    files: ['src/ui.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 ])
