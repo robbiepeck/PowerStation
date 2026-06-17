@@ -210,7 +210,6 @@ export function MonitorView({
 export function ModelsView({
   device,
   download,
-  isElectron,
   models,
   onAddFolder,
   onDelete,
@@ -224,7 +223,6 @@ export function ModelsView({
 }: {
   device: DeviceInfo | null
   download: DownloadState
-  isElectron: boolean
   models: ModelInfo[]
   onAddFolder: () => void
   onDelete: (model: ModelInfo) => void
@@ -334,21 +332,17 @@ export function ModelsView({
                   <Badge tone="neutral">{formatBytes(model.sizeBytes)}</Badge>
                 </div>
                 <div className="model-row-actions">
-                  {isElectron ? (
-                    <button className="ghost-button" type="button" title="Reveal in file manager" onClick={() => onReveal(model)}>
-                      Reveal
-                    </button>
-                  ) : null}
+                  <button className="ghost-button" type="button" title="Reveal in file manager" onClick={() => onReveal(model)}>
+                    Reveal
+                  </button>
                   {model.source === 'imported' ? (
                     <button className="ghost-button" type="button" title="Remove from list" onClick={() => onRemove(model)}>
                       Remove
                     </button>
                   ) : null}
-                  {isElectron ? (
-                    <button className="ghost-button danger" type="button" title="Delete file from disk" onClick={() => onDelete(model)}>
-                      <Trash2 size={13} />
-                    </button>
-                  ) : null}
+                  <button className="ghost-button danger" type="button" title="Delete file from disk" onClick={() => onDelete(model)}>
+                    <Trash2 size={13} />
+                  </button>
                 </div>
               </div>
             )

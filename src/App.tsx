@@ -12,7 +12,7 @@ import {
   Square,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { getDesktop, isElectron } from './desktop'
+import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
 import { ModelsView, MonitorView, SettingsView } from './views'
 import type { DownloadState, MetricSeries } from './views'
@@ -351,7 +351,6 @@ function App() {
             <ModelsView
               device={device}
               download={download}
-              isElectron={isElectron}
               models={models}
               onAddFolder={handleAddFolder}
               onDelete={handleDelete}

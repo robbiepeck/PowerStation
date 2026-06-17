@@ -1,16 +1,16 @@
 # PowerStation
 
-PowerStation is a desktop GUI for running an open-source local model with visible compute, memory, and power pressure. The current build is an Electron + React MVP with a mock model adapter and simulated host telemetry so the interface can be developed before the base model is selected.
+PowerStation is a Mac and Windows desktop GUI for running an open-source local model with visible compute, memory, and power pressure. The app is Electron-based and requires the desktop host bridge for local model inference, model file access, and host telemetry.
 
 ## Current Surface
 
-- Workbench with runtime start/stop, prompt composer, local conversation state, and mock response generation.
+- Workbench with local prompt composer, conversation state, and streamed local model responses.
 - Runtime guardrails for memory budget, compute cap, context window, auto unload, and low power bias.
-- Resource monitor with live simulated CPU, RAM, GPU, VRAM, power draw, thermal headroom, prompt load, and tokens/sec.
+- Resource monitor with desktop host CPU, RAM, GPU/VRAM where available, estimated power draw, thermal headroom, and tokens/sec.
 - Model registry for adapter templates and future model selection.
 - Settings screen for safety profile controls.
-- Electron desktop shell with a secure preload bridge for future host metrics and model controls.
-- Responsive renderer layout that still works in a browser during development.
+- Electron desktop shell with a secure preload bridge for host metrics and model controls.
+- No browser/web version is supported.
 
 ## Development
 
@@ -18,18 +18,6 @@ Install dependencies:
 
 ```bash
 npm install
-```
-
-Run the renderer in a browser:
-
-```bash
-npm run dev
-```
-
-The local app runs through Vite. By default:
-
-```bash
-http://127.0.0.1:5173/
 ```
 
 Run the desktop app in development:
@@ -83,11 +71,10 @@ npm run lint
 
 The model and telemetry behavior are intentionally isolated as adapter-shaped frontend logic for now:
 
-- `useSimulatedTelemetry` should be replaced by a host metrics bridge when the local backend is added.
-- `modelProfiles` should be replaced or hydrated by the selected open-source model and runtime metadata.
-- `makeMockReply` is the current model-response adapter boundary and should become a streaming local inference adapter.
 - `electron/preload.cjs` is the controlled bridge between the renderer and desktop host capabilities.
-- Runtime limits are represented in UI state and should be enforced by the backend controller once attached.
+- `electron/llm.ts` owns the local GGUF runtime through `node-llama-cpp`.
+- `electron/telemetry.ts` samples desktop host telemetry through `systeminformation` and `node-llama-cpp` where available.
+- Runtime limits are represented in UI state and should be enforced by the backend controller.
 
 ## Design
 
