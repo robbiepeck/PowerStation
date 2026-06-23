@@ -49,6 +49,19 @@ export type DownloadProgress = { id: string; totalSize: number; downloadedSize: 
 export type DownloadDone = { id: string; filePath: string }
 export type DownloadError = { id: string; message: string }
 
+export type UpdateState = {
+  phase: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
+  currentVersion: string
+  latestVersion?: string
+  releaseName?: string
+  message?: string
+  progressPct?: number
+  transferredBytes?: number
+  totalBytes?: number
+  bytesPerSecond?: number
+  lastCheckedAt?: number
+}
+
 export type Unsubscribe = () => void
 
 export type PowerStationBridge = {
@@ -83,6 +96,12 @@ export type PowerStationBridge = {
   telemetry: { onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe }
   settings: { get: () => Promise<Settings>; update: (patch: Partial<Settings>) => Promise<Settings> }
   device: { info: () => Promise<DeviceInfo> }
+  updates: {
+    getState: () => Promise<UpdateState>
+    check: () => Promise<UpdateState>
+    installLatest: () => Promise<UpdateState>
+    onState: (callback: (state: UpdateState) => void) => Unsubscribe
+  }
 }
 
 export type MessageRole = 'user' | 'assistant'

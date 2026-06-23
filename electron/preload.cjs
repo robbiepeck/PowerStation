@@ -43,4 +43,10 @@ contextBridge.exposeInMainWorld('powerStation', {
   device: {
     info: () => ipcRenderer.invoke('device:info'),
   },
+  updates: {
+    getState: () => ipcRenderer.invoke('updates:getState'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    installLatest: () => ipcRenderer.invoke('updates:installLatest'),
+    onState: (callback) => subscribe('updates:state', callback),
+  },
 })
