@@ -12,6 +12,12 @@ PowerStation is a Mac and Windows desktop GUI for running an open-source local m
 - Electron desktop shell with a secure preload bridge for host metrics and model controls.
 - No browser/web version is supported.
 
+## Download
+
+- [Download PowerStation for macOS Apple Silicon](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.0/PowerStation-0.0.0-macOS-arm64.dmg)
+
+This first macOS build is unsigned, so macOS may show a Gatekeeper warning on first launch.
+
 ## Development
 
 Install dependencies:
