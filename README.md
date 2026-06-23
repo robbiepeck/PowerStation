@@ -14,7 +14,7 @@ PowerStation is a Mac and Windows desktop GUI for running an open-source local m
 
 ## Download
 
-- [Download PowerStation for macOS Apple Silicon](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.0/PowerStation-0.0.0-macOS-arm64.dmg)
+- [Download PowerStation for macOS Apple Silicon](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.1/PowerStation-0.0.1-macOS-arm64.dmg)
 
 This first macOS build is unsigned, so macOS may show a Gatekeeper warning on first launch.
 
