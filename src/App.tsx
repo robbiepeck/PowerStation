@@ -419,6 +419,8 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
   if (!state || state.phase === 'idle' || state.phase === 'unsupported' || state.phase === 'checking') return null
 
   const downloading = state.phase === 'downloading'
+  const configurationError =
+    state.phase === 'error' && Boolean(state.message?.match(/private|release feed|update metadata/i))
   const label =
     state.phase === 'available'
       ? state.latestVersion
@@ -427,7 +429,9 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
       : state.phase === 'downloaded'
         ? 'Restart to update'
         : state.phase === 'error'
-          ? 'Retry update'
+          ? configurationError
+            ? 'Updates unavailable'
+            : 'Retry update'
           : `Updating ${Math.round(state.progressPct ?? 0)}%`
 
   return (
@@ -435,7 +439,7 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
       className={`update-button ${state.phase}`}
       type="button"
       onClick={onUpdate}
-      disabled={downloading}
+      disabled={downloading || configurationError}
       title={state.message ?? (state.latestVersion ? `Latest version ${state.latestVersion}` : undefined)}
     >
       {downloading ? <LoaderCircle className="spin-icon" size={15} /> : <Download size={15} />}
