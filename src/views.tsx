@@ -2,6 +2,9 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   AlertTriangle,
+  BadgeCheck,
+  BookOpenCheck,
+  Code2,
   Cpu,
   Database,
   Download,
@@ -15,6 +18,7 @@ import {
   Trash2,
   Zap,
 } from 'lucide-react'
+import { STARTER_MODELS, type StarterModel } from './modelCatalog'
 import type { DeviceInfo, ModelInfo, Settings, TelemetrySnapshot } from './types'
 import {
   Badge,
@@ -38,6 +42,131 @@ export type DownloadState = {
   downloadedSize: number
   error?: string
 } | null
+
+function starterIcon(model: StarterModel) {
+  if (model.tone === 'compact') return Zap
+  if (model.tone === 'code') return Code2
+  if (model.tone === 'strong') return Cpu
+  return BookOpenCheck
+}
+
+export function StarterModelCatalog({
+  download,
+  onDownload,
+  onManageModels,
+  variant = 'models',
+}: {
+  download: DownloadState
+  onDownload: (uri: string) => void
+  onManageModels?: () => void
+  variant?: 'models' | 'welcome'
+}) {
+  const downloadingUri = download?.uri
+  const downloadPct = download && download.totalSize ? (download.downloadedSize / download.totalSize) * 100 : 0
+
+  return (
+    <section className={`starter-catalog ${variant}`}>
+      <div className="starter-catalog-head">
+        <span>Starter models</span>
+        <h2>{variant === 'welcome' ? 'Download a local model to begin' : 'Download from PowerStation'}</h2>
+        <p>
+          Pick a GGUF model and PowerStation will download it into the local model folder, import it, and select it for
+          chat when the download completes.
+        </p>
+      </div>
+
+      <div className="starter-grid">
+        {STARTER_MODELS.map((model) => {
+          const Icon = starterIcon(model)
+          const active = downloadingUri === model.uri
+          const disabled = Boolean(download) && !download?.error
+          const failed = active && Boolean(download?.error)
+          const label = active && !download?.error ? 'Downloading' : failed ? 'Retry download' : 'Download'
+
+          return (
+            <article className={`starter-card ${model.tone}`} key={model.id}>
+              <div className="starter-card-top">
+                <span className="starter-icon" aria-hidden="true">
+                  <Icon size={18} />
+                </span>
+                <div>
+                  <h3>{model.name}</h3>
+                  <p>{model.bestFor}</p>
+                </div>
+              </div>
+
+              <div className="starter-specs" aria-label={`${model.name} specs`}>
+                <span>{model.parameters}</span>
+                <span>{model.quantization}</span>
+                <span>{model.downloadSize}</span>
+                <span>{model.recommendedMemory}</span>
+                <span>{model.license}</span>
+              </div>
+
+              <div className="starter-tradeoffs">
+                <div>
+                  <strong>Pros</strong>
+                  <ul>
+                    {model.pros.map((item) => (
+                      <li key={item}>
+                        <BadgeCheck size={13} />
+                        {item}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <strong>Cons</strong>
+                  <ul>
+                    {model.cons.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {active ? (
+                <div className="starter-download-status">
+                  {download?.error ? (
+                    <p className="error-text">{download.error}</p>
+                  ) : (
+                    <>
+                      <div className="download-progress-head">
+                        <span>{label}</span>
+                        <strong>
+                          {formatBytes(download?.downloadedSize ?? 0)} / {formatBytes(download?.totalSize ?? 0)}
+                        </strong>
+                      </div>
+                      <div className="meter-track medium">
+                        <span style={{ width: `${clamp(downloadPct, 2, 100)}%` }} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+
+              <button
+                className="primary-button starter-download"
+                type="button"
+                disabled={disabled && !failed}
+                onClick={() => onDownload(model.uri)}
+              >
+                <Download size={15} />
+                {disabled && !active ? 'Download running' : label}
+              </button>
+            </article>
+          )
+        })}
+      </div>
+
+      {onManageModels ? (
+        <button className="secondary-button starter-manage" type="button" onClick={onManageModels}>
+          Import a local file instead
+        </button>
+      ) : null}
+    </section>
+  )
+}
 
 function LargeChart({ label, series, value, note }: { label: string; series: number[]; value: string; note?: ReactNode }) {
   return (
@@ -249,6 +378,8 @@ export function ModelsView({
           </button>
         }
       />
+
+      <StarterModelCatalog download={download} onDownload={onDownload} />
 
       <div className="model-actions">
         <button className="secondary-button" type="button" onClick={onImportFile}>

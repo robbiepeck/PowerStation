@@ -16,7 +16,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
-import { ModelsView, MonitorView, SettingsView } from './views'
+import { ModelsView, MonitorView, SettingsView, StarterModelCatalog } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { CopyButton, formatNumber } from './ui'
 import type { ChatStatusPayload, ChatTurn, DeviceInfo, ModelInfo, Settings, TelemetrySnapshot, UpdateState } from './types'
@@ -253,6 +253,7 @@ function App() {
   const { installLatest, updateState } = useUpdates()
   const chat = useChat()
   const [download, setDownload] = useState<DownloadState>(null)
+  const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
 
@@ -264,9 +265,13 @@ function App() {
           : { id: payload.id, uri: '', totalSize: payload.totalSize, downloadedSize: payload.downloadedSize },
       )
     })
-    const offDone = bridge.models.onDownloadDone(() => {
+    const offDone = bridge.models.onDownloadDone((payload) => {
       setDownload(null)
-      void refresh()
+      void (async () => {
+        await select(payload.filePath)
+        resetChat()
+        await refresh()
+      })()
     })
     const offError = bridge.models.onDownloadError((payload) => {
       setDownload((current) => (current ? { ...current, error: payload.message } : current))
@@ -276,7 +281,7 @@ function App() {
       offDone()
       offError()
     }
-  }, [refresh])
+  }, [refresh, resetChat, select])
 
   const handleSelectModel = useCallback(
     async (path: string | null) => {
@@ -367,8 +372,10 @@ function App() {
         {activeView === 'chat' && (
           <ChatView
             device={device}
+            download={download}
             messages={chat.messages}
             models={models}
+            onDownload={handleDownload}
             onManageModels={() => setActiveView('models')}
             onNewChat={chat.reset}
             onSelectModel={handleSelectModel}
@@ -441,8 +448,10 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
 
 function ChatView({
   device,
+  download,
   messages,
   models,
+  onDownload,
   onManageModels,
   onNewChat,
   onSelectModel,
@@ -453,8 +462,10 @@ function ChatView({
   streaming,
 }: {
   device: DeviceInfo | null
+  download: DownloadState
   messages: ChatTurn[]
   models: ModelInfo[]
+  onDownload: (uri: string) => void
   onManageModels: () => void
   onNewChat: () => void
   onSelectModel: (path: string) => void
@@ -499,26 +510,17 @@ function ChatView({
 
       <div className="chat-scroll">
         {messages.length === 0 ? (
-          <div className="chat-welcome">
-            <div className="welcome-glyph">
-              <Sparkles size={26} />
+          hasModels ? (
+            <div className="chat-welcome">
+              <div className="welcome-glyph">
+                <Sparkles size={26} />
+              </div>
+              <h1>Chat with {selectedModel ? selectedModel.name : 'a local model'}</h1>
+              <p>Runs entirely on this machine. Your prompts never leave the device.</p>
             </div>
-            {hasModels ? (
-              <>
-                <h1>Chat with {selectedModel ? selectedModel.name : 'a local model'}</h1>
-                <p>Runs entirely on this machine. Your prompts never leave the device.</p>
-              </>
-            ) : (
-              <>
-                <h1>Add a local model to get started</h1>
-                <p>Import a GGUF file you've downloaded or fetch one from Hugging Face, then start chatting offline.</p>
-                <button className="primary-button" type="button" onClick={onManageModels}>
-                  <BrainCircuit size={15} />
-                  Manage models
-                </button>
-              </>
-            )}
-          </div>
+          ) : (
+            <StarterModelCatalog download={download} onDownload={onDownload} onManageModels={onManageModels} variant="welcome" />
+          )
         ) : (
           <div className="message-column">
             {messages.map((message) => (
