@@ -39,6 +39,17 @@ function setState(patch: Partial<UpdateState>, getWindow?: () => BrowserWindow |
   return state
 }
 
+function formatUpdateError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('releases.atom') && message.includes('404')) {
+    return 'PowerStation could not reach the GitHub release feed. This usually means the update repository or release assets are private. Publish releases from a public repository or configure an authenticated updater.'
+  }
+  if (message.includes('latest-mac.yml') && message.includes('404')) {
+    return 'PowerStation found a release, but the macOS update metadata is missing. Upload latest-mac.yml from Electron Builder to the GitHub Release.'
+  }
+  return message.split('\n')[0] || 'Update check failed.'
+}
+
 async function checkForUpdates(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
   if (!app.isPackaged) return setState({ phase: 'unsupported' }, getWindow)
   setState({ phase: 'checking', message: undefined }, getWindow)
@@ -104,19 +115,33 @@ export function registerUpdateIpc(getWindow: () => BrowserWindow | null): void {
 
   autoUpdater.on('error', (error) => {
     installAfterDownload = false
-    setState({ phase: 'error', message: error.message || String(error) }, getWindow)
+    setState({ phase: 'error', message: formatUpdateError(error) }, getWindow)
   })
 
   ipcMain.handle('updates:getState', () => state)
-  ipcMain.handle('updates:check', () => checkForUpdates(getWindow))
-  ipcMain.handle('updates:installLatest', () => installLatest(getWindow))
+  ipcMain.handle('updates:check', async () => {
+    try {
+      return await checkForUpdates(getWindow)
+    } catch (error) {
+      installAfterDownload = false
+      return setState({ phase: 'error', message: formatUpdateError(error) }, getWindow)
+    }
+  })
+  ipcMain.handle('updates:installLatest', async () => {
+    try {
+      return await installLatest(getWindow)
+    } catch (error) {
+      installAfterDownload = false
+      return setState({ phase: 'error', message: formatUpdateError(error) }, getWindow)
+    }
+  })
 }
 
 export function scheduleInitialUpdateCheck(getWindow: () => BrowserWindow | null): void {
   if (!app.isPackaged) return
   setTimeout(() => {
     void checkForUpdates(getWindow).catch((error) => {
-      setState({ phase: 'error', message: error instanceof Error ? error.message : String(error) }, getWindow)
+      setState({ phase: 'error', message: formatUpdateError(error) }, getWindow)
     })
   }, 2500)
 }
