@@ -19,6 +19,7 @@
     "package:win:dir": "npm run build && electron-builder --win --x64 --dir"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
     "lucide-react": "^1.17.0",
     "node-llama-cpp": "^3.18.1",
     "react": "^19.2.6",
@@ -51,6 +52,13 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "robbiepeck",
+        "repo": "PowerStation"
+      }
+    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*",

@@ -3,6 +3,8 @@ import {
   Activity,
   BrainCircuit,
   ChevronDown,
+  Download,
+  LoaderCircle,
   MessageSquareText,
   Plus,
   Power as PowerIcon,
@@ -17,7 +19,7 @@ import { Markdown } from './markdown'
 import { ModelsView, MonitorView, SettingsView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { CopyButton, formatNumber } from './ui'
-import type { ChatStatusPayload, ChatTurn, DeviceInfo, ModelInfo, Settings, TelemetrySnapshot } from './types'
+import type { ChatStatusPayload, ChatTurn, DeviceInfo, ModelInfo, Settings, TelemetrySnapshot, UpdateState } from './types'
 import './App.css'
 
 type ViewId = 'chat' | 'monitor' | 'models' | 'settings'
@@ -124,6 +126,35 @@ function useDevice() {
   return device
 }
 
+function useUpdates() {
+  const [updateState, setUpdateState] = useState<UpdateState | null>(null)
+
+  useEffect(() => {
+    void bridge.updates.getState().then(setUpdateState)
+    const unsubscribe = bridge.updates.onState(setUpdateState)
+    void bridge.updates.check().catch((error) => {
+      setUpdateState((current) =>
+        current
+          ? { ...current, phase: 'error', message: error instanceof Error ? error.message : String(error) }
+          : null,
+      )
+    })
+    return unsubscribe
+  }, [])
+
+  const installLatest = useCallback(() => {
+    void bridge.updates.installLatest().then(setUpdateState).catch((error) => {
+      setUpdateState((current) =>
+        current
+          ? { ...current, phase: 'error', message: error instanceof Error ? error.message : String(error) }
+          : null,
+      )
+    })
+  }, [])
+
+  return { installLatest, updateState }
+}
+
 function useChat() {
   const [messages, setMessages] = useState<ChatTurn[]>([])
   const [streaming, setStreaming] = useState(false)
@@ -219,6 +250,7 @@ function App() {
   const { models, selectedPath, refresh, select } = useModels()
   const { snapshot, series } = useTelemetry()
   const device = useDevice()
+  const { installLatest, updateState } = useUpdates()
   const chat = useChat()
   const [download, setDownload] = useState<DownloadState>(null)
 
@@ -323,6 +355,8 @@ function App() {
           New chat
         </button>
 
+        <UpdateButton onUpdate={installLatest} state={updateState} />
+
         <div className="rail-status" title={snapshot?.model.loaded ? 'Model loaded' : 'No model loaded'}>
           <span className={snapshot?.model.loaded ? 'status-dot live' : 'status-dot'} />
           <span>{snapshot?.model.loaded ? 'Model loaded' : 'Idle'}</span>
@@ -371,6 +405,35 @@ function App() {
         )}
       </main>
     </div>
+  )
+}
+
+function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: UpdateState | null }) {
+  if (!state || state.phase === 'idle' || state.phase === 'unsupported' || state.phase === 'checking') return null
+
+  const downloading = state.phase === 'downloading'
+  const label =
+    state.phase === 'available'
+      ? state.latestVersion
+        ? `Update ${state.latestVersion}`
+        : 'Update'
+      : state.phase === 'downloaded'
+        ? 'Restart to update'
+        : state.phase === 'error'
+          ? 'Retry update'
+          : `Updating ${Math.round(state.progressPct ?? 0)}%`
+
+  return (
+    <button
+      className={`update-button ${state.phase}`}
+      type="button"
+      onClick={onUpdate}
+      disabled={downloading}
+      title={state.message ?? (state.latestVersion ? `Latest version ${state.latestVersion}` : undefined)}
+    >
+      {downloading ? <LoaderCircle className="spin-icon" size={15} /> : <Download size={15} />}
+      <span>{label}</span>
+    </button>
   )
 }
 

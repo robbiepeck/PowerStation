@@ -60,6 +60,12 @@ macOS artifacts are written to `release/`.
 
 Production macOS distribution should use Apple Developer ID signing and notarization. Unsigned local builds may trigger Gatekeeper warnings.
 
+## Desktop Updates
+
+PowerStation checks GitHub Releases for updates from `robbiepeck/PowerStation`. When a newer release is available, an Update button appears in the sidebar. Clicking it downloads the latest package and restarts into the update once the download is ready.
+
+Release artifacts must be published through Electron Builder so the generated `latest.yml` and `latest-mac.yml` metadata are attached to the GitHub Release.
+
 ## Checks
 
 ```bash

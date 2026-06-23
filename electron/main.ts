@@ -5,6 +5,7 @@ import { loadState } from './config.js'
 import { registerIpc } from './ipc.js'
 import { startTelemetry, stopTelemetry } from './telemetry.js'
 import { unloadModel } from './llm.js'
+import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
@@ -33,6 +34,7 @@ function createMainWindow() {
     startTelemetry((snapshot) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('telemetry:update', snapshot)
     })
+    scheduleInitialUpdateCheck(() => mainWindow)
   })
 
   mainWindow.on('closed', () => {
@@ -58,6 +60,7 @@ app.setAppUserModelId('com.powerstation.desktop')
 void app.whenReady().then(async () => {
   await loadState()
   registerIpc(() => mainWindow)
+  registerUpdateIpc(() => mainWindow)
   createMainWindow()
 
   app.on('activate', () => {
