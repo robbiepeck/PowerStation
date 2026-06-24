@@ -8,15 +8,15 @@ PowerStation is built with Electron, React, TypeScript, `node-llama-cpp`, and `s
 
 ## Downloads
 
-Latest release: [v0.0.1](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.1)
+Latest release: [v0.0.2](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.2)
 
 | Platform | Status | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.1-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.1/PowerStation-0.0.1-macOS-arm64.dmg) |
+| macOS Apple Silicon | Available | [PowerStation-0.0.2-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.2/PowerStation-0.0.2-macOS-arm64.dmg) |
 | macOS Intel | Planned | Public binary pending |
 | Windows x64 | Build supported, public binary pending | Use `npm run package:win` from source |
 
-The current macOS release is unsigned, so macOS may show a Gatekeeper warning on first launch.
+The current macOS release is ad-hoc signed but not Developer ID signed or notarized, so macOS may show a Gatekeeper warning on first launch.
 
 ## What It Does
 
@@ -115,7 +115,7 @@ npm run package:win:dir
 
 Artifacts are written to `release/`.
 
-Production macOS distribution should use Apple Developer ID signing and notarization. Unsigned local builds may trigger Gatekeeper warnings.
+Production macOS distribution should use Apple Developer ID signing and notarization. Ad-hoc signed local builds may trigger Gatekeeper warnings.
 
 ## Architecture
 
