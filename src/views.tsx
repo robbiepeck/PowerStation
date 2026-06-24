@@ -47,6 +47,9 @@ function starterIcon(model: StarterModel) {
   if (model.tone === 'compact') return Zap
   if (model.tone === 'code') return Code2
   if (model.tone === 'strong') return Cpu
+  if (model.tone === 'gemma') return ShieldCheck
+  if (model.tone === 'reasoning') return Microchip
+  if (model.tone === 'mistral') return Thermometer
   return BookOpenCheck
 }
 
@@ -96,6 +99,7 @@ export function StarterModelCatalog({
               </div>
 
               <div className="starter-specs" aria-label={`${model.name} specs`}>
+                <span>{model.family}</span>
                 <span>{model.parameters}</span>
                 <span>{model.quantization}</span>
                 <span>{model.downloadSize}</span>

@@ -1,6 +1,7 @@
 export type StarterModel = {
   id: string
   name: string
+  family: string
   source: string
   uri: string
   parameters: string
@@ -9,7 +10,7 @@ export type StarterModel = {
   recommendedMemory: string
   license: string
   bestFor: string
-  tone: 'compact' | 'balanced' | 'strong' | 'code'
+  tone: 'compact' | 'balanced' | 'strong' | 'code' | 'gemma' | 'llama' | 'reasoning' | 'mistral'
   pros: string[]
   cons: string[]
 }
@@ -18,6 +19,7 @@ export const STARTER_MODELS: StarterModel[] = [
   {
     id: 'qwen3-06b',
     name: 'Qwen3 0.6B',
+    family: 'Qwen',
     source: 'Qwen/Qwen3-0.6B-GGUF',
     uri: 'hf:Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf',
     parameters: '0.6B',
@@ -31,8 +33,41 @@ export const STARTER_MODELS: StarterModel[] = [
     cons: ['Shallow reasoning', 'Weaker writing quality', 'Limited coding ability'],
   },
   {
+    id: 'gemma3-1b',
+    name: 'Gemma 3 1B IT',
+    family: 'Gemma',
+    source: 'google/gemma-3-1b-it-qat-q4_0-gguf',
+    uri: 'hf:google/gemma-3-1b-it-qat-q4_0-gguf/gemma-3-1b-it-q4_0.gguf',
+    parameters: '1B',
+    quantization: 'Q4_0',
+    downloadSize: '1.00 GB',
+    recommendedMemory: '4 GB RAM',
+    license: 'Gemma',
+    bestFor: 'Lightweight Google-tuned chat and simple summaries',
+    tone: 'gemma',
+    pros: ['Compact Google model', 'Good instruction style for size', 'Low memory pressure'],
+    cons: ['Gemma license terms', 'Limited deep reasoning', 'Can be terse on complex prompts'],
+  },
+  {
+    id: 'llama32-3b',
+    name: 'Llama 3.2 3B Instruct',
+    family: 'Llama',
+    source: 'bartowski/Llama-3.2-3B-Instruct-GGUF',
+    uri: 'hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
+    parameters: '3B',
+    quantization: 'Q4_K_M',
+    downloadSize: '2.02 GB',
+    recommendedMemory: '8 GB RAM',
+    license: 'Llama 3.2',
+    bestFor: 'General chat with a familiar Llama-style assistant',
+    tone: 'llama',
+    pros: ['Well-known model family', 'Good everyday assistant behavior', 'Compact download for 3B'],
+    cons: ['Meta license terms', 'Not the strongest coder', 'Needs more RAM than 1B models'],
+  },
+  {
     id: 'qwen3-4b',
     name: 'Qwen3 4B',
+    family: 'Qwen',
     source: 'Qwen/Qwen3-4B-GGUF',
     uri: 'hf:Qwen/Qwen3-4B-GGUF/Qwen3-4B-Q4_K_M.gguf',
     parameters: '4B',
@@ -46,8 +81,25 @@ export const STARTER_MODELS: StarterModel[] = [
     cons: ['Slower than 0.6B', 'Can miss harder reasoning', 'Not specialist-grade for code'],
   },
   {
+    id: 'gemma3-4b',
+    name: 'Gemma 3 4B IT',
+    family: 'Gemma',
+    source: 'google/gemma-3-4b-it-qat-q4_0-gguf',
+    uri: 'hf:google/gemma-3-4b-it-qat-q4_0-gguf/gemma-3-4b-it-q4_0.gguf',
+    parameters: '4B',
+    quantization: 'Q4_0',
+    downloadSize: '3.16 GB',
+    recommendedMemory: '8 GB RAM',
+    license: 'Gemma',
+    bestFor: 'Clear instruction following and everyday writing',
+    tone: 'gemma',
+    pros: ['Good writing quality for size', 'Useful default for chat', 'Runs on modern laptops'],
+    cons: ['Gemma license terms', 'Larger than Qwen3 4B Q4_K_M', 'Can be slower on CPU-only machines'],
+  },
+  {
     id: 'qwen3-8b',
     name: 'Qwen3 8B',
+    family: 'Qwen',
     source: 'Qwen/Qwen3-8B-GGUF',
     uri: 'hf:Qwen/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf',
     parameters: '8B',
@@ -61,8 +113,25 @@ export const STARTER_MODELS: StarterModel[] = [
     cons: ['Larger download', 'Higher RAM pressure', 'Slower on CPU-only machines'],
   },
   {
+    id: 'deepseek-r1-distill-qwen-7b',
+    name: 'DeepSeek R1 Distill 7B',
+    family: 'DeepSeek',
+    source: 'mradermacher/DeepSeek-R1-Distill-Qwen-7B-GGUF',
+    uri: 'hf:mradermacher/DeepSeek-R1-Distill-Qwen-7B-GGUF/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf',
+    parameters: '7B',
+    quantization: 'Q4_K_M',
+    downloadSize: '4.68 GB',
+    recommendedMemory: '12 GB RAM',
+    license: 'MIT',
+    bestFor: 'Reasoning-heavy prompts and step-by-step problem solving',
+    tone: 'reasoning',
+    pros: ['Reasoning-focused tuning', 'Permissive MIT license', 'Good quality without a huge file'],
+    cons: ['Can over-explain simple tasks', 'Distilled from a Qwen base', 'Needs more patience on CPU'],
+  },
+  {
     id: 'qwen25-coder-3b',
     name: 'Qwen2.5 Coder 3B',
+    family: 'Qwen Coder',
     source: 'Qwen/Qwen2.5-Coder-3B-Instruct-GGUF',
     uri: 'hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf',
     parameters: '3B',
@@ -74,5 +143,21 @@ export const STARTER_MODELS: StarterModel[] = [
     tone: 'code',
     pros: ['Code-focused tuning', 'Compact for a coding model', 'Good fit for local developer workflows'],
     cons: ['Model-specific license', 'Less capable as a general chat model', 'Not ideal for large repositories'],
+  },
+  {
+    id: 'mistral-nemo-12b',
+    name: 'Mistral Nemo 12B',
+    family: 'Mistral',
+    source: 'bartowski/Mistral-Nemo-Instruct-2407-GGUF',
+    uri: 'hf:bartowski/Mistral-Nemo-Instruct-2407-GGUF/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf',
+    parameters: '12B',
+    quantization: 'Q4_K_M',
+    downloadSize: '7.48 GB',
+    recommendedMemory: '16 GB RAM',
+    license: 'Apache-2.0',
+    bestFor: 'Higher quality chat on machines with more memory',
+    tone: 'mistral',
+    pros: ['Strong general chat model', 'Permissive Apache license', 'Good multilingual coverage'],
+    cons: ['Largest starter download', 'High RAM pressure', 'Not a first choice for weak laptops'],
   },
 ]
