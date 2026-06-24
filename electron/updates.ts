@@ -5,6 +5,11 @@ import type { ProgressInfo, UpdateInfo } from 'electron-updater'
 const require = createRequire(import.meta.url)
 const { autoUpdater } = require('electron-updater') as typeof import('electron-updater')
 
+const macAutoUpdatesSupported = false
+const macAutoUpdateMessage =
+  'Automatic macOS updates require Developer ID signing and notarization. Download the latest DMG from GitHub Releases for now.'
+const updatesSupported = app.isPackaged && (process.platform !== 'darwin' || macAutoUpdatesSupported)
+
 export type UpdateState = {
   phase: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
   currentVersion: string
@@ -19,9 +24,9 @@ export type UpdateState = {
 }
 
 let state: UpdateState = {
-  phase: app.isPackaged ? 'idle' : 'unsupported',
+  phase: updatesSupported ? 'idle' : 'unsupported',
   currentVersion: app.getVersion(),
-  message: app.isPackaged ? undefined : 'Updates are only available in packaged desktop builds.',
+  message: app.isPackaged ? (process.platform === 'darwin' ? macAutoUpdateMessage : undefined) : 'Updates are only available in packaged desktop builds.',
 }
 let installAfterDownload = false
 
@@ -51,14 +56,14 @@ function formatUpdateError(error: unknown): string {
 }
 
 async function checkForUpdates(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
-  if (!app.isPackaged) return setState({ phase: 'unsupported' }, getWindow)
+  if (!updatesSupported) return setState({ phase: 'unsupported', message: state.message }, getWindow)
   setState({ phase: 'checking', message: undefined }, getWindow)
   await autoUpdater.checkForUpdates()
   return state
 }
 
 async function installLatest(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
-  if (!app.isPackaged) return setState({ phase: 'unsupported' }, getWindow)
+  if (!updatesSupported) return setState({ phase: 'unsupported', message: state.message }, getWindow)
 
   installAfterDownload = true
   if (state.phase === 'downloaded') {
@@ -76,6 +81,13 @@ async function installLatest(getWindow: () => BrowserWindow | null): Promise<Upd
 }
 
 export function registerUpdateIpc(getWindow: () => BrowserWindow | null): void {
+  if (!updatesSupported) {
+    ipcMain.handle('updates:getState', () => state)
+    ipcMain.handle('updates:check', () => state)
+    ipcMain.handle('updates:installLatest', () => state)
+    return
+  }
+
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.allowDowngrade = false
@@ -138,7 +150,7 @@ export function registerUpdateIpc(getWindow: () => BrowserWindow | null): void {
 }
 
 export function scheduleInitialUpdateCheck(getWindow: () => BrowserWindow | null): void {
-  if (!app.isPackaged) return
+  if (!updatesSupported) return
   setTimeout(() => {
     void checkForUpdates(getWindow).catch((error) => {
       setState({ phase: 'error', message: formatUpdateError(error) }, getWindow)

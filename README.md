@@ -8,11 +8,11 @@ PowerStation is built with Electron, React, TypeScript, `node-llama-cpp`, and `s
 
 ## Downloads
 
-Latest release: [v0.0.2](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.2)
+Latest release: [v0.0.3](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.3)
 
 | Platform | Status | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.2-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.2/PowerStation-0.0.2-macOS-arm64.dmg) |
+| macOS Apple Silicon | Available | [PowerStation-0.0.3-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.3/PowerStation-0.0.3-macOS-arm64.dmg) |
 | macOS Intel | Planned | Public binary pending |
 | Windows x64 | Build supported, public binary pending | Use `npm run package:win` from source |
 
@@ -58,7 +58,9 @@ Models are downloaded from Hugging Face as GGUF files and run on-device.
 
 ## Updates
 
-PowerStation checks this repository's GitHub Releases for updates. When a newer release is available, an Update button appears in the sidebar. Clicking it downloads the latest desktop package and restarts into the update when ready.
+PowerStation uses this repository's GitHub Releases for distribution. macOS updates are currently manual DMG downloads because automatic replacement requires Developer ID signing and notarization.
+
+When signed update releases are enabled, the app can show an Update button in the sidebar. Clicking it downloads the latest desktop package and restarts into the update when ready.
 
 For update releases, Electron Builder assets must be attached to the GitHub Release, including:
 
