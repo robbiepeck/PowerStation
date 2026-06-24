@@ -22,6 +22,7 @@ import { STARTER_MODELS, type StarterModel } from './modelCatalog'
 import type { DeviceInfo, ModelInfo, Settings, TelemetrySnapshot } from './types'
 import {
   Badge,
+  MetricInfoButton,
   MetricTile,
   PanelHeader,
   RangeControl,
@@ -31,9 +32,37 @@ import {
   formatBytes,
   formatNumber,
 } from './ui'
+import type { MetricInfo } from './ui'
 
 export type MetricKey = 'cpu' | 'ram' | 'gpu' | 'vram' | 'power' | 'thermal'
 export type MetricSeries = Record<MetricKey, number[]>
+
+const METRIC_INFO: Record<MetricKey, MetricInfo> = {
+  cpu: {
+    title: 'CPU',
+    body: 'The CPU is your computer processor. A higher number means PowerStation and other apps are asking the processor to do more work.',
+  },
+  ram: {
+    title: 'RAM',
+    body: 'RAM is your computer memory. Local models need RAM to stay loaded, and larger models usually need more of it.',
+  },
+  gpu: {
+    title: 'GPU',
+    body: 'The GPU is the graphics chip. Some local models can use it to generate answers faster than the CPU alone.',
+  },
+  vram: {
+    title: 'VRAM',
+    body: 'VRAM is memory used by the graphics chip. On Apple Silicon this may come from shared memory, so it can overlap with normal RAM.',
+  },
+  power: {
+    title: 'Power draw',
+    body: 'Power draw is how much electrical power the workload appears to be using right now. In this app it is an estimate unless the system gives direct sensor access.',
+  },
+  thermal: {
+    title: 'Thermal headroom',
+    body: 'Thermal headroom is how much cooling room your computer has left. A lower number means the machine is getting closer to heat limits.',
+  },
+}
 
 export type DownloadState = {
   id: string
@@ -172,11 +201,26 @@ export function StarterModelCatalog({
   )
 }
 
-function LargeChart({ label, series, value, note }: { label: string; series: number[]; value: string; note?: ReactNode }) {
+function LargeChart({
+  info,
+  label,
+  series,
+  value,
+  note,
+}: {
+  info?: MetricInfo
+  label: string
+  series: number[]
+  value: string
+  note?: ReactNode
+}) {
   return (
     <div className="large-chart">
       <div>
-        <span>{label}</span>
+        <span className="metric-label">
+          {label}
+          {info ? <MetricInfoButton info={info} /> : null}
+        </span>
         <strong>{value}</strong>
       </div>
       <Sparkline series={series} height={92} />
@@ -254,6 +298,7 @@ export function MonitorView({
         <MetricTile
           display={`${formatNumber(snapshot.cpu.load)}%`}
           icon={Cpu}
+          info={METRIC_INFO.cpu}
           label="CPU"
           series={series.cpu}
           sub={<Badge tone="real">live</Badge>}
@@ -263,6 +308,7 @@ export function MonitorView({
         <MetricTile
           display={`${formatNumber(snapshot.ram.usedGb, 1)} GB`}
           icon={HardDrive}
+          info={METRIC_INFO.ram}
           label="RAM"
           series={series.ram}
           sub={<Badge tone="real">live</Badge>}
@@ -272,6 +318,7 @@ export function MonitorView({
         <MetricTile
           display={gpuDisplay}
           icon={Microchip}
+          info={METRIC_INFO.gpu}
           label="GPU"
           series={series.gpu}
           sub={<Badge tone={snapshot.gpu.real ? 'real' : 'estimated'}>{snapshot.gpu.real ? 'live' : 'n/a on this OS'}</Badge>}
@@ -281,6 +328,7 @@ export function MonitorView({
         <MetricTile
           display={snapshot.vram.totalGb ? `${formatNumber(snapshot.vram.usedGb ?? 0, 1)} GB` : 'n/a'}
           icon={Database}
+          info={METRIC_INFO.vram}
           label="VRAM"
           series={series.vram}
           sub={<Badge tone={snapshot.vram.real ? 'real' : 'estimated'}>{snapshot.vram.real ? 'live' : 'n/a'}</Badge>}
@@ -290,6 +338,7 @@ export function MonitorView({
         <MetricTile
           display={`${formatNumber(snapshot.power.watts, 1)} W`}
           icon={Zap}
+          info={METRIC_INFO.power}
           label="Power draw"
           series={series.power}
           sub={<Badge tone="estimated">estimated</Badge>}
@@ -299,6 +348,7 @@ export function MonitorView({
         <MetricTile
           display={`${formatNumber(snapshot.thermal.headroomPct)}%`}
           icon={Thermometer}
+          info={METRIC_INFO.thermal}
           label="Thermal headroom"
           series={series.thermal}
           sub={<Badge tone={snapshot.thermal.real ? 'real' : 'estimated'}>{snapshot.thermal.real ? 'sensor' : 'estimated'}</Badge>}
@@ -308,10 +358,11 @@ export function MonitorView({
       </div>
 
       <div className="chart-board">
-        <LargeChart label="CPU load" series={series.cpu} value={`${formatNumber(snapshot.cpu.load)}%`} />
-        <LargeChart label="RAM" series={series.ram} value={`${formatNumber(snapshot.ram.usedGb, 1)} GB`} />
-        <LargeChart label="Power (est.)" series={series.power} value={`${formatNumber(snapshot.power.watts, 1)} W`} />
+        <LargeChart info={METRIC_INFO.cpu} label="CPU load" series={series.cpu} value={`${formatNumber(snapshot.cpu.load)}%`} />
+        <LargeChart info={METRIC_INFO.ram} label="RAM" series={series.ram} value={`${formatNumber(snapshot.ram.usedGb, 1)} GB`} />
+        <LargeChart info={METRIC_INFO.power} label="Power (est.)" series={series.power} value={`${formatNumber(snapshot.power.watts, 1)} W`} />
         <LargeChart
+          info={METRIC_INFO.thermal}
           label="Thermal headroom"
           series={series.thermal}
           value={snapshot.thermal.celsius != null ? `${formatNumber(snapshot.thermal.celsius)}°C` : `${formatNumber(snapshot.thermal.headroomPct)}%`}
