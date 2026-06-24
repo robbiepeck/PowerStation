@@ -1,22 +1,70 @@
 # PowerStation
 
-PowerStation is a Mac and Windows desktop GUI for running an open-source local model with visible compute, memory, and power pressure. The app is Electron-based and requires the desktop host bridge for local model inference, model file access, and host telemetry.
+PowerStation is a desktop app for running open-source local language models on your own computer while watching the compute, memory, and power pressure they create.
 
-## Current Surface
+The goal is to make local models easier to use safely: download a model from inside the app, chat with it locally, and keep an eye on RAM, GPU/VRAM, CPU load, power draw, thermal headroom, and tokens per second.
 
-- Workbench with local prompt composer, conversation state, and streamed local model responses.
-- Runtime guardrails for memory budget, compute cap, context window, auto unload, and low power bias.
-- Resource monitor with desktop host CPU, RAM, GPU/VRAM where available, estimated power draw, thermal headroom, and tokens/sec.
-- Model registry for adapter templates and future model selection.
-- Settings screen for safety profile controls.
-- Electron desktop shell with a secure preload bridge for host metrics and model controls.
-- No browser/web version is supported.
+PowerStation is built with Electron, React, TypeScript, `node-llama-cpp`, and `systeminformation`.
 
-## Download
+## Downloads
 
-- [Download PowerStation for macOS Apple Silicon](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.1/PowerStation-0.0.1-macOS-arm64.dmg)
+Latest release: [v0.0.1](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.1)
 
-This first macOS build is unsigned, so macOS may show a Gatekeeper warning on first launch.
+| Platform | Status | Download |
+| --- | --- | --- |
+| macOS Apple Silicon | Available | [PowerStation-0.0.1-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.1/PowerStation-0.0.1-macOS-arm64.dmg) |
+| macOS Intel | Planned | Public binary pending |
+| Windows x64 | Build supported, public binary pending | Use `npm run package:win` from source |
+
+The current macOS release is unsigned, so macOS may show a Gatekeeper warning on first launch.
+
+## What It Does
+
+- Downloads selected open-weight GGUF models from Hugging Face directly inside the app.
+- Imports existing `.gguf` model files from your computer.
+- Runs chats locally through `node-llama-cpp`.
+- Shows live device telemetry while the model is running.
+- Tracks CPU, RAM, GPU/VRAM where available, estimated power draw, thermal headroom, and generation speed.
+- Provides runtime guardrail controls for memory budget, compute cap, context window, idle unload, and low-power bias.
+- Checks GitHub Releases for desktop app updates.
+
+PowerStation does not have a browser/web version. Local model execution and host telemetry require the desktop app.
+
+## How To Use
+
+1. Download and install the desktop app for your platform.
+2. Open PowerStation.
+3. On first launch, choose a starter model from the model catalog.
+4. Click `Download`. PowerStation downloads the model into its local model folder and selects it when the download finishes.
+5. Start chatting from the Chat view.
+6. Open Monitor to watch local resource usage while the model runs.
+7. Open Models to import a local `.gguf` file, add a model folder, or download another model.
+8. Open Settings to adjust runtime limits and generation behavior.
+
+Larger models need more RAM and will usually run slower on CPU-only machines. Start with a smaller model if you are testing PowerStation on a laptop or a machine with limited memory.
+
+## Starter Models
+
+The app currently presents these starter options:
+
+| Model | Best for | Approx. download | Suggested memory | License shown in app |
+| --- | --- | ---: | ---: | --- |
+| Qwen3 0.6B | Fast first run and weak laptops | 639 MB | 4 GB RAM | Apache-2.0 |
+| Qwen3 4B | Everyday chat and summarising | 2.50 GB | 8 GB RAM | Apache-2.0 |
+| Qwen3 8B | Better reasoning and higher quality answers | 5.03 GB | 12 GB RAM | Apache-2.0 |
+| Qwen2.5 Coder 3B | Code snippets, review, and refactors | 2.10 GB | 8 GB RAM | Qwen research |
+
+Models are downloaded from Hugging Face as GGUF files and run on-device.
+
+## Updates
+
+PowerStation checks this repository's GitHub Releases for updates. When a newer release is available, an Update button appears in the sidebar. Clicking it downloads the latest desktop package and restarts into the update when ready.
+
+For update releases, Electron Builder assets must be attached to the GitHub Release, including:
+
+- `latest-mac.yml` for macOS
+- `latest.yml` for Windows
+- the packaged app archives/installers referenced by those metadata files
 
 ## Development
 
@@ -32,66 +80,50 @@ Run the desktop app in development:
 npm run desktop:dev
 ```
 
-## Windows Build
-
-Build the Windows x64 desktop package:
-
-```bash
-npm run package:win
-```
-
-Build an unpacked Windows directory, which is useful for quick packaging checks:
-
-```bash
-npm run package:win:dir
-```
-
-Windows artifacts are written to `release/`.
-
-## macOS Build
-
-Build the universal macOS desktop package for Apple Silicon and Intel Macs:
-
-```bash
-npm run package:mac
-```
-
-Build an unpacked macOS app directory, which is useful for quick packaging checks:
-
-```bash
-npm run package:mac:dir
-```
-
-macOS artifacts are written to `release/`.
-
-Production macOS distribution should use Apple Developer ID signing and notarization. Unsigned local builds may trigger Gatekeeper warnings.
-
-## Desktop Updates
-
-PowerStation checks GitHub Releases for updates from `robbiepeck/PowerStation`. When a newer release is available, an Update button appears in the sidebar. Clicking it downloads the latest package and restarts into the update once the download is ready.
-
-Release artifacts must be published through Electron Builder so the generated `latest.yml` and `latest-mac.yml` metadata are attached to the GitHub Release.
-
-## Checks
+Run checks:
 
 ```bash
 npm run build
 npm run lint
 ```
 
-## Architecture Notes
+## Packaging
 
-The model and telemetry behavior are intentionally isolated as adapter-shaped frontend logic for now:
+Build the macOS Apple Silicon package:
 
-- `electron/preload.cjs` is the controlled bridge between the renderer and desktop host capabilities.
-- `electron/llm.ts` owns the local GGUF runtime through `node-llama-cpp`.
-- `electron/telemetry.ts` samples desktop host telemetry through `systeminformation` and `node-llama-cpp` where available.
-- Runtime limits are represented in UI state and should be enforced by the backend controller.
-
-## Design
-
-The first visual concept is stored at:
-
-```text
-docs/design/powerstation-concept.png
+```bash
+npm run build && npx electron-builder --mac --arm64
 ```
+
+Build an unpacked macOS Apple Silicon app directory:
+
+```bash
+npm run build && npx electron-builder --mac --arm64 --dir
+```
+
+Build Windows x64 packages:
+
+```bash
+npm run package:win
+```
+
+Build an unpacked Windows directory:
+
+```bash
+npm run package:win:dir
+```
+
+Artifacts are written to `release/`.
+
+Production macOS distribution should use Apple Developer ID signing and notarization. Unsigned local builds may trigger Gatekeeper warnings.
+
+## Architecture
+
+- `electron/preload.cjs` exposes the controlled desktop bridge to the renderer.
+- `electron/llm.ts` owns GGUF model loading, local chat, and model downloading through `node-llama-cpp`.
+- `electron/models.ts` indexes imported and managed model files.
+- `electron/telemetry.ts` samples host telemetry through `systeminformation` and `node-llama-cpp` where available.
+- `electron/updates.ts` handles GitHub Release update checks and installs through `electron-updater`.
+- `src/modelCatalog.ts` defines the starter model catalog shown on first run and in the Models view.
+
+Runtime limits are represented in the UI today. Some limits are advisory because llama.cpp manages low-level allocation directly.
