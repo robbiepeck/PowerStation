@@ -2,7 +2,7 @@
   "name": "powerstation",
   "productName": "PowerStation",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A desktop GUI for hosting and monitoring local open-source models.",
   "author": "Robbie Peck",
   "type": "module",
@@ -68,6 +68,8 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
+      "identity": "-",
+      "hardenedRuntime": false,
       "target": [
         "dmg",
         "zip"
