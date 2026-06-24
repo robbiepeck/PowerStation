@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, Info } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -42,6 +42,33 @@ export function MiniReadout({ label, value }: { label: string; value: string }) 
 
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'real' | 'estimated' | 'neutral' }) {
   return <span className={`badge ${tone}`}>{children}</span>
+}
+
+export type MetricInfo = {
+  title: string
+  body: string
+}
+
+export function MetricInfoButton({ info }: { info: MetricInfo }) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <span className={`metric-info ${open ? 'open' : ''}`}>
+      <button
+        type="button"
+        aria-label={`What ${info.title} means`}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        onBlur={() => setOpen(false)}
+      >
+        <Info size={12} />
+      </button>
+      <span className="metric-info-popover" role="dialog" aria-label={`${info.title} explanation`}>
+        <strong>{info.title}</strong>
+        <span>{info.body}</span>
+      </span>
+    </span>
+  )
 }
 
 export function LoadMeter({ label, value }: { label: string; value: number }) {
@@ -134,6 +161,7 @@ export function Sparkline({ height = 42, series }: { height?: number; series: nu
 export function MetricTile({
   display,
   icon: Icon,
+  info,
   label,
   series,
   sub,
@@ -142,6 +170,7 @@ export function MetricTile({
 }: {
   display: string
   icon: LucideIcon
+  info?: MetricInfo
   label: string
   series: number[]
   sub?: ReactNode
@@ -151,9 +180,10 @@ export function MetricTile({
   return (
     <div className={`metric-tile ${tone}`}>
       <div className="metric-topline">
-        <span>
+        <span className="metric-label">
           <Icon size={15} />
           {label}
+          {info ? <MetricInfoButton info={info} /> : null}
         </span>
         <strong>{display}</strong>
       </div>

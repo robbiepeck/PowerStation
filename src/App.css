@@ -1150,7 +1150,7 @@
   margin-bottom: 0.5rem;
 }
 
-.metric-topline span {
+.metric-label {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1159,8 +1159,74 @@
   font-weight: 600;
 }
 
-.metric-topline span svg {
+.metric-topline .metric-label > svg {
   color: var(--accent);
+}
+
+.metric-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.metric-info button {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--muted) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 86%, white);
+  color: var(--muted);
+  cursor: help;
+}
+
+.metric-info button:hover,
+.metric-info button:focus-visible {
+  border-color: var(--accent, var(--teal));
+  color: var(--accent, var(--teal));
+  outline: none;
+}
+
+.metric-info-popover {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  left: 50%;
+  z-index: 30;
+  display: none;
+  width: min(260px, calc(100vw - 3rem));
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 14px 36px rgba(17, 25, 29, 0.16);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-transform: none;
+  transform: translateX(-50%);
+}
+
+.metric-info:hover .metric-info-popover,
+.metric-info:focus-within .metric-info-popover,
+.metric-info.open .metric-info-popover {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.metric-info-popover strong {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.metric-info-popover span {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.45;
 }
 
 .metric-topline strong {
@@ -1227,7 +1293,7 @@
   margin-bottom: 0.55rem;
 }
 
-.large-chart span {
+.large-chart > div > .metric-label {
   color: var(--muted);
   font-size: 0.82rem;
   font-weight: 600;
