@@ -8,11 +8,11 @@ PowerStation is built with Electron, React, TypeScript, `node-llama-cpp`, and `s
 
 ## Downloads
 
-Latest release: [v0.0.3](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.3)
+Latest release: [v0.0.4](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.4)
 
 | Platform | Status | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.3-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.3/PowerStation-0.0.3-macOS-arm64.dmg) |
+| macOS Apple Silicon | Available | [PowerStation-0.0.4-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.4/PowerStation-0.0.4-macOS-arm64.dmg) |
 | macOS Intel | Planned | Public binary pending |
 | Windows x64 | Build supported, public binary pending | Use `npm run package:win` from source |
 
@@ -50,9 +50,14 @@ The app currently presents these starter options:
 | Model | Best for | Approx. download | Suggested memory | License shown in app |
 | --- | --- | ---: | ---: | --- |
 | Qwen3 0.6B | Fast first run and weak laptops | 639 MB | 4 GB RAM | Apache-2.0 |
+| Gemma 3 1B IT | Lightweight Google-tuned chat and summaries | 1.00 GB | 4 GB RAM | Gemma |
+| Llama 3.2 3B Instruct | General chat with a familiar assistant style | 2.02 GB | 8 GB RAM | Llama 3.2 |
 | Qwen3 4B | Everyday chat and summarising | 2.50 GB | 8 GB RAM | Apache-2.0 |
+| Gemma 3 4B IT | Instruction following and everyday writing | 3.16 GB | 8 GB RAM | Gemma |
 | Qwen3 8B | Better reasoning and higher quality answers | 5.03 GB | 12 GB RAM | Apache-2.0 |
+| DeepSeek R1 Distill 7B | Reasoning-heavy prompts and problem solving | 4.68 GB | 12 GB RAM | MIT |
 | Qwen2.5 Coder 3B | Code snippets, review, and refactors | 2.10 GB | 8 GB RAM | Qwen research |
+| Mistral Nemo 12B | Higher quality chat on machines with more memory | 7.48 GB | 16 GB RAM | Apache-2.0 |
 
 Models are downloaded from Hugging Face as GGUF files and run on-device.
 
