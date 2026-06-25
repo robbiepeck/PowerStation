@@ -65,6 +65,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return id
   })
 
+  ipcMain.handle('app:openExternal', async (_event, url: string) => {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:' || parsed.hostname !== 'huggingface.co') {
+      throw new Error('PowerStation can only open trusted HTTPS model pages.')
+    }
+    await shell.openExternal(parsed.toString())
+    return true
+  })
+
   // --- Settings & device ----------------------------------------------------
   ipcMain.handle('settings:get', async () => (await getState()).settings)
   ipcMain.handle('settings:update', (_event, patch: Partial<Settings>) => patchSettings(patch))

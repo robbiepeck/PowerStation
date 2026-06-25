@@ -9,6 +9,9 @@ function subscribe(channel, callback) {
 contextBridge.exposeInMainWorld('powerStation', {
   platform: process.platform,
   runtime: 'electron',
+  app: {
+    openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+  },
   models: {
     list: () => ipcRenderer.invoke('models:list'),
     pickFile: () => ipcRenderer.invoke('models:pickFile'),
