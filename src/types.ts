@@ -67,6 +67,9 @@ export type Unsubscribe = () => void
 export type PowerStationBridge = {
   platform: string
   runtime: string
+  app: {
+    openExternal: (url: string) => Promise<boolean>
+  }
   models: {
     list: () => Promise<ModelInfo[]>
     pickFile: () => Promise<ModelInfo[]>

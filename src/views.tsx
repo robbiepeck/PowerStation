@@ -8,6 +8,7 @@ import {
   Cpu,
   Database,
   Download,
+  ExternalLink,
   FileDown,
   FolderSearch,
   HardDrive,
@@ -86,11 +87,13 @@ export function StarterModelCatalog({
   download,
   onDownload,
   onManageModels,
+  onOpenWebsite,
   variant = 'models',
 }: {
   download: DownloadState
   onDownload: (uri: string) => void
   onManageModels?: () => void
+  onOpenWebsite: (url: string) => void
   variant?: 'models' | 'welcome'
 }) {
   const downloadingUri = download?.uri
@@ -178,6 +181,15 @@ export function StarterModelCatalog({
                 </div>
               ) : null}
 
+              <button
+                className="starter-website-button"
+                type="button"
+                onClick={() => onOpenWebsite(model.websiteUrl)}
+                aria-label={`View ${model.name} website`}
+              >
+                <ExternalLink size={15} />
+                View Website
+              </button>
               <button
                 className="primary-button starter-download"
                 type="button"
@@ -398,6 +410,7 @@ export function ModelsView({
   onAddFolder,
   onDelete,
   onDownload,
+  onOpenWebsite,
   onImportFile,
   onRefresh,
   onRemove,
@@ -411,6 +424,7 @@ export function ModelsView({
   onAddFolder: () => void
   onDelete: (model: ModelInfo) => void
   onDownload: (uri: string) => void
+  onOpenWebsite: (url: string) => void
   onImportFile: () => void
   onRefresh: () => void
   onRemove: (model: ModelInfo) => void
@@ -434,7 +448,7 @@ export function ModelsView({
         }
       />
 
-      <StarterModelCatalog download={download} onDownload={onDownload} />
+      <StarterModelCatalog download={download} onDownload={onDownload} onOpenWebsite={onOpenWebsite} />
 
       <div className="model-actions">
         <button className="secondary-button" type="button" onClick={onImportFile}>

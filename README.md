@@ -14,11 +14,11 @@ PowerStation does not have a web version. Browser apps cannot reliably inspect h
 
 ## Download
 
-Latest release: [v0.0.5](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.5)
+Latest release: [v0.0.6](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.6)
 
 | Platform | Status | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.5-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.5/PowerStation-0.0.5-macOS-arm64.dmg) |
+| macOS Apple Silicon | Available | [PowerStation-0.0.6-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.6/PowerStation-0.0.6-macOS-arm64.dmg) |
 | macOS Intel | Planned | Public binary pending |
 | Windows x64 | Build supported, public binary pending | Build from source with `npm run package:win` |
 

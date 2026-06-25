@@ -3,6 +3,7 @@ export type StarterModel = {
   name: string
   family: string
   source: string
+  websiteUrl: string
   uri: string
   parameters: string
   quantization: string
@@ -21,6 +22,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Qwen3 0.6B',
     family: 'Qwen',
     source: 'Qwen/Qwen3-0.6B-GGUF',
+    websiteUrl: 'https://huggingface.co/Qwen/Qwen3-0.6B-GGUF',
     uri: 'hf:Qwen/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf',
     parameters: '0.6B',
     quantization: 'Q8_0',
@@ -37,6 +39,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Gemma 3 1B IT',
     family: 'Gemma',
     source: 'google/gemma-3-1b-it-qat-q4_0-gguf',
+    websiteUrl: 'https://huggingface.co/google/gemma-3-1b-it-qat-q4_0-gguf',
     uri: 'hf:google/gemma-3-1b-it-qat-q4_0-gguf/gemma-3-1b-it-q4_0.gguf',
     parameters: '1B',
     quantization: 'Q4_0',
@@ -53,6 +56,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Llama 3.2 3B Instruct',
     family: 'Llama',
     source: 'bartowski/Llama-3.2-3B-Instruct-GGUF',
+    websiteUrl: 'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF',
     uri: 'hf:bartowski/Llama-3.2-3B-Instruct-GGUF/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
     parameters: '3B',
     quantization: 'Q4_K_M',
@@ -69,6 +73,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Qwen3 4B',
     family: 'Qwen',
     source: 'Qwen/Qwen3-4B-GGUF',
+    websiteUrl: 'https://huggingface.co/Qwen/Qwen3-4B-GGUF',
     uri: 'hf:Qwen/Qwen3-4B-GGUF/Qwen3-4B-Q4_K_M.gguf',
     parameters: '4B',
     quantization: 'Q4_K_M',
@@ -85,6 +90,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Gemma 3 4B IT',
     family: 'Gemma',
     source: 'google/gemma-3-4b-it-qat-q4_0-gguf',
+    websiteUrl: 'https://huggingface.co/google/gemma-3-4b-it-qat-q4_0-gguf',
     uri: 'hf:google/gemma-3-4b-it-qat-q4_0-gguf/gemma-3-4b-it-q4_0.gguf',
     parameters: '4B',
     quantization: 'Q4_0',
@@ -101,6 +107,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Qwen3 8B',
     family: 'Qwen',
     source: 'Qwen/Qwen3-8B-GGUF',
+    websiteUrl: 'https://huggingface.co/Qwen/Qwen3-8B-GGUF',
     uri: 'hf:Qwen/Qwen3-8B-GGUF/Qwen3-8B-Q4_K_M.gguf',
     parameters: '8B',
     quantization: 'Q4_K_M',
@@ -117,6 +124,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'DeepSeek R1 Distill 7B',
     family: 'DeepSeek',
     source: 'mradermacher/DeepSeek-R1-Distill-Qwen-7B-GGUF',
+    websiteUrl: 'https://huggingface.co/mradermacher/DeepSeek-R1-Distill-Qwen-7B-GGUF',
     uri: 'hf:mradermacher/DeepSeek-R1-Distill-Qwen-7B-GGUF/DeepSeek-R1-Distill-Qwen-7B.Q4_K_M.gguf',
     parameters: '7B',
     quantization: 'Q4_K_M',
@@ -133,6 +141,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Qwen2.5 Coder 3B',
     family: 'Qwen Coder',
     source: 'Qwen/Qwen2.5-Coder-3B-Instruct-GGUF',
+    websiteUrl: 'https://huggingface.co/Qwen/Qwen2.5-Coder-3B-Instruct-GGUF',
     uri: 'hf:Qwen/Qwen2.5-Coder-3B-Instruct-GGUF/qwen2.5-coder-3b-instruct-q4_k_m.gguf',
     parameters: '3B',
     quantization: 'Q4_K_M',
@@ -149,6 +158,7 @@ export const STARTER_MODELS: StarterModel[] = [
     name: 'Mistral Nemo 12B',
     family: 'Mistral',
     source: 'bartowski/Mistral-Nemo-Instruct-2407-GGUF',
+    websiteUrl: 'https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF',
     uri: 'hf:bartowski/Mistral-Nemo-Instruct-2407-GGUF/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf',
     parameters: '12B',
     quantization: 'Q4_K_M',

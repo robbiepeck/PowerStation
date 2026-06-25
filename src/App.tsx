@@ -301,6 +301,12 @@ function App() {
     }
   }, [])
 
+  const handleOpenModelWebsite = useCallback((url: string) => {
+    void bridge.app.openExternal(url).catch((error) => {
+      window.alert(error instanceof Error ? error.message : String(error))
+    })
+  }, [])
+
   const handleImportFile = useCallback(async () => {
     await bridge.models.pickFile()
     await refresh()
@@ -376,6 +382,7 @@ function App() {
             messages={chat.messages}
             models={models}
             onDownload={handleDownload}
+            onOpenModelWebsite={handleOpenModelWebsite}
             onManageModels={() => setActiveView('models')}
             onNewChat={chat.reset}
             onSelectModel={handleSelectModel}
@@ -396,6 +403,7 @@ function App() {
               onAddFolder={handleAddFolder}
               onDelete={handleDelete}
               onDownload={handleDownload}
+              onOpenWebsite={handleOpenModelWebsite}
               onImportFile={handleImportFile}
               onRefresh={refresh}
               onRemove={handleRemove}
@@ -456,6 +464,7 @@ function ChatView({
   messages,
   models,
   onDownload,
+  onOpenModelWebsite,
   onManageModels,
   onNewChat,
   onSelectModel,
@@ -470,6 +479,7 @@ function ChatView({
   messages: ChatTurn[]
   models: ModelInfo[]
   onDownload: (uri: string) => void
+  onOpenModelWebsite: (url: string) => void
   onManageModels: () => void
   onNewChat: () => void
   onSelectModel: (path: string) => void
@@ -523,7 +533,13 @@ function ChatView({
               <p>Runs entirely on this machine. Your prompts never leave the device.</p>
             </div>
           ) : (
-            <StarterModelCatalog download={download} onDownload={onDownload} onManageModels={onManageModels} variant="welcome" />
+            <StarterModelCatalog
+              download={download}
+              onDownload={onDownload}
+              onManageModels={onManageModels}
+              onOpenWebsite={onOpenModelWebsite}
+              variant="welcome"
+            />
           )
         ) : (
           <div className="message-column">
