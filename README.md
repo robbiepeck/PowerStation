@@ -12,6 +12,10 @@ PowerStation is early desktop software. The macOS Apple Silicon build is availab
 
 PowerStation does not have a web version. Browser apps cannot reliably inspect host-level model memory usage, GPU/VRAM pressure, power draw, or local runtime state, so PowerStation is desktop-only.
 
+A "computer repair" feature that helps diagnose (and pontentially fix) problems with memory, ram, and other performance issues with computer devices is planned, with extremely careful use of agentic tools when editing essential computer files.
+
+PowerStation aims to eventually provide a powerful model harness (skills, connectors) and fine tuning abilities. 
+
 ## Download
 
 Latest release: [v0.0.6](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.6)
