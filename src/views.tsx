@@ -35,7 +35,7 @@ import {
 } from './ui'
 import type { MetricInfo } from './ui'
 
-export type MetricKey = 'cpu' | 'ram' | 'gpu' | 'vram' | 'power' | 'thermal'
+export type MetricKey = 'cpu' | 'ram' | 'gpu' | 'vram' | 'storage' | 'power' | 'thermal'
 export type MetricSeries = Record<MetricKey, number[]>
 
 const METRIC_INFO: Record<MetricKey, MetricInfo> = {
@@ -54,6 +54,10 @@ const METRIC_INFO: Record<MetricKey, MetricInfo> = {
   vram: {
     title: 'VRAM',
     body: 'VRAM is memory used by the graphics chip. On Apple Silicon this may come from shared memory, so it can overlap with normal RAM.',
+  },
+  storage: {
+    title: 'Storage',
+    body: 'Storage is disk space on your computer. This shows how much of the main disk is already used and how much total space it has.',
   },
   power: {
     title: 'Power draw',
@@ -261,6 +265,7 @@ export function MonitorView({
 
   const ramPct = snapshot.ram.totalGb ? (snapshot.ram.usedGb / snapshot.ram.totalGb) * 100 : 0
   const vramPct = snapshot.vram.totalGb ? ((snapshot.vram.usedGb ?? 0) / snapshot.vram.totalGb) * 100 : 0
+  const storagePct = snapshot.storage.totalGb ? (snapshot.storage.usedGb / snapshot.storage.totalGb) * 100 : 0
   const gpuDisplay = snapshot.gpu.load != null ? `${formatNumber(snapshot.gpu.load)}%` : 'n/a'
 
   const rows = [
@@ -271,6 +276,14 @@ export function MonitorView({
       value: snapshot.vram.totalGb ? `${formatNumber(snapshot.vram.usedGb ?? 0, 1)} GB` : 'n/a',
       detail: snapshot.vram.totalGb ? `${formatNumber(snapshot.vram.totalGb, 0)} GB total` : 'unavailable',
       real: snapshot.vram.real,
+    },
+    {
+      label: 'Storage',
+      value: snapshot.storage.totalGb ? `${formatNumber(snapshot.storage.usedGb, 1)} GB` : 'n/a',
+      detail: snapshot.storage.totalGb
+        ? `${formatNumber(snapshot.storage.freeGb, 1)} GB free of ${formatNumber(snapshot.storage.totalGb, 0)} GB`
+        : 'unavailable',
+      real: snapshot.storage.real,
     },
     { label: 'Power', value: `${formatNumber(snapshot.power.watts, 1)} W`, detail: 'package estimate', real: !snapshot.power.estimated },
     {
@@ -303,7 +316,7 @@ export function MonitorView({
           <strong>{snapshot.model.loaded ? 'Model loaded' : 'Idle'}</strong>
           {snapshot.model.loaded ? ' · generating uses GPU + RAM' : ' · no model in memory'}
         </span>
-        <span className="muted">CPU, RAM and VRAM are live · power and thermal headroom are estimated without elevated access</span>
+        <span className="muted">CPU, RAM, VRAM and storage are live · power and thermal headroom are estimated without elevated access</span>
       </div>
 
       <div className="metric-stack wide">
@@ -348,6 +361,20 @@ export function MonitorView({
           value={vramPct}
         />
         <MetricTile
+          display={snapshot.storage.totalGb ? `${formatNumber(snapshot.storage.usedGb, 0)} / ${formatNumber(snapshot.storage.totalGb, 0)} GB` : 'n/a'}
+          icon={HardDrive}
+          info={METRIC_INFO.storage}
+          label="Storage"
+          series={series.storage}
+          sub={
+            <Badge tone={snapshot.storage.real ? 'real' : 'estimated'}>
+              {snapshot.storage.real ? `${formatNumber(snapshot.storage.freeGb, 0)} GB free` : 'n/a'}
+            </Badge>
+          }
+          tone="blue"
+          value={storagePct}
+        />
+        <MetricTile
           display={`${formatNumber(snapshot.power.watts, 1)} W`}
           icon={Zap}
           info={METRIC_INFO.power}
@@ -372,6 +399,12 @@ export function MonitorView({
       <div className="chart-board">
         <LargeChart info={METRIC_INFO.cpu} label="CPU load" series={series.cpu} value={`${formatNumber(snapshot.cpu.load)}%`} />
         <LargeChart info={METRIC_INFO.ram} label="RAM" series={series.ram} value={`${formatNumber(snapshot.ram.usedGb, 1)} GB`} />
+        <LargeChart
+          info={METRIC_INFO.storage}
+          label="Storage"
+          series={series.storage}
+          value={snapshot.storage.totalGb ? `${formatNumber(snapshot.storage.usedGb, 0)} / ${formatNumber(snapshot.storage.totalGb, 0)} GB` : 'n/a'}
+        />
         <LargeChart info={METRIC_INFO.power} label="Power (est.)" series={series.power} value={`${formatNumber(snapshot.power.watts, 1)} W`} />
         <LargeChart
           info={METRIC_INFO.thermal}
