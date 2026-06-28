@@ -10,6 +10,14 @@ import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
 
+function isSafeExternalUrl(url: string): boolean {
+  try {
+    return ['https:', 'http:', 'mailto:'].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
 let mainWindow: BrowserWindow | null = null
 
 function createMainWindow() {
@@ -42,9 +50,22 @@ function createMainWindow() {
     mainWindow = null
   })
 
+  // Open only web links externally; never let the renderer spawn windows or
+  // hand arbitrary URI schemes (file:, custom protocol handlers, etc.) to the OS.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    void shell.openExternal(url)
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // Block in-app navigation away from the bundled UI. Anything that tries to
+  // navigate the top-level frame to a remote origin is opened externally instead,
+  // so the preload bridge is never exposed to untrusted content.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const devUrl = process.env.VITE_DEV_SERVER_URL
+    if (devUrl && url.startsWith(devUrl)) return
+    if (url.startsWith('file://')) return
+    event.preventDefault()
+    if (isSafeExternalUrl(url)) void shell.openExternal(url)
   })
 
   if (isDevelopment && process.env.VITE_DEV_SERVER_URL) {

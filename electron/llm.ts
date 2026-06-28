@@ -24,6 +24,18 @@ let loadingPath: string | null = null
 let lastTokensPerSec = 0
 
 const abortControllers = new Map<string, AbortController>()
+const activeGenerations = new Set<Promise<unknown>>()
+
+function abortAll(): void {
+  for (const controller of abortControllers.values()) controller.abort()
+}
+
+// Wait for every in-flight prompt to actually settle. Callers abort first, but
+// node-llama-cpp only stops on the next loop turn, so the session must not be
+// reset or disposed until the generation promises have resolved.
+async function waitForGenerations(): Promise<void> {
+  await Promise.allSettled([...activeGenerations])
+}
 
 async function getLlamaInstance(): Promise<LlamaInstance> {
   if (!llamaPromise) llamaPromise = getLlama()
@@ -69,7 +81,14 @@ export async function ensureModelLoaded(
   contextTokens: number,
   onStatus?: (status: ChatStatus) => void,
 ): Promise<LoadedState> {
-  if (loaded && loaded.path === modelPath && loaded.contextTokens >= contextTokens) return loaded
+  // Compare against the *effective* context size (clamped to the model's trained
+  // ceiling), not the raw request. Otherwise asking for more tokens than the model
+  // supports makes the clamped value always look "too small" and reloads the model
+  // on every single message.
+  if (loaded && loaded.path === modelPath) {
+    const target = clampContextSize(contextTokens, loaded.model.trainContextSize)
+    if (loaded.contextTokens >= target) return loaded
+  }
   if (loaded) await disposeLoaded()
 
   loadingPath = modelPath
@@ -106,7 +125,7 @@ export async function chat(options: {
     options.onStatus?.({ phase: 'generating' })
     const start = Date.now()
     let charCount = 0
-    const text = await active.session.prompt(options.prompt, {
+    const generation = active.session.prompt(options.prompt, {
       temperature: options.temperature,
       maxTokens: options.maxTokens > 0 ? options.maxTokens : undefined,
       signal: controller.signal,
@@ -116,6 +135,13 @@ export async function chat(options: {
         options.onToken(chunk)
       },
     })
+    activeGenerations.add(generation)
+    let text: string
+    try {
+      text = await generation
+    } finally {
+      activeGenerations.delete(generation)
+    }
     const elapsedSec = (Date.now() - start) / 1000
     const approxTokens = Math.max(1, Math.round(charCount / 4))
     lastTokensPerSec = elapsedSec > 0 ? approxTokens / elapsedSec : 0
@@ -135,10 +161,14 @@ export function stopChat(requestId: string): boolean {
 }
 
 export async function resetChat(): Promise<void> {
+  abortAll()
+  await waitForGenerations()
   if (loaded) loaded.session.resetChatHistory()
 }
 
 export async function unloadModel(): Promise<void> {
+  abortAll()
+  await waitForGenerations()
   await disposeLoaded()
 }
 

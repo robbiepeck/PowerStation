@@ -10,6 +10,20 @@ import { CopyButton } from './ui'
 
 const INLINE = /(\*\*([^*]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_|\[([^\]]+)\]\(([^)\s]+)\))/g
 
+/**
+ * Only allow links that resolve to a safe web scheme. Model output is untrusted,
+ * so `javascript:`, `file:`, `data:` and unknown custom schemes are rejected and
+ * the link is rendered as plain text instead of a clickable anchor.
+ */
+function safeHref(raw: string): string | null {
+  try {
+    const protocol = new URL(raw, 'https://invalid.local').protocol
+    return protocol === 'https:' || protocol === 'http:' || protocol === 'mailto:' ? raw : null
+  } catch {
+    return null
+  }
+}
+
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = []
   // Split on inline code first so its contents are never re-parsed.
@@ -33,12 +47,18 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
       if (match[2] !== undefined) nodes.push(<strong key={key}>{match[2]}</strong>)
       else if (match[3] !== undefined) nodes.push(<em key={key}>{match[3]}</em>)
       else if (match[4] !== undefined) nodes.push(<em key={key}>{match[4]}</em>)
-      else if (match[5] !== undefined)
+      else if (match[5] !== undefined) {
+        const href = safeHref(match[6])
         nodes.push(
-          <a href={match[6]} key={key} rel="noreferrer noopener" target="_blank">
-            {match[5]}
-          </a>,
+          href ? (
+            <a href={href} key={key} rel="noreferrer noopener" target="_blank">
+              {match[5]}
+            </a>
+          ) : (
+            match[5]
+          ),
         )
+      }
       lastIndex = match.index + match[0].length
     }
     if (lastIndex < segment.length) nodes.push(segment.slice(lastIndex))
