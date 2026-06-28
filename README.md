@@ -18,11 +18,11 @@ PowerStation aims to eventually provide a powerful model harness (skills, connec
 
 ## Download
 
-Latest release: [v0.0.6](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.6)
+Latest release: [v0.0.7](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.7)
 
 | Platform | Status | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.6-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.6/PowerStation-0.0.6-macOS-arm64.dmg) |
+| macOS Apple Silicon | Available | [PowerStation-0.0.7-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.7/PowerStation-0.0.7-macOS-arm64.dmg) |
 | macOS Intel | Planned | Public binary pending |
 | Windows x64 | Build supported, public binary pending | Build from source with `npm run package:win` |
 
@@ -34,7 +34,7 @@ The current macOS release is ad-hoc signed, but not yet Developer ID signed or n
 - Imports existing `.gguf` model files from your computer.
 - Runs local chats through `node-llama-cpp`.
 - Shows live device telemetry while models run.
-- Tracks CPU, RAM, GPU/VRAM where available, estimated power draw, thermal headroom, and tokens per second.
+- Tracks CPU, RAM, GPU/VRAM where available, storage used/free, estimated power draw, thermal headroom, and tokens per second.
 - Provides runtime controls for memory budget, compute cap, context window, idle unload, and low-power bias.
 - Uses GitHub Releases for app distribution.
 

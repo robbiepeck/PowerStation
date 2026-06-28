@@ -39,6 +39,7 @@ const emptySeries = (): MetricSeries => ({
   ram: Array(SERIES_LENGTH).fill(0),
   gpu: Array(SERIES_LENGTH).fill(0),
   vram: Array(SERIES_LENGTH).fill(0),
+  storage: Array(SERIES_LENGTH).fill(0),
   power: Array(SERIES_LENGTH).fill(0),
   thermal: Array(SERIES_LENGTH).fill(0),
 })
@@ -110,6 +111,7 @@ function useTelemetry() {
         ram: pushSeries(prev.ram, snap.ram.totalGb ? (snap.ram.usedGb / snap.ram.totalGb) * 100 : 0),
         gpu: pushSeries(prev.gpu, snap.gpu.load ?? 0),
         vram: pushSeries(prev.vram, snap.vram.totalGb ? ((snap.vram.usedGb ?? 0) / snap.vram.totalGb) * 100 : 0),
+        storage: pushSeries(prev.storage, snap.storage.totalGb ? (snap.storage.usedGb / snap.storage.totalGb) * 100 : 0),
         power: pushSeries(prev.power, (snap.power.watts / 120) * 100),
         thermal: pushSeries(prev.thermal, snap.thermal.headroomPct),
       }))

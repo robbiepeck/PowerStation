@@ -26,6 +26,7 @@ export type TelemetrySnapshot = {
   ram: { usedGb: number; totalGb: number; real: boolean }
   gpu: { load: number | null; name: string | null; type: string | null; real: boolean }
   vram: { usedGb: number | null; totalGb: number | null; real: boolean }
+  storage: { usedGb: number; totalGb: number; freeGb: number; mount: string | null; real: boolean }
   power: { watts: number; estimated: boolean }
   thermal: { celsius: number | null; headroomPct: number; real: boolean }
   tokensPerSec: number

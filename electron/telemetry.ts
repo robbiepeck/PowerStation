@@ -1,4 +1,5 @@
 import os from 'node:os'
+import { app } from 'electron'
 import si from 'systeminformation'
 import { getDeviceInfo, getLastTokensPerSec, getLoadedPath } from './llm.js'
 
@@ -8,6 +9,7 @@ export type TelemetrySnapshot = {
   ram: { usedGb: number; totalGb: number; real: boolean }
   gpu: { load: number | null; name: string | null; type: string | null; real: boolean }
   vram: { usedGb: number | null; totalGb: number | null; real: boolean }
+  storage: { usedGb: number; totalGb: number; freeGb: number; mount: string | null; real: boolean }
   power: { watts: number; estimated: boolean }
   thermal: { celsius: number | null; headroomPct: number; real: boolean }
   tokensPerSec: number
@@ -22,6 +24,29 @@ const round = (value: number, decimals = 0) => {
 
 let timer: ReturnType<typeof setInterval> | null = null
 let staticInfo: { gpuName: string | null; gpuType: string | null; tdpWatts: number } | null = null
+
+async function getPrimaryStorage() {
+  const disks = await si.fsSize().catch(() => [])
+  if (!disks.length) return null
+
+  const targetPath = (app.isReady() ? app.getPath('userData') : os.homedir()).toLowerCase()
+  const matchingDisk =
+    disks
+      .filter((disk) => disk.mount && targetPath.startsWith(disk.mount.toLowerCase()))
+      .sort((a, b) => b.mount.length - a.mount.length)[0] ?? disks.find((disk) => disk.mount === '/') ?? disks[0]
+
+  if (!matchingDisk || !matchingDisk.size) return null
+
+  const used = typeof matchingDisk.used === 'number' ? matchingDisk.used : matchingDisk.size - (matchingDisk.available ?? 0)
+  const free = typeof matchingDisk.available === 'number' ? matchingDisk.available : matchingDisk.size - used
+
+  return {
+    usedGb: round(used / 1e9, 2),
+    totalGb: round(matchingDisk.size / 1e9, 1),
+    freeGb: round(free / 1e9, 2),
+    mount: matchingDisk.mount,
+  }
+}
 
 async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
   if (staticInfo) return staticInfo
@@ -39,11 +64,12 @@ async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
 
 async function sample(): Promise<TelemetrySnapshot> {
   const info = await loadStaticInfo()
-  const [load, mem, temp, device] = await Promise.all([
+  const [load, mem, temp, device, storage] = await Promise.all([
     si.currentLoad().catch(() => null),
     si.mem().catch(() => null),
     si.cpuTemperature().catch(() => null),
     getDeviceInfo().catch(() => null),
+    getPrimaryStorage().catch(() => null),
   ])
 
   const cpuLoad = clamp(load?.currentLoad ?? 0, 0, 100)
@@ -79,6 +105,9 @@ async function sample(): Promise<TelemetrySnapshot> {
     ram: { usedGb: round(usedRam / 1e9, 2), totalGb: round(totalRam / 1e9, 1), real: true },
     gpu: { load: gpuLoad, name: info.gpuName, type: info.gpuType, real: gpuLoad != null },
     vram: { usedGb: vramUsedGb != null ? round(vramUsedGb, 2) : null, totalGb: vramTotalGb != null ? round(vramTotalGb, 1) : null, real: vramReal },
+    storage: storage
+      ? { ...storage, real: true }
+      : { usedGb: 0, totalGb: 0, freeGb: 0, mount: null, real: false },
     power: { watts: powerWatts, estimated: true },
     thermal: { celsius: tempC != null ? round(tempC, 1) : null, headroomPct: round(headroomPct), real: tempC != null },
     tokensPerSec: round(getLastTokensPerSec(), 1),
