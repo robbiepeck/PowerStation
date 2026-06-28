@@ -1,9 +1,24 @@
+import path from 'node:path'
 import { ipcMain, dialog, shell, type BrowserWindow } from 'electron'
 import * as models from './models.js'
 import * as llm from './llm.js'
 import { getDeviceHealthProfile } from './device.js'
-import { analyzeStorage } from './storage.js'
+import { analyzeStorage, isWithinScannedRoots } from './storage.js'
 import { getState, patchSettings, managedModelsDir, type Settings } from './config.js'
+
+// Model downloads come from a free-text field, so constrain them to the schemes
+// the app actually supports (Hugging Face shorthand or a direct HTTPS GGUF URL)
+// and reject things like file:, ftp:, or custom protocol handlers.
+function isAllowedModelUri(uri: string): boolean {
+  if (typeof uri !== 'string') return false
+  const trimmed = uri.trim()
+  if (/^hf:/i.test(trimmed)) return true
+  try {
+    return new URL(trimmed).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
   const send = (channel: string, payload: unknown) => {
@@ -17,8 +32,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('models:select', (_event, filePath: string | null) => models.selectModel(filePath))
   ipcMain.handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
   ipcMain.handle('models:deleteFile', (_event, filePath: string) => models.deleteModelFile(filePath))
-  ipcMain.handle('models:reveal', (_event, filePath: string) => {
-    shell.showItemInFolder(filePath)
+  ipcMain.handle('models:reveal', async (_event, filePath: string) => {
+    if (!(await models.isKnownModelPath(filePath))) return false
+    shell.showItemInFolder(path.resolve(filePath))
     return true
   })
 
@@ -53,6 +69,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const id = `dl-${Date.now()}`
     void (async () => {
       try {
+        if (!isAllowedModelUri(uri)) {
+          throw new Error('Only Hugging Face (hf:) or HTTPS GGUF URLs can be downloaded.')
+        }
         const filePath = await llm.downloadModel({
           uri,
           dirPath: managedModelsDir(),
@@ -85,7 +104,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('storage:analyze', () => analyzeStorage())
   ipcMain.handle('storage:reveal', (_event, filePath: string) => {
-    shell.showItemInFolder(filePath)
+    if (!isWithinScannedRoots(filePath)) return false
+    shell.showItemInFolder(path.resolve(filePath))
     return true
   })
 

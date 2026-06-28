@@ -131,12 +131,22 @@ export async function removeImported(filePath: string): Promise<void> {
   })
 }
 
-export async function deleteModelFile(filePath: string): Promise<{ deleted: boolean; reason?: string }> {
+export async function isKnownModelPath(filePath: string): Promise<boolean> {
+  if (typeof filePath !== 'string' || !filePath) return false
   const resolved = path.resolve(filePath)
   const state = await getState()
-  const known =
+  return (
     state.importedModelPaths.some((p) => path.resolve(p) === resolved) ||
-    state.modelFolders.some((folder) => resolved.startsWith(path.resolve(folder) + path.sep))
+    state.modelFolders.some((folder) => {
+      const root = path.resolve(folder)
+      return resolved === root || resolved.startsWith(root + path.sep)
+    })
+  )
+}
+
+export async function deleteModelFile(filePath: string): Promise<{ deleted: boolean; reason?: string }> {
+  const resolved = path.resolve(filePath)
+  const known = await isKnownModelPath(resolved)
   if (!known) return { deleted: false, reason: 'File is outside any known model folder' }
   await fs.rm(resolved)
   await removeImported(resolved)

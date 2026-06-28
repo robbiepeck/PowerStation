@@ -49,6 +49,21 @@ type ScanState = {
 
 const staleDays = (modifiedAt: number) => (Date.now() - modifiedAt) / 86_400_000
 
+function isInside(child: string, parent: string): boolean {
+  const root = path.resolve(parent)
+  return child === root || child.startsWith(root + path.sep)
+}
+
+// Storage results are produced by scanning locations under the user's home
+// directory and the app's own data folder. Revealing a path is only allowed for
+// items that fall inside those same roots, so the renderer cannot point the OS
+// file manager at arbitrary locations.
+export function isWithinScannedRoots(filePath: string): boolean {
+  if (typeof filePath !== 'string' || !filePath) return false
+  const resolved = path.resolve(filePath)
+  return isInside(resolved, os.homedir()) || isInside(resolved, app.getPath('userData'))
+}
+
 async function exists(dirPath: string) {
   try {
     await fs.access(dirPath)

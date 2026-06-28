@@ -31,6 +31,32 @@ const defaultSettings: Settings = {
 
 let state: PersistedState | null = null
 
+function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(max, Math.max(min, n))
+}
+
+function boolOr(value: unknown, fallback: boolean): boolean {
+  return typeof value === 'boolean' ? value : fallback
+}
+
+// Settings arrive from the renderer (settings:update) and from a possibly
+// corrupted on-disk config, so every field is coerced and range-clamped here
+// before it can reach llama.cpp (a NaN context size would otherwise crash it).
+function sanitizeSettings(patch: Partial<Settings> | null | undefined, base: Settings): Settings {
+  const s = { ...base, ...(patch ?? {}) }
+  return {
+    memoryBudgetGb: clampNumber(s.memoryBudgetGb, 4, 64, defaultSettings.memoryBudgetGb),
+    computeCap: clampNumber(s.computeCap, 20, 100, defaultSettings.computeCap),
+    contextTokens: clampNumber(s.contextTokens, 512, 32768, defaultSettings.contextTokens),
+    autoUnloadIdle: boolOr(s.autoUnloadIdle, defaultSettings.autoUnloadIdle),
+    lowPowerBias: boolOr(s.lowPowerBias, defaultSettings.lowPowerBias),
+    temperature: clampNumber(s.temperature, 0, 2, defaultSettings.temperature),
+    maxTokens: clampNumber(s.maxTokens, 0, 4096, defaultSettings.maxTokens),
+  }
+}
+
 function configPath() {
   return path.join(app.getPath('userData'), 'powerstation-config.json')
 }
@@ -49,7 +75,7 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
       ? parsed!.importedModelPaths.filter((p) => typeof p === 'string')
       : [],
     selectedModelPath: typeof parsed?.selectedModelPath === 'string' ? parsed!.selectedModelPath : null,
-    settings: { ...defaultSettings, ...(parsed?.settings ?? {}) },
+    settings: sanitizeSettings(parsed?.settings ?? null, defaultSettings),
   }
 }
 
@@ -76,7 +102,7 @@ export async function saveState(): Promise<void> {
 
 export async function patchSettings(patch: Partial<Settings>): Promise<Settings> {
   const current = await getState()
-  current.settings = { ...current.settings, ...patch }
+  current.settings = sanitizeSettings(patch, current.settings)
   await saveState()
   return current.settings
 }
