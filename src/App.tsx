@@ -16,13 +16,22 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
-import { ModelsView, MonitorView, SettingsView, StarterModelCatalog } from './views'
+import { ModelsView, MonitorView, SettingsView, StarterModelCatalog, StorageView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { CopyButton, formatNumber } from './ui'
-import type { ChatStatusPayload, ChatTurn, DeviceInfo, ModelInfo, Settings, TelemetrySnapshot, UpdateState } from './types'
+import type {
+  ChatStatusPayload,
+  ChatTurn,
+  DeviceInfo,
+  ModelInfo,
+  Settings,
+  StorageBreakdown,
+  TelemetrySnapshot,
+  UpdateState,
+} from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'settings'
+type ViewId = 'chat' | 'monitor' | 'models' | 'settings' | 'storage'
 
 const bridge = getDesktop()
 
@@ -255,6 +264,8 @@ function App() {
   const { installLatest, updateState } = useUpdates()
   const chat = useChat()
   const [download, setDownload] = useState<DownloadState>(null)
+  const [storageBreakdown, setStorageBreakdown] = useState<StorageBreakdown | null>(null)
+  const [storageLoading, setStorageLoading] = useState(false)
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
@@ -308,6 +319,20 @@ function App() {
       window.alert(error instanceof Error ? error.message : String(error))
     })
   }, [])
+
+  const loadStorageBreakdown = useCallback(async () => {
+    setStorageLoading(true)
+    try {
+      setStorageBreakdown(await bridge.storage.analyze())
+    } finally {
+      setStorageLoading(false)
+    }
+  }, [])
+
+  const handleOpenStorage = useCallback(() => {
+    setActiveView('storage')
+    void loadStorageBreakdown()
+  }, [loadStorageBreakdown])
 
   const handleImportFile = useCallback(async () => {
     await bridge.models.pickFile()
@@ -395,7 +420,19 @@ function App() {
             streaming={chat.streaming}
           />
         )}
-        {activeView === 'monitor' && <MonitorView device={device} series={series} snapshot={snapshot} />}
+        {activeView === 'monitor' && <MonitorView device={device} onOpenStorage={handleOpenStorage} series={series} snapshot={snapshot} />}
+        {activeView === 'storage' && (
+          <div className="scroll-view">
+            <StorageView
+              loading={storageLoading}
+              onBack={() => setActiveView('monitor')}
+              onRefresh={loadStorageBreakdown}
+              onReveal={(filePath) => void bridge.storage.reveal(filePath)}
+              result={storageBreakdown}
+              snapshot={snapshot}
+            />
+          </div>
+        )}
         {activeView === 'models' && (
           <div className="scroll-view">
             <ModelsView

@@ -1088,7 +1088,8 @@
 
 .monitor-view,
 .models-view,
-.settings-view {
+.settings-view,
+.storage-view {
   max-width: 1040px;
   margin: 0 auto;
   padding: 1.6rem 1.9rem 2.4rem;
@@ -1100,9 +1101,8 @@
 }
 
 .device-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
+  display: grid;
+  gap: 0.25rem;
   padding: 0.4rem 0.65rem;
   border: 1px solid var(--border);
   border-radius: 9px;
@@ -1112,8 +1112,23 @@
   font-weight: 600;
 }
 
-.device-chip svg {
+.device-chip-main,
+.device-chip-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.device-chip-main svg {
   color: var(--teal);
+}
+
+.device-chip-health {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .monitor-banner {
@@ -1141,17 +1156,31 @@
 
 .metric-stack {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.9rem;
   margin-bottom: 1.3rem;
 }
 
 .metric-tile {
   --accent: var(--teal);
+  min-height: 150px;
   padding: 0.85rem 0.95rem;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
+}
+
+.metric-tile.clickable {
+  cursor: pointer;
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, transform 0.14s ease;
+}
+
+.metric-tile.clickable:hover,
+.metric-tile.clickable:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 12px 30px rgba(17, 25, 29, 0.08);
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .metric-tile.teal {
@@ -1295,49 +1324,6 @@
   margin-top: 0.55rem;
 }
 
-.chart-board {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 0.9rem;
-  margin-bottom: 1.3rem;
-}
-
-.large-chart {
-  padding: 1rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
-  color: var(--teal);
-}
-
-.large-chart > div {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 0.55rem;
-}
-
-.large-chart > div > .metric-label {
-  color: var(--muted);
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.large-chart strong {
-  color: var(--ink);
-  font-size: 1.05rem;
-}
-
-.large-chart .sparkline {
-  height: 92px;
-}
-
-.chart-note {
-  margin-top: 0.4rem;
-  color: var(--muted);
-  font-size: 0.76rem;
-}
-
 .process-table {
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -1370,6 +1356,187 @@
 
 .table-row strong {
   color: var(--ink);
+}
+
+/* --------------------------------------------------------------- Storage */
+
+.storage-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.storage-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+.storage-summary > div,
+.storage-root-card {
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.storage-summary span,
+.storage-root-card span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.storage-summary strong,
+.storage-root-card strong {
+  display: block;
+  margin-top: 0.3rem;
+  color: var(--ink);
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+
+.storage-note {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  margin-bottom: 1.1rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(177, 112, 24, 0.22);
+  border-radius: 12px;
+  background: rgba(177, 112, 24, 0.08);
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.storage-note svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--amber);
+}
+
+.storage-section {
+  margin-top: 1rem;
+}
+
+.storage-section h3 {
+  margin: 0 0 0.7rem;
+  color: var(--ink);
+  font-size: 0.98rem;
+}
+
+.storage-root-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.storage-root-card small {
+  display: block;
+  margin-top: 0.35rem;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-table {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.storage-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) 0.9fr 0.7fr 0.75fr auto;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.storage-row.cleanup {
+  border-color: rgba(177, 112, 24, 0.25);
+  background: rgba(177, 112, 24, 0.06);
+}
+
+.storage-row-main {
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.storage-row-main svg {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--teal);
+}
+
+.storage-row-main div {
+  min-width: 0;
+}
+
+.storage-row-main strong {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-row-main span,
+.storage-row > span,
+.storage-row p {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.storage-row-main span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-row p {
+  grid-column: 1 / 5;
+  margin: 0.1rem 0 0;
+  line-height: 1.35;
+}
+
+@media (max-width: 980px) {
+  .metric-stack,
+  .storage-root-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .storage-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .metric-stack,
+  .storage-root-grid,
+  .storage-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-row {
+    grid-template-columns: 1fr;
+  }
+
+  .storage-row p {
+    grid-column: auto;
+  }
 }
 
 /* ------------------------------------------------------------------ Models */

@@ -37,6 +37,44 @@ export type DeviceInfo = {
   gpuType: string | false
   gpuNames: string[]
   vram: { total: number; used: number; free: number; unifiedSize: number } | null
+  health: {
+    modelName: string | null
+    introducedYear: number | null
+    ageYears: number | null
+    batteryCapacityPct: number | null
+    batteryCycleCount: number | null
+    performanceCapacityPct: number | null
+    estimateNote: string
+  }
+}
+
+export type StorageBreakdownItem = {
+  path: string
+  name: string
+  type: 'file' | 'directory'
+  sizeBytes: number
+  modifiedAt: number
+  category: string
+  reason: string
+  potentiallyUnneeded: boolean
+}
+
+export type StorageBreakdownRoot = {
+  path: string
+  label: string
+  sizeBytes: number
+  skipped: number
+}
+
+export type StorageBreakdown = {
+  scannedAt: number
+  scannedBytes: number
+  scannedEntries: number
+  skipped: number
+  roots: StorageBreakdownRoot[]
+  items: StorageBreakdownItem[]
+  cleanupBytes: number
+  note: string
 }
 
 export type ChatStatusPayload =
@@ -100,6 +138,10 @@ export type PowerStationBridge = {
   telemetry: { onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe }
   settings: { get: () => Promise<Settings>; update: (patch: Partial<Settings>) => Promise<Settings> }
   device: { info: () => Promise<DeviceInfo> }
+  storage: {
+    analyze: () => Promise<StorageBreakdown>
+    reveal: (filePath: string) => Promise<boolean>
+  }
   updates: {
     getState: () => Promise<UpdateState>
     check: () => Promise<UpdateState>

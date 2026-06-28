@@ -46,6 +46,10 @@ contextBridge.exposeInMainWorld('powerStation', {
   device: {
     info: () => ipcRenderer.invoke('device:info'),
   },
+  storage: {
+    analyze: () => ipcRenderer.invoke('storage:analyze'),
+    reveal: (filePath) => ipcRenderer.invoke('storage:reveal', filePath),
+  },
   updates: {
     getState: () => ipcRenderer.invoke('updates:getState'),
     check: () => ipcRenderer.invoke('updates:check'),

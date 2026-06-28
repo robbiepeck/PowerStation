@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { Check, Copy, Info } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -58,7 +58,10 @@ export function MetricInfoButton({ info }: { info: MetricInfo }) {
         type="button"
         aria-label={`What ${info.title} means`}
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={(event) => {
+          event.stopPropagation()
+          setOpen((current) => !current)
+        }}
         onBlur={() => setOpen(false)}
       >
         <Info size={12} />
@@ -163,6 +166,7 @@ export function MetricTile({
   icon: Icon,
   info,
   label,
+  onClick,
   series,
   sub,
   tone,
@@ -172,13 +176,28 @@ export function MetricTile({
   icon: LucideIcon
   info?: MetricInfo
   label: string
+  onClick?: () => void
   series: number[]
   sub?: ReactNode
   tone: 'amber' | 'blue' | 'green' | 'teal'
   value: number
 }) {
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!onClick) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      onClick()
+    }
+  }
+
   return (
-    <div className={`metric-tile ${tone}`}>
+    <div
+      className={`metric-tile ${tone} ${onClick ? 'clickable' : ''}`}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={handleKeyDown}
+    >
       <div className="metric-topline">
         <span className="metric-label">
           <Icon size={15} />

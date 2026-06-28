@@ -37,7 +37,7 @@ async function getPrimaryStorage() {
 
   if (!matchingDisk || !matchingDisk.size) return null
 
-  const used = typeof matchingDisk.used === 'number' ? matchingDisk.used : matchingDisk.size - (matchingDisk.available ?? 0)
+  const used = typeof matchingDisk.available === 'number' ? matchingDisk.size - matchingDisk.available : matchingDisk.used
   const free = typeof matchingDisk.available === 'number' ? matchingDisk.available : matchingDisk.size - used
 
   return {

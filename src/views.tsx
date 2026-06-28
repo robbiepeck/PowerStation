@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import type { ReactNode } from 'react'
 import {
   AlertTriangle,
+  ArrowLeft,
   BadgeCheck,
   BookOpenCheck,
   Code2,
@@ -11,6 +11,7 @@ import {
   ExternalLink,
   FileDown,
   FolderSearch,
+  FolderOpen,
   HardDrive,
   Microchip,
   RefreshCw,
@@ -20,14 +21,12 @@ import {
   Zap,
 } from 'lucide-react'
 import { STARTER_MODELS, type StarterModel } from './modelCatalog'
-import type { DeviceInfo, ModelInfo, Settings, TelemetrySnapshot } from './types'
+import type { DeviceInfo, ModelInfo, Settings, StorageBreakdown, TelemetrySnapshot } from './types'
 import {
   Badge,
-  MetricInfoButton,
   MetricTile,
   PanelHeader,
   RangeControl,
-  Sparkline,
   ToggleControl,
   clamp,
   formatBytes,
@@ -217,40 +216,14 @@ export function StarterModelCatalog({
   )
 }
 
-function LargeChart({
-  info,
-  label,
-  series,
-  value,
-  note,
-}: {
-  info?: MetricInfo
-  label: string
-  series: number[]
-  value: string
-  note?: ReactNode
-}) {
-  return (
-    <div className="large-chart">
-      <div>
-        <span className="metric-label">
-          {label}
-          {info ? <MetricInfoButton info={info} /> : null}
-        </span>
-        <strong>{value}</strong>
-      </div>
-      <Sparkline series={series} height={92} />
-      {note ? <div className="chart-note">{note}</div> : null}
-    </div>
-  )
-}
-
 export function MonitorView({
   device,
+  onOpenStorage,
   series,
   snapshot,
 }: {
   device: DeviceInfo | null
+  onOpenStorage: () => void
   series: MetricSeries
   snapshot: TelemetrySnapshot | null
 }) {
@@ -301,9 +274,16 @@ export function MonitorView({
         title="Live monitor"
         action={
           <div className="device-chip">
-            <Microchip size={15} />
-            <span>{device?.gpuNames?.[0] ?? snapshot.gpu.name ?? 'GPU'}</span>
-            <Badge tone="neutral">{typeof device?.gpuType === 'string' ? device.gpuType : 'cpu'}</Badge>
+            <div className="device-chip-main">
+              <Microchip size={15} />
+              <span>{device?.gpuNames?.[0] ?? device?.health.modelName ?? snapshot.gpu.name ?? 'GPU'}</span>
+              <Badge tone="neutral">{typeof device?.gpuType === 'string' ? device.gpuType : 'cpu'}</Badge>
+            </div>
+            <div className="device-chip-health" title={device?.health.estimateNote}>
+              <span>{device?.health.ageYears != null ? `${formatNumber(device.health.ageYears, 1)}y old` : 'Age n/a'}</span>
+              <span>{device?.health.batteryCapacityPct != null ? `Battery ${formatNumber(device.health.batteryCapacityPct)}%` : 'Battery n/a'}</span>
+              <span>{device?.health.performanceCapacityPct != null ? `Perf ${formatNumber(device.health.performanceCapacityPct)}%` : 'Perf est. n/a'}</span>
+            </div>
           </div>
         }
       />
@@ -365,6 +345,7 @@ export function MonitorView({
           icon={HardDrive}
           info={METRIC_INFO.storage}
           label="Storage"
+          onClick={onOpenStorage}
           series={series.storage}
           sub={
             <Badge tone={snapshot.storage.real ? 'real' : 'estimated'}>
@@ -396,24 +377,6 @@ export function MonitorView({
         />
       </div>
 
-      <div className="chart-board">
-        <LargeChart info={METRIC_INFO.cpu} label="CPU load" series={series.cpu} value={`${formatNumber(snapshot.cpu.load)}%`} />
-        <LargeChart info={METRIC_INFO.ram} label="RAM" series={series.ram} value={`${formatNumber(snapshot.ram.usedGb, 1)} GB`} />
-        <LargeChart
-          info={METRIC_INFO.storage}
-          label="Storage"
-          series={series.storage}
-          value={snapshot.storage.totalGb ? `${formatNumber(snapshot.storage.usedGb, 0)} / ${formatNumber(snapshot.storage.totalGb, 0)} GB` : 'n/a'}
-        />
-        <LargeChart info={METRIC_INFO.power} label="Power (est.)" series={series.power} value={`${formatNumber(snapshot.power.watts, 1)} W`} />
-        <LargeChart
-          info={METRIC_INFO.thermal}
-          label="Thermal headroom"
-          series={series.thermal}
-          value={snapshot.thermal.celsius != null ? `${formatNumber(snapshot.thermal.celsius)}°C` : `${formatNumber(snapshot.thermal.headroomPct)}%`}
-        />
-      </div>
-
       <div className="process-table">
         <div className="table-head">
           <span>Signal</span>
@@ -432,6 +395,118 @@ export function MonitorView({
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+export function StorageView({
+  loading,
+  onBack,
+  onRefresh,
+  onReveal,
+  result,
+  snapshot,
+}: {
+  loading: boolean
+  onBack: () => void
+  onRefresh: () => void
+  onReveal: (filePath: string) => void
+  result: StorageBreakdown | null
+  snapshot: TelemetrySnapshot | null
+}) {
+  const usedBytes = snapshot ? snapshot.storage.usedGb * 1_000_000_000 : 0
+  const totalBytes = snapshot ? snapshot.storage.totalGb * 1_000_000_000 : 0
+  const freeBytes = snapshot ? snapshot.storage.freeGb * 1_000_000_000 : 0
+
+  return (
+    <div className="storage-view">
+      <PanelHeader
+        eyebrow="Storage"
+        title="Storage breakdown"
+        action={
+          <div className="storage-actions">
+            <button className="secondary-button compact" type="button" onClick={onBack}>
+              <ArrowLeft size={14} />
+              Monitor
+            </button>
+            <button className="secondary-button compact" type="button" onClick={onRefresh} disabled={loading}>
+              <RefreshCw size={14} />
+              {loading ? 'Scanning' : 'Rescan'}
+            </button>
+          </div>
+        }
+      />
+
+      <div className="storage-summary">
+        <div>
+          <span>Used</span>
+          <strong>{formatBytes(usedBytes)}</strong>
+        </div>
+        <div>
+          <span>Free</span>
+          <strong>{formatBytes(freeBytes)}</strong>
+        </div>
+        <div>
+          <span>Total</span>
+          <strong>{formatBytes(totalBytes)}</strong>
+        </div>
+        <div>
+          <span>Potential cleanup</span>
+          <strong>{result ? formatBytes(result.cleanupBytes) : loading ? 'Scanning' : '—'}</strong>
+        </div>
+      </div>
+
+      <div className="storage-note">
+        <AlertTriangle size={15} />
+        <span>{result?.note ?? 'PowerStation is scanning common user-owned folders for large and stale files. Nothing is deleted automatically.'}</span>
+      </div>
+
+      {loading && !result ? <p className="empty-hint">Scanning storage. This can take a little while on large folders.</p> : null}
+
+      {result ? (
+        <>
+          <section className="storage-section">
+            <h3>Largest areas scanned</h3>
+            <div className="storage-root-grid">
+              {result.roots.slice(0, 6).map((root) => (
+                <div className="storage-root-card" key={root.path}>
+                  <span>{root.label}</span>
+                  <strong>{formatBytes(root.sizeBytes)}</strong>
+                  <small>{root.skipped ? `${root.skipped} skipped` : root.path}</small>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="storage-section">
+            <h3>Large files and folders</h3>
+            <div className="storage-table">
+              {result.items.length ? (
+                result.items.map((item) => (
+                  <div className={`storage-row ${item.potentiallyUnneeded ? 'cleanup' : ''}`} key={item.path}>
+                    <div className="storage-row-main">
+                      <FolderOpen size={15} />
+                      <div>
+                        <strong>{item.name}</strong>
+                        <span>{item.path}</span>
+                      </div>
+                    </div>
+                    <span>{item.category}</span>
+                    <span>{formatBytes(item.sizeBytes)}</span>
+                    <span>{new Date(item.modifiedAt).toLocaleDateString()}</span>
+                    <p>{item.reason}</p>
+                    <button className="secondary-button compact" type="button" onClick={() => onReveal(item.path)}>
+                      Reveal
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="empty-hint">No large user-owned files were found in the scanned locations.</p>
+              )}
+            </div>
+          </section>
+        </>
+      ) : null}
     </div>
   )
 }
