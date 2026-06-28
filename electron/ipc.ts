@@ -1,6 +1,8 @@
 import { ipcMain, dialog, shell, type BrowserWindow } from 'electron'
 import * as models from './models.js'
 import * as llm from './llm.js'
+import { getDeviceHealthProfile } from './device.js'
+import { analyzeStorage } from './storage.js'
 import { getState, patchSettings, managedModelsDir, type Settings } from './config.js'
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
@@ -77,7 +79,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // --- Settings & device ----------------------------------------------------
   ipcMain.handle('settings:get', async () => (await getState()).settings)
   ipcMain.handle('settings:update', (_event, patch: Partial<Settings>) => patchSettings(patch))
-  ipcMain.handle('device:info', () => llm.getDeviceInfo())
+  ipcMain.handle('device:info', async () => {
+    const info = await llm.getDeviceInfo()
+    return { ...info, health: await getDeviceHealthProfile(info.gpuNames) }
+  })
+  ipcMain.handle('storage:analyze', () => analyzeStorage())
+  ipcMain.handle('storage:reveal', (_event, filePath: string) => {
+    shell.showItemInFolder(filePath)
+    return true
+  })
 
   // --- Chat -----------------------------------------------------------------
   ipcMain.handle('chat:send', async (_event, payload: { requestId: string; prompt: string }) => {
