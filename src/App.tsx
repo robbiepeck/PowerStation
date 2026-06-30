@@ -444,7 +444,6 @@ function App() {
               onDownload={handleDownload}
               onOpenWebsite={handleOpenModelWebsite}
               onImportFile={handleImportFile}
-              onRefresh={refresh}
               onRemove={handleRemove}
               onReveal={(model) => void bridge.models.reveal(model.path)}
               onSelect={(model) => void handleSelectModel(model.path)}
@@ -577,6 +576,7 @@ function ChatView({
               onDownload={onDownload}
               onManageModels={onManageModels}
               onOpenWebsite={onOpenModelWebsite}
+              selectedModel={selectedModel}
               variant="welcome"
             />
           )

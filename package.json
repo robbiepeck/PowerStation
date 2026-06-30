@@ -2,7 +2,7 @@
   "name": "powerstation",
   "productName": "PowerStation",
   "private": true,
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "A desktop GUI for hosting and monitoring local open-source models.",
   "author": "Robbie Peck",
   "type": "module",
