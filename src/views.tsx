@@ -86,17 +86,37 @@ function starterIcon(model: StarterModel) {
   return BookOpenCheck
 }
 
+function starterFileName(model: StarterModel) {
+  return decodeURIComponent(model.uri.split('/').pop() ?? '').toLowerCase()
+}
+
+function comparableModelName(value: string) {
+  return value.toLowerCase().replace(/\.gguf$/i, '').replace(/[^a-z0-9]+/g, '')
+}
+
+function isCurrentStarterModel(model: StarterModel, selectedModel?: ModelInfo | null) {
+  if (!selectedModel) return false
+  const target = starterFileName(model)
+  const selectedFile = selectedModel.fileName.toLowerCase()
+  const selectedPath = selectedModel.path.split('\\').join('/').toLowerCase()
+  const comparableTarget = comparableModelName(target)
+  const comparableSelected = comparableModelName(selectedFile)
+  return Boolean(target) && (selectedFile === target || selectedPath.endsWith(`/${target}`) || comparableSelected.includes(comparableTarget))
+}
+
 export function StarterModelCatalog({
   download,
   onDownload,
   onManageModels,
   onOpenWebsite,
+  selectedModel,
   variant = 'models',
 }: {
   download: DownloadState
   onDownload: (uri: string) => void
   onManageModels?: () => void
   onOpenWebsite: (url: string) => void
+  selectedModel?: ModelInfo | null
   variant?: 'models' | 'welcome'
 }) {
   const downloadingUri = download?.uri
@@ -117,12 +137,13 @@ export function StarterModelCatalog({
         {STARTER_MODELS.map((model) => {
           const Icon = starterIcon(model)
           const active = downloadingUri === model.uri
+          const current = isCurrentStarterModel(model, selectedModel)
           const disabled = Boolean(download) && !download?.error
           const failed = active && Boolean(download?.error)
           const label = active && !download?.error ? 'Downloading' : failed ? 'Retry download' : 'Download'
 
           return (
-            <article className={`starter-card ${model.tone}`} key={model.id}>
+            <article className={`starter-card ${model.tone} ${current ? 'currently-used' : ''}`} key={model.id}>
               <div className="starter-card-top">
                 <span className="starter-icon" aria-hidden="true">
                   <Icon size={18} />
@@ -193,15 +214,22 @@ export function StarterModelCatalog({
                 <ExternalLink size={15} />
                 View Website
               </button>
-              <button
-                className="primary-button starter-download"
-                type="button"
-                disabled={disabled && !failed}
-                onClick={() => onDownload(model.uri)}
-              >
-                <Download size={15} />
-                {disabled && !active ? 'Download running' : label}
-              </button>
+              {current ? (
+                <button className="primary-button starter-download currently-used-button" type="button" disabled>
+                  <BadgeCheck size={15} />
+                  Currently Used
+                </button>
+              ) : (
+                <button
+                  className="primary-button starter-download"
+                  type="button"
+                  disabled={disabled && !failed}
+                  onClick={() => onDownload(model.uri)}
+                >
+                  <Download size={15} />
+                  {disabled && !active ? 'Download running' : label}
+                </button>
+              )}
             </article>
           )
         })}
@@ -520,7 +548,6 @@ export function ModelsView({
   onDownload,
   onOpenWebsite,
   onImportFile,
-  onRefresh,
   onRemove,
   onReveal,
   onSelect,
@@ -534,7 +561,6 @@ export function ModelsView({
   onDownload: (uri: string) => void
   onOpenWebsite: (url: string) => void
   onImportFile: () => void
-  onRefresh: () => void
   onRemove: (model: ModelInfo) => void
   onReveal: (model: ModelInfo) => void
   onSelect: (model: ModelInfo) => void
@@ -542,21 +568,13 @@ export function ModelsView({
 }) {
   const [uri, setUri] = useState('')
   const downloadPct = download && download.totalSize ? (download.downloadedSize / download.totalSize) * 100 : 0
+  const selectedModel = models.find((model) => model.path === selectedPath) ?? null
 
   return (
     <div className="models-view">
-      <PanelHeader
-        eyebrow="Models"
-        title="Local models"
-        action={
-          <button className="secondary-button compact" type="button" onClick={onRefresh}>
-            <RefreshCw size={14} />
-            Refresh
-          </button>
-        }
-      />
+      <PanelHeader eyebrow="Models" title="Local models" />
 
-      <StarterModelCatalog download={download} onDownload={onDownload} onOpenWebsite={onOpenWebsite} />
+      <StarterModelCatalog download={download} onDownload={onDownload} onOpenWebsite={onOpenWebsite} selectedModel={selectedModel} />
 
       <div className="model-actions">
         <button className="secondary-button" type="button" onClick={onImportFile}>

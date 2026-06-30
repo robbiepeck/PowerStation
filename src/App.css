@@ -500,6 +500,16 @@
   --model-accent: var(--amber);
 }
 
+.starter-card.currently-used {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 18%, transparent), 0 18px 44px rgba(43, 110, 151, 0.12);
+}
+
+.starter-card.currently-used .starter-icon {
+  background: color-mix(in srgb, var(--blue) 14%, white);
+  color: var(--blue);
+}
+
 .starter-card-top {
   display: flex;
   gap: 0.7rem;
@@ -612,6 +622,13 @@
   justify-content: center;
   width: 100%;
   margin-top: 0.6rem;
+}
+
+.starter-download.currently-used-button:disabled {
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #f6fbfa;
+  cursor: default;
 }
 
 .starter-website-button {

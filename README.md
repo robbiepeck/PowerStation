@@ -18,11 +18,11 @@ PowerStation aims to eventually provide a powerful model harness (skills, connec
 
 ## Download
 
-Latest release: [v0.0.8](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.8)
+Latest release: [v0.0.9](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.9)
 
 | Platform | Status | Download |
 | --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.8-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.8/PowerStation-0.0.8-macOS-arm64.dmg) |
+| macOS Apple Silicon | Available | [PowerStation-0.0.9-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.9/PowerStation-0.0.9-macOS-arm64.dmg) |
 | macOS Intel | Planned | Public binary pending |
 | Windows x64 | Build supported, public binary pending | Build from source with `npm run package:win` |
 
