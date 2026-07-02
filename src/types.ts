@@ -1,3 +1,21 @@
+export type UtilityItem = {
+  id: string
+  label: string
+}
+
+export type McpServerConfig = {
+  id: string
+  name: string
+  command: string
+}
+
+export type UtilitySettings = {
+  systemPrompt: string
+  skills: UtilityItem[]
+  connectors: UtilityItem[]
+  mcpServers: McpServerConfig[]
+}
+
 export type ModelInfo = {
   path: string
   fileName: string
@@ -18,6 +36,7 @@ export type Settings = {
   lowPowerBias: boolean
   temperature: number
   maxTokens: number
+  utilities: UtilitySettings
 }
 
 export type TelemetrySnapshot = {

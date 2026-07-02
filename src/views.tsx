@@ -14,6 +14,7 @@ import {
   FolderOpen,
   HardDrive,
   Microchip,
+  Plus,
   RefreshCw,
   ShieldCheck,
   Thermometer,
@@ -21,7 +22,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { STARTER_MODELS, type StarterModel } from './modelCatalog'
-import type { DeviceInfo, ModelInfo, Settings, StorageBreakdown, TelemetrySnapshot } from './types'
+import type { DeviceInfo, ModelInfo, Settings, StorageBreakdown, TelemetrySnapshot, UtilitySettings } from './types'
 import {
   Badge,
   MetricTile,
@@ -75,6 +76,17 @@ export type DownloadState = {
   downloadedSize: number
   error?: string
 } | null
+
+const EMPTY_UTILITIES: UtilitySettings = {
+  systemPrompt: '',
+  skills: [],
+  connectors: [],
+  mcpServers: [],
+}
+
+function createUtilityId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+}
 
 function starterIcon(model: StarterModel) {
   if (model.tone === 'compact') return Zap
@@ -693,6 +705,258 @@ export function ModelsView({
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+export function UtilitiesView({
+  enabled,
+  onSettingsChange,
+  selectedModel,
+  settings,
+}: {
+  enabled: boolean
+  onSettingsChange: (patch: Partial<Settings>) => void
+  selectedModel: ModelInfo | null
+  settings: Settings | null
+}) {
+  const [skillDraft, setSkillDraft] = useState('')
+  const [connectorDraft, setConnectorDraft] = useState('')
+  const [mcpNameDraft, setMcpNameDraft] = useState('')
+  const [mcpCommandDraft, setMcpCommandDraft] = useState('')
+  const utilities = settings?.utilities ?? EMPTY_UTILITIES
+  const disabled = !enabled || !settings
+
+  const updateUtilities = (patch: Partial<UtilitySettings>) => {
+    if (disabled) return
+    onSettingsChange({ utilities: { ...utilities, ...patch } })
+  }
+
+  const addSkill = () => {
+    const label = skillDraft.trim()
+    if (!label) return
+    updateUtilities({ skills: [...utilities.skills, { id: createUtilityId('skill'), label }] })
+    setSkillDraft('')
+  }
+
+  const addConnector = () => {
+    const label = connectorDraft.trim()
+    if (!label) return
+    updateUtilities({ connectors: [...utilities.connectors, { id: createUtilityId('connector'), label }] })
+    setConnectorDraft('')
+  }
+
+  const addMcpServer = () => {
+    const name = mcpNameDraft.trim()
+    const command = mcpCommandDraft.trim()
+    if (!name || !command) return
+    updateUtilities({
+      mcpServers: [...utilities.mcpServers, { id: createUtilityId('mcp'), name, command }],
+    })
+    setMcpNameDraft('')
+    setMcpCommandDraft('')
+  }
+
+  return (
+    <div className="utilities-view">
+      <section className={disabled ? 'utilities-section disabled' : 'utilities-section'} aria-disabled={disabled}>
+        <div className="utilities-head">
+          <div>
+            <span>Utilities</span>
+            <h3>Agent utilities</h3>
+            <p>
+              {selectedModel
+                ? `Configured for ${selectedModel.name}`
+                : 'Download and select a local model to configure utilities.'}
+            </p>
+          </div>
+          <Badge tone={disabled ? 'neutral' : 'real'}>{disabled ? 'Locked' : 'Enabled'}</Badge>
+        </div>
+
+        <fieldset className="utilities-fieldset" disabled={disabled}>
+          <div className="utilities-grid">
+            <section className="utility-panel personalisation">
+              <div className="utility-panel-head">
+                <BookOpenCheck size={16} />
+                <h4>Personalisation</h4>
+              </div>
+              <label className="utility-label">
+                <span>System prompt</span>
+                <textarea
+                  aria-label="System prompt"
+                  placeholder="Describe how the local model should behave for this workspace."
+                  rows={7}
+                  value={utilities.systemPrompt}
+                  onChange={(event) => updateUtilities({ systemPrompt: event.target.value })}
+                />
+              </label>
+            </section>
+
+            <section className="utility-panel">
+              <div className="utility-panel-head">
+                <ShieldCheck size={16} />
+                <h4>Skills</h4>
+              </div>
+              <UtilityAddRow
+                buttonLabel="Add skill"
+                onAdd={addSkill}
+                placeholder="Skill name or local folder path"
+                value={skillDraft}
+                onChange={setSkillDraft}
+              />
+              <UtilityItemList
+                emptyText="No skills added"
+                items={utilities.skills}
+                onRemove={(id) => updateUtilities({ skills: utilities.skills.filter((item) => item.id !== id) })}
+              />
+            </section>
+
+            <section className="utility-panel">
+              <div className="utility-panel-head">
+                <Database size={16} />
+                <h4>Connectors</h4>
+              </div>
+              <UtilityAddRow
+                buttonLabel="Add connector"
+                onAdd={addConnector}
+                placeholder="Connector name or service"
+                value={connectorDraft}
+                onChange={setConnectorDraft}
+              />
+              <UtilityItemList
+                emptyText="No connectors added"
+                items={utilities.connectors}
+                onRemove={(id) =>
+                  updateUtilities({ connectors: utilities.connectors.filter((item) => item.id !== id) })
+                }
+              />
+            </section>
+
+            <section className="utility-panel mcp-panel">
+              <div className="utility-panel-head">
+                <Code2 size={16} />
+                <h4>MCP servers</h4>
+              </div>
+              <div className="mcp-add-grid">
+                <input
+                  aria-label="MCP server name"
+                  placeholder="Server name"
+                  value={mcpNameDraft}
+                  onChange={(event) => setMcpNameDraft(event.target.value)}
+                />
+                <input
+                  aria-label="MCP server command"
+                  placeholder="Command or URL"
+                  value={mcpCommandDraft}
+                  onChange={(event) => setMcpCommandDraft(event.target.value)}
+                />
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  onClick={addMcpServer}
+                  disabled={!mcpNameDraft.trim() || !mcpCommandDraft.trim()}
+                >
+                  <Plus size={14} />
+                  Add server
+                </button>
+              </div>
+              <div className="utility-list">
+                {utilities.mcpServers.length ? (
+                  utilities.mcpServers.map((server) => (
+                    <div className="utility-item mcp-item" key={server.id}>
+                      <div>
+                        <strong>{server.name}</strong>
+                        <code>{server.command}</code>
+                      </div>
+                      <button
+                        className="ghost-button danger"
+                        type="button"
+                        title={`Remove ${server.name}`}
+                        onClick={() =>
+                          updateUtilities({
+                            mcpServers: utilities.mcpServers.filter((item) => item.id !== server.id),
+                          })
+                        }
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <p className="utility-empty">No MCP servers added</p>
+                )}
+              </div>
+            </section>
+          </div>
+        </fieldset>
+      </section>
+    </div>
+  )
+}
+
+function UtilityAddRow({
+  buttonLabel,
+  onAdd,
+  onChange,
+  placeholder,
+  value,
+}: {
+  buttonLabel: string
+  onAdd: () => void
+  onChange: (value: string) => void
+  placeholder: string
+  value: string
+}) {
+  return (
+    <div className="utility-add-row">
+      <input
+        aria-label={buttonLabel}
+        placeholder={placeholder}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            onAdd()
+          }
+        }}
+      />
+      <button className="secondary-button compact" type="button" onClick={onAdd} disabled={!value.trim()}>
+        <Plus size={14} />
+        {buttonLabel}
+      </button>
+    </div>
+  )
+}
+
+function UtilityItemList({
+  emptyText,
+  items,
+  onRemove,
+}: {
+  emptyText: string
+  items: UtilitySettings['skills']
+  onRemove: (id: string) => void
+}) {
+  return (
+    <div className="utility-list">
+      {items.length ? (
+        items.map((item) => (
+          <div className="utility-item" key={item.id}>
+            <span>{item.label}</span>
+            <button
+              className="ghost-button danger"
+              type="button"
+              title={`Remove ${item.label}`}
+              onClick={() => onRemove(item.id)}
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        ))
+      ) : (
+        <p className="utility-empty">{emptyText}</p>
+      )}
     </div>
   )
 }
