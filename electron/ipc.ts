@@ -20,6 +20,17 @@ function isAllowedModelUri(uri: string): boolean {
   }
 }
 
+function isTrustedExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'https:') return false
+    if (parsed.hostname === 'huggingface.co') return true
+    return parsed.hostname === 'github.com' && parsed.pathname.startsWith('/robbiepeck/PowerStation/releases')
+  } catch {
+    return false
+  }
+}
+
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
   const send = (channel: string, payload: unknown) => {
     const win = getWindow()
@@ -87,11 +98,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'https:' || parsed.hostname !== 'huggingface.co') {
-      throw new Error('PowerStation can only open trusted HTTPS model pages.')
+    if (!isTrustedExternalUrl(url)) {
+      throw new Error('PowerStation can only open trusted external pages.')
     }
-    await shell.openExternal(parsed.toString())
+    await shell.openExternal(new URL(url).toString())
     return true
   })
 

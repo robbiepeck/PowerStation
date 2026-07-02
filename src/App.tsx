@@ -12,11 +12,12 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   Square,
+  Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
-import { ModelsView, MonitorView, SettingsView, StarterModelCatalog, StorageView } from './views'
+import { ModelsView, MonitorView, SettingsView, StarterModelCatalog, StorageView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { CopyButton, formatNumber } from './ui'
 import type {
@@ -31,7 +32,7 @@ import type {
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'settings' | 'storage'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'settings' | 'storage'
 
 const bridge = getDesktop()
 
@@ -39,6 +40,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'chat', label: 'Chat', icon: MessageSquareText },
   { id: 'monitor', label: 'Monitor', icon: Activity },
   { id: 'models', label: 'Models', icon: BrainCircuit },
+  { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
 ]
 
@@ -269,6 +271,8 @@ function App() {
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
+  const utilitiesDisabled = !selectedModel
+  const visibleView = activeView === 'utilities' && utilitiesDisabled ? 'models' : activeView
 
   useEffect(() => {
     const offProgress = bridge.models.onDownloadProgress((payload) => {
@@ -373,13 +377,18 @@ function App() {
         <nav className="nav-stack" aria-label="PowerStation sections">
           {navItems.map((item) => {
             const Icon = item.icon
+            const disabled = item.id === 'utilities' && utilitiesDisabled
             return (
               <button
-                className={item.id === activeView ? 'nav-button active' : 'nav-button'}
+                className={`${item.id === visibleView ? 'nav-button active' : 'nav-button'}${disabled ? ' disabled' : ''}`}
                 key={item.id}
                 type="button"
                 aria-label={item.label}
-                onClick={() => setActiveView(item.id)}
+                aria-disabled={disabled}
+                disabled={disabled}
+                onClick={() => {
+                  if (!disabled) setActiveView(item.id)
+                }}
               >
                 <Icon size={19} strokeWidth={2.1} />
                 <span>{item.label}</span>
@@ -402,7 +411,7 @@ function App() {
       </aside>
 
       <main className="app-main">
-        {activeView === 'chat' && (
+        {visibleView === 'chat' && (
           <ChatView
             device={device}
             download={download}
@@ -420,8 +429,8 @@ function App() {
             streaming={chat.streaming}
           />
         )}
-        {activeView === 'monitor' && <MonitorView device={device} onOpenStorage={handleOpenStorage} series={series} snapshot={snapshot} />}
-        {activeView === 'storage' && (
+        {visibleView === 'monitor' && <MonitorView device={device} onOpenStorage={handleOpenStorage} series={series} snapshot={snapshot} />}
+        {visibleView === 'storage' && (
           <div className="scroll-view">
             <StorageView
               loading={storageLoading}
@@ -433,7 +442,7 @@ function App() {
             />
           </div>
         )}
-        {activeView === 'models' && (
+        {visibleView === 'models' && (
           <div className="scroll-view">
             <ModelsView
               device={device}
@@ -451,7 +460,17 @@ function App() {
             />
           </div>
         )}
-        {activeView === 'settings' && (
+        {visibleView === 'utilities' && (
+          <div className="scroll-view">
+            <UtilitiesView
+              enabled={Boolean(selectedModel)}
+              onSettingsChange={updateSettings}
+              selectedModel={selectedModel}
+              settings={settings}
+            />
+          </div>
+        )}
+        {visibleView === 'settings' && (
           <div className="scroll-view">
             {settings ? <SettingsView onChange={updateSettings} settings={settings} /> : null}
           </div>
@@ -462,11 +481,19 @@ function App() {
 }
 
 function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: UpdateState | null }) {
-  if (!state || state.phase === 'idle' || state.phase === 'unsupported' || state.phase === 'checking') return null
+  if (!state) return null
 
   const downloading = state.phase === 'downloading'
   const configurationError =
     state.phase === 'error' && Boolean(state.message?.match(/private|release feed|update metadata/i))
+  const shouldShow =
+    state.phase === 'available' ||
+    state.phase === 'downloading' ||
+    state.phase === 'downloaded' ||
+    (state.phase === 'error' && Boolean(state.latestVersion) && !configurationError)
+
+  if (!shouldShow) return null
+
   const label =
     state.phase === 'available'
       ? state.latestVersion
@@ -486,7 +513,10 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
       type="button"
       onClick={onUpdate}
       disabled={downloading || configurationError}
-      title={state.message ?? (state.latestVersion ? `Latest version ${state.latestVersion}` : undefined)}
+      title={
+        state.message ??
+        (state.latestVersion ? `Latest version ${state.latestVersion}` : 'Check for PowerStation updates')
+      }
     >
       {downloading ? <LoaderCircle className="spin-icon" size={15} /> : <Download size={15} />}
       <span>{label}</span>
