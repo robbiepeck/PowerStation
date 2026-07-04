@@ -1,0 +1,381 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-05",
+  "models": [
+    {
+      "id": "qwen3.5-4b",
+      "name": "Qwen3.5 4B",
+      "family": "Qwen3.5",
+      "hfRepo": "lmstudio-community/Qwen3.5-4B-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/Qwen3.5-4B-GGUF",
+      "fileName": "Qwen3.5-4B-Q4_K_M.gguf",
+      "sizeBytes": 2707513696,
+      "quant": "Q4_K_M",
+      "totalParamsB": 4,
+      "activeParamsB": null,
+      "geometry": { "nLayers": 32, "nKvHeads": 4, "headDim": 256 },
+      "kvBytesPerToken": 32768,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 16,
+      "expectedTps": "30-50 tok/s",
+      "useCases": ["everyday", "documents", "agents"],
+      "goodAt": [
+        "Fast, reliable tool calling for its size — top scores on 2026 small-model agent evals",
+        "Everyday chat, summarising and writing with quick responses",
+        "Very long documents: 256K context with an unusually small memory footprint"
+      ],
+      "strugglesWith": [
+        "Deep specialist knowledge and obscure facts, typical of a 4B model",
+        "Large or complex multi-file coding projects"
+      ]
+    },
+    {
+      "id": "gpt-oss-20b",
+      "name": "gpt-oss 20B",
+      "family": "gpt-oss (OpenAI)",
+      "hfRepo": "ggml-org/gpt-oss-20b-GGUF",
+      "downloadUrl": "https://huggingface.co/ggml-org/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-mxfp4.gguf",
+      "websiteUrl": "https://huggingface.co/ggml-org/gpt-oss-20b-GGUF",
+      "fileName": "gpt-oss-20b-mxfp4.gguf",
+      "sizeBytes": 12109566560,
+      "quant": "MXFP4",
+      "totalParamsB": 21,
+      "activeParamsB": 3.6,
+      "geometry": { "nLayers": 24, "nKvHeads": 8, "headDim": 64 },
+      "kvBytesPerToken": 49152,
+      "maxContext": 131072,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 16,
+      "expectedTps": "50-70 tok/s",
+      "useCases": ["everyday", "agents", "coding", "reasoning"],
+      "goodAt": [
+        "Step-by-step reasoning with adjustable effort",
+        "Multi-step tool calling for agent workflows",
+        "Fast responses for its size — only 3.6B of 21B parameters active per token",
+        "Coding, math and structured problem solving"
+      ],
+      "strugglesWith": [
+        "Tight fit on 16GB Macs — keep the context window modest",
+        "Thinner general world knowledge than larger dense models",
+        "Reasons before answering, which delays the first visible token"
+      ]
+    },
+    {
+      "id": "gemma4-e4b",
+      "name": "Gemma 4 E4B",
+      "family": "Gemma 4 (Google)",
+      "hfRepo": "lmstudio-community/gemma-4-E4B-it-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/gemma-4-E4B-it-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF",
+      "fileName": "gemma-4-E4B-it-Q4_K_M.gguf",
+      "sizeBytes": 5335289664,
+      "quant": "Q4_K_M",
+      "totalParamsB": 8,
+      "activeParamsB": 4,
+      "geometry": { "nLayers": 42, "nKvHeads": 2, "headDim": 256 },
+      "kvBytesPerToken": 16384,
+      "maxContext": 131072,
+      "toolCalling": "single",
+      "license": "Apache-2.0",
+      "minRamGb": 16,
+      "expectedTps": "40-60 tok/s",
+      "useCases": ["everyday", "documents"],
+      "goodAt": [
+        "Strong multilingual support — 140+ languages, translation, multilingual documents",
+        "Clear, well-written everyday chat on 16GB Macs",
+        "Reading long documents with a tiny memory footprint"
+      ],
+      "strugglesWith": [
+        "Hard math and competition-level coding",
+        "Long multi-step agent tasks can go off the rails — fine for single tool calls",
+        "Recalling details spread across very long documents"
+      ]
+    },
+    {
+      "id": "glm-4.7-flash",
+      "name": "GLM-4.7 Flash",
+      "family": "GLM (Z.ai)",
+      "hfRepo": "lmstudio-community/GLM-4.7-Flash-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/GLM-4.7-Flash-GGUF/resolve/main/GLM-4.7-Flash-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/GLM-4.7-Flash-GGUF",
+      "fileName": "GLM-4.7-Flash-Q4_K_M.gguf",
+      "sizeBytes": 18132721120,
+      "quant": "Q4_K_M",
+      "totalParamsB": 31.2,
+      "activeParamsB": 3,
+      "geometry": { "nLayers": 47, "nKvHeads": 20, "headDim": 256 },
+      "kvBytesPerToken": 54272,
+      "maxContext": 202752,
+      "toolCalling": "multi",
+      "license": "MIT",
+      "minRamGb": 24,
+      "expectedTps": "40-60 tok/s",
+      "useCases": ["agents", "coding", "everyday"],
+      "goodAt": [
+        "Multi-step agent loops and tool calling — best in its size class",
+        "Coding and software-engineering tasks",
+        "Fast responses for a 30B-class model — only ~3B parameters active per token",
+        "Very long documents with a memory-efficient design"
+      ],
+      "strugglesWith": [
+        "Tight fit on 24GB Macs — 32GB is comfortable for long sessions",
+        "Thinking mode can reason at length before answering",
+        "Text only — no image input"
+      ]
+    },
+    {
+      "id": "qwen3-coder-30b-a3b",
+      "name": "Qwen3 Coder 30B-A3B",
+      "family": "Qwen3-Coder",
+      "hfRepo": "lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF/resolve/main/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/Qwen3-Coder-30B-A3B-Instruct-GGUF",
+      "fileName": "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf",
+      "sizeBytes": 18632186176,
+      "quant": "Q4_K_M",
+      "totalParamsB": 30.5,
+      "activeParamsB": 3.3,
+      "geometry": { "nLayers": 48, "nKvHeads": 4, "headDim": 128 },
+      "kvBytesPerToken": 98304,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 24,
+      "expectedTps": "40-60 tok/s",
+      "useCases": ["coding", "agents"],
+      "goodAt": [
+        "Writing and editing code across many languages",
+        "Multi-step agentic coding with tool calls",
+        "Understanding large codebases with very long context",
+        "Fast responses for its size — only 3.3B parameters active per token"
+      ],
+      "strugglesWith": [
+        "Deep math and logic reasoning — it has no thinking mode",
+        "General knowledge and creative writing versus generalist models",
+        "Tight on 24GB Macs — keep the context small, or use a 32GB machine"
+      ]
+    },
+    {
+      "id": "devstral-2-24b",
+      "name": "Devstral Small 2 24B",
+      "family": "Mistral / Devstral",
+      "hfRepo": "lmstudio-community/Devstral-Small-2-24B-Instruct-2512-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/Devstral-Small-2-24B-Instruct-2512-GGUF/resolve/main/Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/Devstral-Small-2-24B-Instruct-2512-GGUF",
+      "fileName": "Devstral-Small-2-24B-Instruct-2512-Q4_K_M.gguf",
+      "sizeBytes": 14334437504,
+      "quant": "Q4_K_M",
+      "totalParamsB": 24,
+      "activeParamsB": null,
+      "geometry": { "nLayers": 40, "nKvHeads": 8, "headDim": 128 },
+      "kvBytesPerToken": 163840,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 24,
+      "expectedTps": "12-18 tok/s",
+      "useCases": ["coding", "agents"],
+      "goodAt": [
+        "Agentic coding: exploring a codebase, editing files, driving tools in a loop",
+        "Reliable multi-step tool calling inside agent harnesses",
+        "Long coding sessions with a 256K context window"
+      ],
+      "strugglesWith": [
+        "General chat and creative writing — it is tuned specifically for software engineering",
+        "Slower per-token than MoE models, since all 24B parameters are active",
+        "Large contexts on 24GB Macs — 32GB is recommended for real agent sessions"
+      ]
+    },
+    {
+      "id": "gemma4-26b-a4b",
+      "name": "Gemma 4 26B-A4B",
+      "family": "Gemma 4 (Google)",
+      "hfRepo": "lmstudio-community/gemma-4-26B-A4B-it-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/gemma-4-26B-A4B-it-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF",
+      "fileName": "gemma-4-26B-A4B-it-Q4_K_M.gguf",
+      "sizeBytes": 16796015040,
+      "quant": "Q4_K_M",
+      "totalParamsB": 25.2,
+      "activeParamsB": 3.8,
+      "geometry": { "nLayers": 30, "nKvHeads": 8, "headDim": 256 },
+      "kvBytesPerToken": 24576,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 24,
+      "expectedTps": "25-45 tok/s",
+      "useCases": ["everyday", "documents", "coding"],
+      "goodAt": [
+        "High-quality general chat and reasoning — near-frontier scores with only 4B active parameters",
+        "Coding and math with a configurable thinking mode",
+        "Very long documents with unusually low memory use"
+      ],
+      "strugglesWith": [
+        "Tight fit on 24GB Macs — little headroom for other apps; 32GB is comfortable",
+        "Recall accuracy drops on very long contexts",
+        "Deep specialist knowledge trails larger dense models"
+      ]
+    },
+    {
+      "id": "nemotron3-nano-30b",
+      "name": "Nemotron 3 Nano 30B-A3B",
+      "family": "Nemotron (NVIDIA)",
+      "hfRepo": "bartowski/nvidia_Nemotron-3-Nano-30B-A3B-GGUF",
+      "downloadUrl": "https://huggingface.co/bartowski/nvidia_Nemotron-3-Nano-30B-A3B-GGUF/resolve/main/nvidia_Nemotron-3-Nano-30B-A3B-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/bartowski/nvidia_Nemotron-3-Nano-30B-A3B-GGUF",
+      "fileName": "nvidia_Nemotron-3-Nano-30B-A3B-Q4_K_M.gguf",
+      "sizeBytes": 24655899872,
+      "quant": "Q4_K_M",
+      "totalParamsB": 30,
+      "activeParamsB": 3.5,
+      "geometry": { "nLayers": 52, "nKvHeads": 2, "headDim": 128 },
+      "kvBytesPerToken": 8192,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "NVIDIA Open Model License",
+      "minRamGb": 32,
+      "expectedTps": "45-60 tok/s",
+      "useCases": ["reasoning", "agents", "documents"],
+      "goodAt": [
+        "Step-by-step reasoning with visible thinking and a controllable thinking budget",
+        "Multi-step tool calling and agent workflows",
+        "Math and coding problems, especially with tool assistance",
+        "Very long documents — 256K context with a tiny per-token memory footprint"
+      ],
+      "strugglesWith": [
+        "Large download (~24.7GB) that needs a 32GB+ Mac",
+        "Thinks before answering by default, slowing simple requests",
+        "Creative writing polish trails similarly sized dense chat models"
+      ]
+    },
+    {
+      "id": "qwen3.6-35b-a3b",
+      "name": "Qwen3.6 35B-A3B",
+      "family": "Qwen3.6",
+      "hfRepo": "lmstudio-community/Qwen3.6-35B-A3B-GGUF",
+      "downloadUrl": "https://huggingface.co/lmstudio-community/Qwen3.6-35B-A3B-GGUF/resolve/main/Qwen3.6-35B-A3B-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/lmstudio-community/Qwen3.6-35B-A3B-GGUF",
+      "fileName": "Qwen3.6-35B-A3B-Q4_K_M.gguf",
+      "sizeBytes": 21166757728,
+      "quant": "Q4_K_M",
+      "totalParamsB": 35,
+      "activeParamsB": 3,
+      "geometry": { "nLayers": 40, "nKvHeads": 2, "headDim": 256 },
+      "kvBytesPerToken": 20480,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 32,
+      "expectedTps": "35-55 tok/s",
+      "useCases": ["agents", "coding", "everyday", "documents"],
+      "goodAt": [
+        "Agentic coding and multi-step tool use — flagship-quality agent work on a 32GB Mac",
+        "Fast responses for its size — only 3B of 35B parameters active per token",
+        "Very long documents and codebases (262K context, tiny memory footprint)"
+      ],
+      "strugglesWith": [
+        "Needs a 32GB Mac — the 21GB file won't fit GPU memory on 24GB machines",
+        "Deep obscure factual knowledge trails larger dense models"
+      ]
+    },
+    {
+      "id": "gpt-oss-120b",
+      "name": "gpt-oss 120B",
+      "family": "gpt-oss (OpenAI)",
+      "hfRepo": "ggml-org/gpt-oss-120b-GGUF",
+      "downloadUrl": "https://huggingface.co/ggml-org/gpt-oss-120b-GGUF/resolve/main/gpt-oss-120b-mxfp4-00001-of-00003.gguf",
+      "websiteUrl": "https://huggingface.co/ggml-org/gpt-oss-120b-GGUF",
+      "fileName": "gpt-oss-120b-mxfp4-00001-of-00003.gguf",
+      "sizeBytes": 63387346464,
+      "quant": "MXFP4",
+      "totalParamsB": 117,
+      "activeParamsB": 5.1,
+      "geometry": { "nLayers": 36, "nKvHeads": 8, "headDim": 64 },
+      "kvBytesPerToken": 73728,
+      "maxContext": 131072,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 64,
+      "expectedTps": "30-45 tok/s",
+      "useCases": ["reasoning", "agents", "coding", "everyday", "documents"],
+      "goodAt": [
+        "Complex multi-step reasoning with adjustable effort",
+        "Reliable multi-turn agent loops and tool calling",
+        "Coding, debugging and structured output",
+        "The strongest local option short of a workstation"
+      ],
+      "strugglesWith": [
+        "Barely fits on 64GB Macs — leaves little room for other apps",
+        "Text only — no image input",
+        "Slow prompt processing on very long inputs"
+      ]
+    },
+    {
+      "id": "qwen3-coder-next",
+      "name": "Qwen3 Coder Next 80B-A3B",
+      "family": "Qwen3-Next",
+      "hfRepo": "Qwen/Qwen3-Coder-Next-GGUF",
+      "downloadUrl": "https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF/resolve/main/Qwen3-Coder-Next-Q4_K_M/Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf",
+      "websiteUrl": "https://huggingface.co/Qwen/Qwen3-Coder-Next-GGUF",
+      "fileName": "Qwen3-Coder-Next-Q4_K_M-00001-of-00004.gguf",
+      "sizeBytes": 48410992032,
+      "quant": "Q4_K_M",
+      "totalParamsB": 80,
+      "activeParamsB": 3,
+      "geometry": { "nLayers": 48, "nKvHeads": 2, "headDim": 256 },
+      "kvBytesPerToken": 24576,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 64,
+      "expectedTps": "20-30 tok/s",
+      "useCases": ["coding", "agents"],
+      "goodAt": [
+        "Agentic coding with reliable multi-step tool calling and error recovery",
+        "Very large codebases — 256K context with a small memory footprint",
+        "Fast for its size — only 3B of 80B parameters active per token"
+      ],
+      "strugglesWith": [
+        "Needs a 64GB Mac and a ~48GB download",
+        "Specialised for coding — general chat and writing are not its strength",
+        "No thinking mode, so deep math reasoning is weaker"
+      ]
+    },
+    {
+      "id": "qwen3-next-80b",
+      "name": "Qwen3 Next 80B-A3B",
+      "family": "Qwen3-Next",
+      "hfRepo": "Qwen/Qwen3-Next-80B-A3B-Instruct-GGUF",
+      "downloadUrl": "https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct-GGUF/resolve/main/Qwen3-Next-80B-A3B-Instruct-Q4_K_M.gguf",
+      "websiteUrl": "https://huggingface.co/Qwen/Qwen3-Next-80B-A3B-Instruct-GGUF",
+      "fileName": "Qwen3-Next-80B-A3B-Instruct-Q4_K_M.gguf",
+      "sizeBytes": 48410988384,
+      "quant": "Q4_K_M",
+      "totalParamsB": 80,
+      "activeParamsB": 3,
+      "geometry": { "nLayers": 48, "nKvHeads": 2, "headDim": 256 },
+      "kvBytesPerToken": 24576,
+      "maxContext": 262144,
+      "toolCalling": "multi",
+      "license": "Apache-2.0",
+      "minRamGb": 64,
+      "expectedTps": "20-30 tok/s",
+      "useCases": ["everyday", "documents", "agents"],
+      "goodAt": [
+        "Big-model chat quality with small-model speed",
+        "Multi-step tool calling and agent workflows",
+        "Very long documents — 256K native context",
+        "Strong multilingual coverage"
+      ],
+      "strugglesWith": [
+        "Needs a 64GB Mac and nearly its whole memory budget",
+        "Hard math and tricky logic favor a dedicated reasoning model"
+      ]
+    }
+  ]
+}

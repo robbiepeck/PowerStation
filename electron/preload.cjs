@@ -12,6 +12,19 @@ contextBridge.exposeInMainWorld('powerStation', {
   app: {
     openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   },
+  hardware: {
+    profile: () => ipcRenderer.invoke('hardware:profile'),
+  },
+  catalog: {
+    get: () => ipcRenderer.invoke('catalog:get'),
+    refresh: () => ipcRenderer.invoke('catalog:refresh'),
+    recommend: (intent) => ipcRenderer.invoke('catalog:recommend', intent),
+    fitCheck: (payload) => ipcRenderer.invoke('fit:check', payload),
+  },
+  onboarding: {
+    get: () => ipcRenderer.invoke('onboarding:get'),
+    complete: (payload) => ipcRenderer.invoke('onboarding:complete', payload),
+  },
   models: {
     list: () => ipcRenderer.invoke('models:list'),
     pickFile: () => ipcRenderer.invoke('models:pickFile'),
@@ -35,6 +48,26 @@ contextBridge.exposeInMainWorld('powerStation', {
     onDone: (callback) => subscribe('chat:done', callback),
     onError: (callback) => subscribe('chat:error', callback),
     onStatus: (callback) => subscribe('chat:status', callback),
+    onAdmission: (callback) => subscribe('chat:admission', callback),
+    onToolCall: (callback) => subscribe('chat:toolCall', callback),
+    onToolResult: (callback) => subscribe('chat:toolResult', callback),
+  },
+  agent: {
+    respondPermission: (payload) => ipcRenderer.invoke('agent:permissionResponse', payload),
+    onPermissionRequest: (callback) => subscribe('agent:permissionRequest', callback),
+  },
+  mcp: {
+    statuses: () => ipcRenderer.invoke('mcp:statuses'),
+    toolInfo: () => ipcRenderer.invoke('mcp:toolInfo'),
+    reconnect: (serverId) => ipcRenderer.invoke('mcp:reconnect', serverId),
+    onStatus: (callback) => subscribe('mcp:status', callback),
+  },
+  permissions: {
+    get: () => ipcRenderer.invoke('permissions:get'),
+    set: (payload) => ipcRenderer.invoke('permissions:set', payload),
+  },
+  runtime: {
+    onEvent: (callback) => subscribe('runtime:event', callback),
   },
   telemetry: {
     onUpdate: (callback) => subscribe('telemetry:update', callback),
@@ -45,10 +78,6 @@ contextBridge.exposeInMainWorld('powerStation', {
   },
   device: {
     info: () => ipcRenderer.invoke('device:info'),
-  },
-  storage: {
-    analyze: () => ipcRenderer.invoke('storage:analyze'),
-    reveal: (filePath) => ipcRenderer.invoke('storage:reveal', filePath),
   },
   updates: {
     getState: () => ipcRenderer.invoke('updates:getState'),

@@ -2,6 +2,7 @@ import os from 'node:os'
 import { app } from 'electron'
 import si from 'systeminformation'
 import { getDeviceInfo, getLastTokensPerSec, getLoadedPath } from './llm.js'
+import { getMemoryPressureLevel, type MemoryPressureLevel } from './hardware.js'
 
 export type TelemetrySnapshot = {
   timestamp: number
@@ -12,6 +13,8 @@ export type TelemetrySnapshot = {
   storage: { usedGb: number; totalGb: number; freeGb: number; mount: string | null; real: boolean }
   power: { watts: number; estimated: boolean }
   thermal: { celsius: number | null; headroomPct: number; real: boolean }
+  /** OS memory pressure (macOS kernel signal, no privileges needed). */
+  pressure: { level: MemoryPressureLevel | null; real: boolean }
   tokensPerSec: number
   model: { loaded: boolean; path: string | null }
 }
@@ -64,12 +67,13 @@ async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
 
 async function sample(): Promise<TelemetrySnapshot> {
   const info = await loadStaticInfo()
-  const [load, mem, temp, device, storage] = await Promise.all([
+  const [load, mem, temp, device, storage, pressureLevel] = await Promise.all([
     si.currentLoad().catch(() => null),
     si.mem().catch(() => null),
     si.cpuTemperature().catch(() => null),
     getDeviceInfo().catch(() => null),
     getPrimaryStorage().catch(() => null),
+    getMemoryPressureLevel().catch(() => null),
   ])
 
   const cpuLoad = clamp(load?.currentLoad ?? 0, 0, 100)
@@ -110,6 +114,7 @@ async function sample(): Promise<TelemetrySnapshot> {
       : { usedGb: 0, totalGb: 0, freeGb: 0, mount: null, real: false },
     power: { watts: powerWatts, estimated: true },
     thermal: { celsius: tempC != null ? round(tempC, 1) : null, headroomPct: round(headroomPct), real: tempC != null },
+    pressure: { level: pressureLevel, real: pressureLevel != null },
     tokensPerSec: round(getLastTokensPerSec(), 1),
     model: { loaded: Boolean(getLoadedPath()), path: getLoadedPath() },
   }

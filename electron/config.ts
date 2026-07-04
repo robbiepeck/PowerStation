@@ -22,6 +22,15 @@ export type McpServerConfig = {
   id: string
   name: string
   command: string
+  enabled: boolean
+}
+
+export type ToolPermission = 'allow' | 'ask' | 'deny'
+
+export type OnboardingState = {
+  completed: boolean
+  useCase: string | null
+  priority: string | null
 }
 
 export type UtilitySettings = {
@@ -36,6 +45,8 @@ export type PersistedState = {
   importedModelPaths: string[]
   selectedModelPath: string | null
   settings: Settings
+  toolPermissions: Record<string, ToolPermission>
+  onboarding: OnboardingState
 }
 
 const defaultUtilities: UtilitySettings = {
@@ -96,9 +107,30 @@ function sanitizeMcpServers(value: unknown): McpServerConfig[] {
       const command = cleanString(record?.command, 2000)
       if (!name || !command) return null
       const id = cleanString(record?.id, 120) || `mcp-${index}`
-      return { id, name, command }
+      return { id, name, command, enabled: boolOr(record?.enabled, true) }
     })
     .filter((server): server is McpServerConfig => Boolean(server))
+}
+
+function sanitizeToolPermissions(value: unknown): Record<string, ToolPermission> {
+  if (typeof value !== 'object' || value === null) return {}
+  const out: Record<string, ToolPermission> = {}
+  for (const [key, permission] of Object.entries(value as Record<string, unknown>).slice(0, 500)) {
+    const cleanKey = cleanString(key, 200)
+    if (cleanKey && (permission === 'allow' || permission === 'ask' || permission === 'deny')) {
+      out[cleanKey] = permission
+    }
+  }
+  return out
+}
+
+function sanitizeOnboarding(value: unknown): OnboardingState {
+  const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  return {
+    completed: boolOr(record.completed, false),
+    useCase: cleanString(record.useCase, 40) || null,
+    priority: cleanString(record.priority, 40) || null,
+  }
 }
 
 function sanitizeUtilities(value: unknown): UtilitySettings {
@@ -148,6 +180,8 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
       : [],
     selectedModelPath: typeof parsed?.selectedModelPath === 'string' ? parsed!.selectedModelPath : null,
     settings: sanitizeSettings(parsed?.settings ?? null, defaultSettings),
+    toolPermissions: sanitizeToolPermissions(parsed?.toolPermissions),
+    onboarding: sanitizeOnboarding(parsed?.onboarding),
   }
 }
 

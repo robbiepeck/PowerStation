@@ -1,179 +1,189 @@
-import { getLlama, LlamaChatSession, createModelDownloader } from 'node-llama-cpp'
+// LLM runtime host. Inference itself runs in an isolated utilityProcess
+// (llmWorker.ts) so a native llama.cpp crash becomes a restartable event with
+// a recovery card instead of killing the app. This module supervises that
+// worker: request/response correlation, token streaming, crash surfacing, and
+// the tool-execution bridge used by the agent harness.
 
-type LlamaInstance = Awaited<ReturnType<typeof getLlama>>
-type LoadedModel = Awaited<ReturnType<LlamaInstance['loadModel']>>
-type LoadedContext = Awaited<ReturnType<LoadedModel['createContext']>>
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { utilityProcess, type UtilityProcess } from 'electron'
+import { createModelDownloader } from 'node-llama-cpp'
+import type {
+  ChatRequest,
+  ChatResult,
+  ChatStatus,
+  ToolDefinition,
+  WorkerDeviceInfo,
+  WorkerMessage,
+  WorkerRequest,
+} from './llmProtocol.js'
+import { isWorkerEvent } from './llmProtocol.js'
 
-export type ChatStatus =
-  | { phase: 'loading-model'; modelPath: string }
-  | { phase: 'creating-context'; modelPath: string }
-  | { phase: 'ready'; modelPath: string }
-  | { phase: 'generating' }
+export type { ChatStatus, ToolDefinition }
 
-type LoadedState = {
-  path: string
-  contextTokens: number
-  model: LoadedModel
-  context: LoadedContext
-  session: LlamaChatSession
+export type RuntimeEvent = { type: 'crashed'; message: string }
+
+type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void }
+type ChatCallbacks = {
+  onToken: (token: string) => void
+  onStatus?: (status: ChatStatus) => void
+  onToolCall?: (toolKey: string, args: unknown) => void
 }
 
-let llamaPromise: Promise<LlamaInstance> | null = null
-let loaded: LoadedState | null = null
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+let worker: UtilityProcess | null = null
+let nextRequestId = 1
+const pending = new Map<number, Pending>()
+const chatCallbacks = new Map<string, ChatCallbacks>()
+const runtimeListeners = new Set<(event: RuntimeEvent) => void>()
+
+// Mirrored from worker 'state' events so telemetry can read them synchronously.
+let loadedPath: string | null = null
 let loadingPath: string | null = null
 let lastTokensPerSec = 0
 
-const abortControllers = new Map<string, AbortController>()
-const activeGenerations = new Set<Promise<unknown>>()
+// The agent layer installs this; it runs MCP calls (with permission checks) in
+// the main process and returns the tool output that goes back into the model.
+let toolExecutor: ((toolKey: string, args: unknown, requestId: string) => Promise<string>) | null = null
 
-function abortAll(): void {
-  for (const controller of abortControllers.values()) controller.abort()
+export function setToolExecutor(executor: typeof toolExecutor): void {
+  toolExecutor = executor
 }
 
-// Wait for every in-flight prompt to actually settle. Callers abort first, but
-// node-llama-cpp only stops on the next loop turn, so the session must not be
-// reset or disposed until the generation promises have resolved.
-async function waitForGenerations(): Promise<void> {
-  await Promise.allSettled([...activeGenerations])
+export function onRuntimeEvent(listener: (event: RuntimeEvent) => void): () => void {
+  runtimeListeners.add(listener)
+  return () => runtimeListeners.delete(listener)
 }
 
-async function getLlamaInstance(): Promise<LlamaInstance> {
-  if (!llamaPromise) llamaPromise = getLlama()
-  return llamaPromise
-}
-
-function clampContextSize(requested: number, trained: number): number {
-  const ceiling = trained && trained > 0 ? trained : requested
-  return Math.max(512, Math.min(requested, ceiling))
-}
-
-async function disposeLoaded(): Promise<void> {
-  if (!loaded) return
-  const current = loaded
-  loaded = null
-  try {
-    await current.context.dispose()
-  } catch {
-    /* ignore */
-  }
-  try {
-    await current.model.dispose()
-  } catch {
-    /* ignore */
-  }
-}
-
-export async function getDeviceInfo(): Promise<{
-  gpuType: string | false
-  gpuNames: string[]
-  vram: { total: number; used: number; free: number; unifiedSize: number } | null
-}> {
-  const llama = await getLlamaInstance()
-  const [vram, gpuNames] = await Promise.all([
-    llama.getVramState().catch(() => null),
-    llama.getGpuDeviceNames().catch(() => [] as string[]),
-  ])
-  return { gpuType: llama.gpu, gpuNames, vram }
-}
-
-export async function ensureModelLoaded(
-  modelPath: string,
-  contextTokens: number,
-  onStatus?: (status: ChatStatus) => void,
-): Promise<LoadedState> {
-  // Compare against the *effective* context size (clamped to the model's trained
-  // ceiling), not the raw request. Otherwise asking for more tokens than the model
-  // supports makes the clamped value always look "too small" and reloads the model
-  // on every single message.
-  if (loaded && loaded.path === modelPath) {
-    const target = clampContextSize(contextTokens, loaded.model.trainContextSize)
-    if (loaded.contextTokens >= target) return loaded
-  }
-  if (loaded) await disposeLoaded()
-
-  loadingPath = modelPath
-  try {
-    const llama = await getLlamaInstance()
-    onStatus?.({ phase: 'loading-model', modelPath })
-    const model = await llama.loadModel({ modelPath })
-    onStatus?.({ phase: 'creating-context', modelPath })
-    const contextSize = clampContextSize(contextTokens, model.trainContextSize)
-    const context = await model.createContext({ contextSize })
-    const session = new LlamaChatSession({ contextSequence: context.getSequence() })
-    loaded = { path: modelPath, contextTokens: contextSize, model, context, session }
-    onStatus?.({ phase: 'ready', modelPath })
-    return loaded
-  } finally {
-    loadingPath = null
-  }
-}
-
-export async function chat(options: {
-  requestId: string
-  modelPath: string
-  prompt: string
-  contextTokens: number
-  temperature: number
-  maxTokens: number
-  onToken: (token: string) => void
-  onStatus?: (status: ChatStatus) => void
-}): Promise<{ text: string; tokensPerSec: number; aborted: boolean }> {
-  const controller = new AbortController()
-  abortControllers.set(options.requestId, controller)
-  try {
-    const active = await ensureModelLoaded(options.modelPath, options.contextTokens, options.onStatus)
-    options.onStatus?.({ phase: 'generating' })
-    const start = Date.now()
-    let charCount = 0
-    const generation = active.session.prompt(options.prompt, {
-      temperature: options.temperature,
-      maxTokens: options.maxTokens > 0 ? options.maxTokens : undefined,
-      signal: controller.signal,
-      stopOnAbortSignal: true,
-      onTextChunk: (chunk: string) => {
-        charCount += chunk.length
-        options.onToken(chunk)
-      },
-    })
-    activeGenerations.add(generation)
-    let text: string
-    try {
-      text = await generation
-    } finally {
-      activeGenerations.delete(generation)
+function handleWorkerMessage(message: WorkerMessage): void {
+  if (isWorkerEvent(message)) {
+    switch (message.event) {
+      case 'chat:token':
+        chatCallbacks.get(message.requestId)?.onToken(message.token)
+        return
+      case 'chat:status':
+        chatCallbacks.get(message.requestId)?.onStatus?.(message.status)
+        return
+      case 'chat:toolCall': {
+        chatCallbacks.get(message.requestId)?.onToolCall?.(message.toolKey, message.args)
+        const executor = toolExecutor
+        void (async () => {
+          try {
+            if (!executor) throw new Error('No tool executor is configured.')
+            const result = await executor(message.toolKey, message.args, message.requestId)
+            send({ id: 0, cmd: 'toolResult', payload: { callId: message.callId, result } })
+          } catch (error) {
+            send({
+              id: 0,
+              cmd: 'toolResult',
+              payload: { callId: message.callId, error: error instanceof Error ? error.message : String(error) },
+            })
+          }
+        })()
+        return
+      }
+      case 'state':
+        loadedPath = message.loadedPath
+        loadingPath = message.loadingPath
+        lastTokensPerSec = message.tokensPerSec
+        return
     }
-    const elapsedSec = (Date.now() - start) / 1000
-    const approxTokens = Math.max(1, Math.round(charCount / 4))
-    lastTokensPerSec = elapsedSec > 0 ? approxTokens / elapsedSec : 0
-    return { text, tokensPerSec: lastTokensPerSec, aborted: controller.signal.aborted }
+  }
+  const entry = pending.get(message.id)
+  if (!entry) return
+  pending.delete(message.id)
+  if (message.ok) entry.resolve(message.result)
+  else entry.reject(new Error(message.error))
+}
+
+function handleWorkerExit(code: number): void {
+  worker = null
+  loadedPath = null
+  loadingPath = null
+  const message =
+    'The model runtime stopped unexpectedly' +
+    (code ? ` (exit code ${code})` : '') +
+    '. This usually means the model ran out of memory. PowerStation recovered — try a smaller context or a smaller model.'
+  const error = new Error(message)
+  for (const entry of pending.values()) entry.reject(error)
+  pending.clear()
+  chatCallbacks.clear()
+  // Only report crashes; code 0 is a deliberate shutdown.
+  if (code !== 0) for (const listener of runtimeListeners) listener({ type: 'crashed', message })
+}
+
+function ensureWorker(): UtilityProcess {
+  if (worker) return worker
+  const spawned = utilityProcess.fork(path.join(__dirname, 'llmWorker.js'), [], {
+    serviceName: 'PowerStation LLM runtime',
+  })
+  spawned.on('message', (message: unknown) => handleWorkerMessage(message as WorkerMessage))
+  spawned.on('exit', (code) => {
+    if (worker === spawned || worker === null) handleWorkerExit(code)
+  })
+  worker = spawned
+  return spawned
+}
+
+function send(request: WorkerRequest): void {
+  ensureWorker().postMessage(request)
+}
+
+// Omit must distribute over the request union, otherwise 'payload' is dropped.
+type WorkerRequestBody = WorkerRequest extends infer R ? (R extends WorkerRequest ? Omit<R, 'id'> : never) : never
+
+function call<T>(request: WorkerRequestBody): Promise<T> {
+  const id = nextRequestId++
+  return new Promise<T>((resolve, reject) => {
+    pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
+    send({ ...request, id } as WorkerRequest)
+  })
+}
+
+export async function getDeviceInfo(): Promise<WorkerDeviceInfo> {
+  return call<WorkerDeviceInfo>({ cmd: 'deviceInfo' })
+}
+
+export async function chat(
+  options: Omit<ChatRequest, 'requestId'> & { requestId: string } & ChatCallbacks,
+): Promise<ChatResult> {
+  const { onToken, onStatus, onToolCall, ...request } = options
+  chatCallbacks.set(request.requestId, { onToken, onStatus, onToolCall })
+  try {
+    return await call<ChatResult>({ cmd: 'chat', payload: request })
   } finally {
-    abortControllers.delete(options.requestId)
+    chatCallbacks.delete(request.requestId)
   }
 }
 
 export function stopChat(requestId: string): boolean {
-  const controller = abortControllers.get(requestId)
-  if (controller) {
-    controller.abort()
-    return true
-  }
-  return false
+  if (!worker) return false
+  send({ id: 0, cmd: 'stop', payload: { requestId } })
+  return true
 }
 
 export async function resetChat(): Promise<void> {
-  abortAll()
-  await waitForGenerations()
-  if (loaded) loaded.session.resetChatHistory()
+  if (!worker) return
+  await call({ cmd: 'reset' })
 }
 
 export async function unloadModel(): Promise<void> {
-  abortAll()
-  await waitForGenerations()
-  await disposeLoaded()
+  if (!worker) return
+  await call({ cmd: 'unload' })
+}
+
+export function shutdown(): void {
+  if (!worker) return
+  const current = worker
+  worker = null
+  pending.clear()
+  chatCallbacks.clear()
+  current.kill()
 }
 
 export function getLoadedPath(): string | null {
-  return loaded?.path ?? null
+  return loadedPath
 }
 
 export function getLoadingPath(): string | null {
@@ -184,6 +194,12 @@ export function getLastTokensPerSec(): number {
   return lastTokensPerSec
 }
 
+export function getActiveRequestIds(): string[] {
+  return [...chatCallbacks.keys()]
+}
+
+// Downloads are plain HTTPS with resume support — no native inference code
+// involved, so they run in the main process, unaffected by worker restarts.
 export async function downloadModel(options: {
   uri: string
   dirPath: string

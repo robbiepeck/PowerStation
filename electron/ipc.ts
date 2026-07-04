@@ -2,9 +2,14 @@ import path from 'node:path'
 import { ipcMain, dialog, shell, type BrowserWindow } from 'electron'
 import * as models from './models.js'
 import * as llm from './llm.js'
+import * as mcp from './mcp.js'
+import * as agent from './agent.js'
 import { getDeviceHealthProfile } from './device.js'
-import { analyzeStorage, isWithinScannedRoots } from './storage.js'
-import { getState, patchSettings, managedModelsDir, type Settings } from './config.js'
+import { getCatalog, refreshCatalog, type CatalogModel } from './catalog.js'
+import { recommendModels, type Intent } from './recommend.js'
+import { getHardwareProfile } from './hardware.js'
+import { admittedContextTokens, checkFit } from './admission.js'
+import { getState, mutate, patchSettings, managedModelsDir, type Settings, type ToolPermission } from './config.js'
 
 // Model downloads come from a free-text field, so constrain them to the schemes
 // the app actually supports (Hugging Face shorthand or a direct HTTPS GGUF URL)
@@ -25,9 +30,35 @@ function isTrustedExternalUrl(url: string): boolean {
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:') return false
     if (parsed.hostname === 'huggingface.co') return true
-    return parsed.hostname === 'github.com' && parsed.pathname.startsWith('/robbiepeck/PowerStation/releases')
+    return parsed.hostname === 'github.com' && parsed.pathname.startsWith('/robbiepeck/PowerStation')
   } catch {
     return false
+  }
+}
+
+async function findCatalogEntryForModel(modelPath: string): Promise<CatalogModel | null> {
+  const fileName = path.basename(modelPath).toLowerCase()
+  const catalog = await getCatalog()
+  return catalog.models.find((entry) => entry.fileName.toLowerCase() === fileName) ?? null
+}
+
+async function getGpuBudgetBytes(): Promise<number> {
+  const device = await llm.getDeviceInfo().catch(() => null)
+  if (device?.vram && device.vram.total > 0) return device.vram.total
+  const profile = await getHardwareProfile()
+  return profile.gpuBudgetBytes
+}
+
+/** Reconnect/disconnect MCP servers so connections mirror the settings. */
+async function reconcileMcpServers(): Promise<void> {
+  const state = await getState()
+  const wanted = new Map(state.settings.utilities.mcpServers.filter((server) => server.enabled).map((s) => [s.id, s]))
+  const connected = new Set(mcp.getMcpStatuses().filter((status) => status.state === 'connected' || status.state === 'connecting').map((status) => status.id))
+  for (const id of connected) {
+    if (!wanted.has(id)) await mcp.disconnectServer(id)
+  }
+  for (const [id, config] of wanted) {
+    if (!connected.has(id)) void mcp.connectServer(config)
   }
 }
 
@@ -36,6 +67,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const win = getWindow()
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
+
+  // --- Agent/runtime event wiring -------------------------------------------
+  llm.setToolExecutor(agent.executeToolCall)
+  llm.onRuntimeEvent((event) => send('runtime:event', event))
+  agent.setPermissionRequester((request) => send('agent:permissionRequest', request))
+  agent.setToolResultReporter((event) => send('chat:toolResult', event))
+  mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
+  void reconcileMcpServers()
 
   // --- Models ---------------------------------------------------------------
   ipcMain.handle('models:list', () => models.listModels())
@@ -105,18 +144,116 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return true
   })
 
+  // --- Hardware, catalog, recommendations ------------------------------------
+  ipcMain.handle('hardware:profile', async () => {
+    const device = await llm.getDeviceInfo().catch(() => null)
+    return getHardwareProfile(device?.vram?.total ?? null)
+  })
+
+  ipcMain.handle('catalog:get', () => getCatalog())
+  ipcMain.handle('catalog:refresh', () => refreshCatalog())
+
+  ipcMain.handle('catalog:recommend', async (_event, intent: Intent) => {
+    const [catalog, profile, budget] = await Promise.all([getCatalog(), getHardwareProfile(), getGpuBudgetBytes()])
+    return recommendModels({
+      catalog: catalog.models,
+      intent,
+      totalRamBytes: profile.totalRamBytes,
+      gpuBudgetBytes: budget,
+      freeDiskBytes: profile.freeDiskBytes,
+    })
+  })
+
+  // Fit report for a catalog entry or a local model file, used by the UI to
+  // show honest "will this fit" guidance before download or load.
+  ipcMain.handle('fit:check', async (_event, payload: { catalogId?: string; modelPath?: string; contextTokens?: number }) => {
+    const state = await getState()
+    const contextTokens = payload.contextTokens ?? state.settings.contextTokens
+    const budget = await getGpuBudgetBytes()
+    if (payload.catalogId) {
+      const catalog = await getCatalog()
+      const entry = catalog.models.find((model) => model.id === payload.catalogId)
+      if (!entry) return null
+      return checkFit({
+        weightsBytes: entry.sizeBytes,
+        geometry: entry.geometry,
+        kvBytesPerToken: entry.kvBytesPerToken,
+        contextTokens: Math.min(contextTokens, entry.maxContext ?? contextTokens),
+        budgetBytes: budget,
+      })
+    }
+    if (payload.modelPath) {
+      const info = await models.getModelInfo(payload.modelPath)
+      if (!info) return null
+      const entry = await findCatalogEntryForModel(payload.modelPath)
+      return checkFit({
+        weightsBytes: info.sizeBytes,
+        geometry: info.geometry,
+        kvBytesPerToken: entry?.kvBytesPerToken ?? null,
+        contextTokens,
+        budgetBytes: budget,
+      })
+    }
+    return null
+  })
+
+  // --- Onboarding -------------------------------------------------------------
+  ipcMain.handle('onboarding:get', async () => (await getState()).onboarding)
+  ipcMain.handle('onboarding:complete', async (_event, payload: { useCase?: string; priority?: string }) => {
+    const state = await mutate((current) => {
+      current.onboarding = {
+        completed: true,
+        useCase: typeof payload?.useCase === 'string' ? payload.useCase.slice(0, 40) : current.onboarding.useCase,
+        priority: typeof payload?.priority === 'string' ? payload.priority.slice(0, 40) : current.onboarding.priority,
+      }
+    })
+    return state.onboarding
+  })
+
+  // --- MCP & permissions -------------------------------------------------------
+  ipcMain.handle('mcp:statuses', () => mcp.getMcpStatuses())
+  ipcMain.handle('mcp:toolInfo', async () => {
+    const state = await getState()
+    return {
+      tools: mcp.getConnectedTools(),
+      schemaTokens: agent.estimateToolSchemaTokens(),
+      contextTokens: state.settings.contextTokens,
+    }
+  })
+  ipcMain.handle('mcp:reconnect', async (_event, serverId: string) => {
+    const state = await getState()
+    const config = state.settings.utilities.mcpServers.find((server) => server.id === serverId)
+    if (!config) return null
+    return mcp.connectServer(config)
+  })
+
+  ipcMain.handle('permissions:get', async () => (await getState()).toolPermissions)
+  ipcMain.handle('permissions:set', async (_event, payload: { toolKey: string; permission: ToolPermission }) => {
+    if (!payload || typeof payload.toolKey !== 'string') return false
+    if (!['allow', 'ask', 'deny'].includes(payload.permission)) return false
+    await agent.setToolPermission(payload.toolKey.slice(0, 200), payload.permission)
+    return true
+  })
+
+  ipcMain.handle('agent:permissionResponse', (_event, payload: { promptId: string; decision: string }) => {
+    if (!payload || typeof payload.promptId !== 'string') return false
+    const decision = ['allow-once', 'allow-always', 'deny'].includes(payload.decision)
+      ? (payload.decision as agent.PermissionDecision)
+      : 'deny'
+    return agent.resolvePermission(payload.promptId, decision)
+  })
+
   // --- Settings & device ----------------------------------------------------
   ipcMain.handle('settings:get', async () => (await getState()).settings)
-  ipcMain.handle('settings:update', (_event, patch: Partial<Settings>) => patchSettings(patch))
+  ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
+    const settings = await patchSettings(patch)
+    // MCP server list may have changed — mirror connections to the new config.
+    void reconcileMcpServers()
+    return settings
+  })
   ipcMain.handle('device:info', async () => {
     const info = await llm.getDeviceInfo()
     return { ...info, health: await getDeviceHealthProfile(info.gpuNames) }
-  })
-  ipcMain.handle('storage:analyze', () => analyzeStorage())
-  ipcMain.handle('storage:reveal', (_event, filePath: string) => {
-    if (!isWithinScannedRoots(filePath)) return false
-    shell.showItemInFolder(path.resolve(filePath))
-    return true
   })
 
   // --- Chat -----------------------------------------------------------------
@@ -130,17 +267,69 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     void (async () => {
       try {
+        // Admission control: verify the model + requested context fit BEFORE
+        // asking the worker to load anything, and shrink the context if that
+        // is what it takes to stay safe.
+        const [info, entry, budget] = await Promise.all([
+          models.getModelInfo(modelPath),
+          findCatalogEntryForModel(modelPath),
+          getGpuBudgetBytes(),
+        ])
+        const fitRequest = {
+          weightsBytes: info?.sizeBytes ?? 0,
+          geometry: info?.geometry ?? entry?.geometry ?? null,
+          kvBytesPerToken: entry?.kvBytesPerToken ?? null,
+          contextTokens: state.settings.contextTokens,
+          budgetBytes: budget,
+        }
+        const fit = checkFit(fitRequest)
+        if (!fit.fits && fit.maxComfortableContext === null) {
+          send('chat:error', {
+            requestId,
+            message: `${fit.summary} ${fit.suggestions.join(' ')}`,
+          })
+          return
+        }
+        const contextTokens = admittedContextTokens(fitRequest)
+
+        // Agent tools: only register them for models that can actually use
+        // them — an untrained model flailing at tool calls reads as a broken
+        // app, not a limited model.
+        const tier = entry?.toolCalling ?? (info?.geometry ? 'single' : 'none')
+        const toolDefinitions = tier === 'none' ? [] : agent.getAgentToolDefinitions()
+        const maxToolCalls = tier === 'multi' ? 15 : 3
+
+        send('chat:admission', {
+          requestId,
+          contextTokens,
+          verdict: fit.verdict,
+          summary: fit.summary,
+          toolCount: toolDefinitions.length,
+          schemaTokens: toolDefinitions.length ? agent.estimateToolSchemaTokens() : 0,
+        })
+
         const result = await llm.chat({
           requestId,
           modelPath,
           prompt,
-          contextTokens: state.settings.contextTokens,
+          systemPrompt: state.settings.utilities.systemPrompt || undefined,
+          contextTokens,
           temperature: state.settings.temperature,
           maxTokens: state.settings.maxTokens,
+          tools: toolDefinitions.length ? toolDefinitions : undefined,
+          maxToolCalls,
           onToken: (token) => send('chat:token', { requestId, token }),
           onStatus: (status) => send('chat:status', { requestId, ...status }),
+          onToolCall: (toolKey, args) => send('chat:toolCall', { requestId, toolKey, args }),
         })
-        send('chat:done', { requestId, text: result.text, tokensPerSec: result.tokensPerSec, aborted: result.aborted })
+        send('chat:done', {
+          requestId,
+          text: result.text,
+          tokensPerSec: result.tokensPerSec,
+          aborted: result.aborted,
+          toolCallCount: result.toolCallCount,
+          haltReason: result.haltReason,
+        })
       } catch (error) {
         send('chat:error', { requestId, message: error instanceof Error ? error.message : String(error) })
       }

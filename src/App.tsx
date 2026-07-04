@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
+  AlertTriangle,
   BrainCircuit,
   ChevronDown,
   Download,
@@ -10,29 +11,39 @@ import {
   Power as PowerIcon,
   Send,
   Settings as SettingsIcon,
+  ShieldQuestion,
   Sparkles,
   Square,
   Wrench,
+  X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
-import { ModelsView, MonitorView, SettingsView, StarterModelCatalog, StorageView, UtilitiesView } from './views'
+import { ModelsView, MonitorView, SettingsView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
+import { OnboardingFlow } from './onboarding'
 import { CopyButton, formatNumber } from './ui'
 import type {
+  Catalog,
+  CatalogModel,
   ChatStatusPayload,
   ChatTurn,
   DeviceInfo,
+  FitReport,
+  McpServerStatus,
   ModelInfo,
+  OnboardingState,
+  PermissionRequest,
+  RuntimeEventPayload,
   Settings,
-  StorageBreakdown,
   TelemetrySnapshot,
+  ToolCallingTier,
   UpdateState,
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'settings' | 'storage'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'settings'
 
 const bridge = getDesktop()
 
@@ -77,6 +88,61 @@ function useSettings() {
     void bridge.settings.update(patch)
   }, [])
   return { settings, update }
+}
+
+function useOnboarding() {
+  const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
+  useEffect(() => {
+    void bridge.onboarding.get().then(setOnboarding)
+  }, [])
+  const complete = useCallback((payload: { useCase: string; priority: string }) => {
+    setOnboarding({ completed: true, useCase: payload.useCase, priority: payload.priority })
+    void bridge.onboarding.complete(payload)
+  }, [])
+  const markCompleted = useCallback(() => {
+    setOnboarding((prev) => (prev ? { ...prev, completed: true } : { completed: true, useCase: null, priority: null }))
+  }, [])
+  return { onboarding, complete, markCompleted }
+}
+
+function useCatalog() {
+  const [catalog, setCatalog] = useState<Catalog | null>(null)
+  const [fitReports, setFitReports] = useState<Record<string, FitReport | null>>({})
+  const [refreshing, setRefreshing] = useState(false)
+
+  const loadFits = useCallback(async (models: CatalogModel[]) => {
+    const entries = await Promise.all(
+      models.map(async (model) => [model.id, await bridge.catalog.fitCheck({ catalogId: model.id }).catch(() => null)] as const),
+    )
+    setFitReports(Object.fromEntries(entries))
+  }, [])
+
+  useEffect(() => {
+    void bridge.catalog.get().then((result) => {
+      setCatalog(result)
+      void loadFits(result.models)
+      // Quietly look for a newer catalog in the background on every launch.
+      void bridge.catalog.refresh().then((fresh) => {
+        if (fresh.updatedAt !== result.updatedAt) {
+          setCatalog(fresh)
+          void loadFits(fresh.models)
+        }
+      })
+    })
+  }, [loadFits])
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const fresh = await bridge.catalog.refresh()
+      setCatalog(fresh)
+      await loadFits(fresh.models)
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadFits])
+
+  return { catalog, fitReports, refresh, refreshing }
 }
 
 function useModels() {
@@ -139,6 +205,44 @@ function useDevice() {
   return device
 }
 
+function useMcpStatuses() {
+  const [statuses, setStatuses] = useState<McpServerStatus[]>([])
+  useEffect(() => {
+    void bridge.mcp.statuses().then(setStatuses)
+    return bridge.mcp.onStatus(setStatuses)
+  }, [])
+  return statuses
+}
+
+function usePermissionPrompt() {
+  const [request, setRequest] = useState<PermissionRequest | null>(null)
+  const queue = useRef<PermissionRequest[]>([])
+  useEffect(() => {
+    return bridge.agent.onPermissionRequest((payload) => {
+      setRequest((current) => {
+        if (current) {
+          queue.current.push(payload)
+          return current
+        }
+        return payload
+      })
+    })
+  }, [])
+  const respond = useCallback((promptId: string, decision: 'allow-once' | 'allow-always' | 'deny') => {
+    void bridge.agent.respondPermission({ promptId, decision })
+    setRequest(queue.current.shift() ?? null)
+  }, [])
+  return { request, respond }
+}
+
+function useRuntimeEvents() {
+  const [event, setEvent] = useState<RuntimeEventPayload | null>(null)
+  useEffect(() => {
+    return bridge.runtime.onEvent(setEvent)
+  }, [])
+  return { event, dismiss: () => setEvent(null) }
+}
+
 function useUpdates() {
   const [updateState, setUpdateState] = useState<UpdateState | null>(null)
 
@@ -173,47 +277,60 @@ function useChat() {
   const [streaming, setStreaming] = useState(false)
   const activeRef = useRef<string | null>(null)
 
+  const patchAssistant = useCallback((requestId: string, patch: (turn: ChatTurn) => ChatTurn) => {
+    setMessages((prev) =>
+      prev.map((message) => (message.requestId === requestId && message.role === 'assistant' ? patch(message) : message)),
+    )
+  }, [])
+
   useEffect(() => {
     const offToken = bridge.chat.onToken(({ requestId, token }) => {
       if (activeRef.current !== requestId) return
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.requestId === requestId && message.role === 'assistant'
-            ? { ...message, content: message.content + token, status: undefined }
-            : message,
-        ),
-      )
+      patchAssistant(requestId, (turn) => ({ ...turn, content: turn.content + token, status: undefined }))
     })
     const offStatus = bridge.chat.onStatus((payload) => {
       if (activeRef.current !== payload.requestId) return
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.requestId === payload.requestId && message.role === 'assistant' && !message.content
-            ? { ...message, status: statusText(payload) }
-            : message,
-        ),
+      patchAssistant(payload.requestId, (turn) =>
+        !turn.content ? { ...turn, status: statusText(payload) } : turn,
       )
     })
-    const offDone = bridge.chat.onDone(({ requestId, tokensPerSec, aborted }) => {
+    const offAdmission = bridge.chat.onAdmission((payload) => {
+      patchAssistant(payload.requestId, (turn) => ({ ...turn, admission: payload }))
+    })
+    const offToolCall = bridge.chat.onToolCall(({ requestId, toolKey, args }) => {
+      patchAssistant(requestId, (turn) => ({
+        ...turn,
+        status: undefined,
+        toolCalls: [...(turn.toolCalls ?? []), { toolKey, args, ok: null, summary: null }],
+      }))
+    })
+    const offToolResult = bridge.chat.onToolResult(({ requestId, toolKey, ok, summary }) => {
+      patchAssistant(requestId, (turn) => {
+        const calls = [...(turn.toolCalls ?? [])]
+        for (let i = calls.length - 1; i >= 0; i--) {
+          if (calls[i].toolKey === toolKey && calls[i].ok === null) {
+            calls[i] = { ...calls[i], ok, summary }
+            break
+          }
+        }
+        return { ...turn, toolCalls: calls }
+      })
+    })
+    const offDone = bridge.chat.onDone(({ requestId, tokensPerSec, aborted, haltReason }) => {
       if (activeRef.current !== requestId) return
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.requestId === requestId && message.role === 'assistant'
-            ? { ...message, streaming: false, status: undefined, tokensPerSec, aborted }
-            : message,
-        ),
-      )
+      patchAssistant(requestId, (turn) => ({
+        ...turn,
+        streaming: false,
+        status: undefined,
+        tokensPerSec,
+        aborted,
+        haltReason,
+      }))
       setStreaming(false)
       activeRef.current = null
     })
     const offError = bridge.chat.onError(({ requestId, message }) => {
-      setMessages((prev) =>
-        prev.map((turn) =>
-          turn.requestId === requestId && turn.role === 'assistant'
-            ? { ...turn, streaming: false, status: undefined, error: message }
-            : turn,
-        ),
-      )
+      patchAssistant(requestId, (turn) => ({ ...turn, streaming: false, status: undefined, error: message }))
       if (activeRef.current === requestId) {
         setStreaming(false)
         activeRef.current = null
@@ -222,10 +339,13 @@ function useChat() {
     return () => {
       offToken()
       offStatus()
+      offAdmission()
+      offToolCall()
+      offToolResult()
       offDone()
       offError()
     }
-  }, [])
+  }, [patchAssistant])
 
   const send = useCallback((text: string) => {
     const trimmed = text.trim()
@@ -255,22 +375,34 @@ function useChat() {
   return { messages, streaming, send, stop, reset }
 }
 
+// Match a local model file to its catalog entry to learn its capability tier.
+function resolveToolTier(model: ModelInfo | null, catalog: Catalog | null): ToolCallingTier {
+  if (!model) return 'none'
+  const entry = catalog?.models.find((item) => item.fileName.toLowerCase() === model.fileName.toLowerCase())
+  if (entry) return entry.toolCalling
+  return model.geometry ? 'single' : 'none'
+}
+
 // --- App shell --------------------------------------------------------------
 
 function App() {
   const [activeView, setActiveView] = useState<ViewId>('chat')
   const { settings, update: updateSettings } = useSettings()
+  const { onboarding, complete: completeOnboarding, markCompleted } = useOnboarding()
+  const { catalog, fitReports, refresh: refreshCatalog, refreshing: catalogRefreshing } = useCatalog()
   const { models, selectedPath, refresh, select } = useModels()
   const { snapshot, series } = useTelemetry()
   const device = useDevice()
+  const mcpStatuses = useMcpStatuses()
+  const permissionPrompt = usePermissionPrompt()
+  const runtimeEvents = useRuntimeEvents()
   const { installLatest, updateState } = useUpdates()
   const chat = useChat()
   const [download, setDownload] = useState<DownloadState>(null)
-  const [storageBreakdown, setStorageBreakdown] = useState<StorageBreakdown | null>(null)
-  const [storageLoading, setStorageLoading] = useState(false)
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
+  const selectedTier = useMemo(() => resolveToolTier(selectedModel, catalog), [selectedModel, catalog])
   const utilitiesDisabled = !selectedModel
   const visibleView = activeView === 'utilities' && utilitiesDisabled ? 'models' : activeView
 
@@ -324,20 +456,6 @@ function App() {
     })
   }, [])
 
-  const loadStorageBreakdown = useCallback(async () => {
-    setStorageLoading(true)
-    try {
-      setStorageBreakdown(await bridge.storage.analyze())
-    } finally {
-      setStorageLoading(false)
-    }
-  }, [])
-
-  const handleOpenStorage = useCallback(() => {
-    setActiveView('storage')
-    void loadStorageBreakdown()
-  }, [loadStorageBreakdown])
-
   const handleImportFile = useCallback(async () => {
     await bridge.models.pickFile()
     await refresh()
@@ -366,6 +484,25 @@ function App() {
     },
     [refresh],
   )
+
+  if (onboarding === null) return null
+
+  if (!onboarding.completed) {
+    return (
+      <OnboardingFlow
+        download={download}
+        onDownload={handleDownload}
+        onComplete={(payload) => {
+          completeOnboarding(payload)
+          setActiveView('chat')
+        }}
+        onSkipToModels={() => {
+          markCompleted()
+          setActiveView('models')
+        }}
+      />
+    )
+  }
 
   return (
     <div className="app-shell">
@@ -413,46 +550,37 @@ function App() {
       <main className="app-main">
         {visibleView === 'chat' && (
           <ChatView
-            device={device}
-            download={download}
             messages={chat.messages}
             models={models}
-            onDownload={handleDownload}
-            onOpenModelWebsite={handleOpenModelWebsite}
             onManageModels={() => setActiveView('models')}
             onNewChat={chat.reset}
+            onOpenMonitor={() => setActiveView('monitor')}
             onSelectModel={handleSelectModel}
             onSend={chat.send}
             onStop={chat.stop}
+            runtimeEvent={runtimeEvents.event}
+            onDismissRuntimeEvent={runtimeEvents.dismiss}
             selectedModel={selectedModel}
             snapshot={snapshot}
             streaming={chat.streaming}
           />
         )}
-        {visibleView === 'monitor' && <MonitorView device={device} onOpenStorage={handleOpenStorage} series={series} snapshot={snapshot} />}
-        {visibleView === 'storage' && (
-          <div className="scroll-view">
-            <StorageView
-              loading={storageLoading}
-              onBack={() => setActiveView('monitor')}
-              onRefresh={loadStorageBreakdown}
-              onReveal={(filePath) => void bridge.storage.reveal(filePath)}
-              result={storageBreakdown}
-              snapshot={snapshot}
-            />
-          </div>
-        )}
+        {visibleView === 'monitor' && <MonitorView device={device} series={series} snapshot={snapshot} />}
         {visibleView === 'models' && (
           <div className="scroll-view">
             <ModelsView
+              catalog={catalog}
+              catalogRefreshing={catalogRefreshing}
               device={device}
               download={download}
+              fitReports={fitReports}
               models={models}
               onAddFolder={handleAddFolder}
               onDelete={handleDelete}
               onDownload={handleDownload}
               onOpenWebsite={handleOpenModelWebsite}
               onImportFile={handleImportFile}
+              onRefreshCatalog={() => void refreshCatalog()}
               onRemove={handleRemove}
               onReveal={(model) => void bridge.models.reveal(model.path)}
               onSelect={(model) => void handleSelectModel(model.path)}
@@ -464,8 +592,10 @@ function App() {
           <div className="scroll-view">
             <UtilitiesView
               enabled={Boolean(selectedModel)}
+              mcpStatuses={mcpStatuses}
               onSettingsChange={updateSettings}
               selectedModel={selectedModel}
+              selectedTier={selectedTier}
               settings={settings}
             />
           </div>
@@ -476,6 +606,10 @@ function App() {
           </div>
         )}
       </main>
+
+      {permissionPrompt.request ? (
+        <PermissionModal request={permissionPrompt.request} onRespond={permissionPrompt.respond} />
+      ) : null}
     </div>
   )
 }
@@ -524,35 +658,70 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
   )
 }
 
+// --- Status pill --------------------------------------------------------------
+
+function StatusPill({
+  onOpenMonitor,
+  snapshot,
+  streaming,
+}: {
+  onOpenMonitor: () => void
+  snapshot: TelemetrySnapshot | null
+  streaming: boolean
+}) {
+  if (!snapshot) return <span className="runtime-pill subtle">Starting…</span>
+
+  const pressure = snapshot.pressure.level
+  const ramPct = snapshot.ram.totalGb ? (snapshot.ram.usedGb / snapshot.ram.totalGb) * 100 : 0
+  const tone = pressure === 'critical' ? 'critical' : pressure === 'warn' || ramPct > 88 ? 'warn' : 'ok'
+  const label =
+    tone === 'critical'
+      ? 'Memory critical'
+      : tone === 'warn'
+        ? 'Memory getting tight'
+        : streaming && snapshot.tokensPerSec > 0
+          ? `Running smoothly · ${formatNumber(snapshot.tokensPerSec, 1)} tok/s`
+          : snapshot.model.loaded
+            ? snapshot.tokensPerSec > 0
+              ? `Ready · last run ${formatNumber(snapshot.tokensPerSec, 1)} tok/s`
+              : 'Ready'
+            : 'No model loaded'
+
+  return (
+    <button className={`status-pill ${tone}`} type="button" onClick={onOpenMonitor} title="Open the full monitor">
+      <span className="status-dot-pill" />
+      {label}
+    </button>
+  )
+}
+
 // --- Chat view --------------------------------------------------------------
 
 function ChatView({
-  device,
-  download,
   messages,
   models,
-  onDownload,
-  onOpenModelWebsite,
   onManageModels,
   onNewChat,
+  onOpenMonitor,
   onSelectModel,
   onSend,
   onStop,
+  runtimeEvent,
+  onDismissRuntimeEvent,
   selectedModel,
   snapshot,
   streaming,
 }: {
-  device: DeviceInfo | null
-  download: DownloadState
   messages: ChatTurn[]
   models: ModelInfo[]
-  onDownload: (uri: string) => void
-  onOpenModelWebsite: (url: string) => void
   onManageModels: () => void
   onNewChat: () => void
+  onOpenMonitor: () => void
   onSelectModel: (path: string) => void
   onSend: (text: string) => void
   onStop: () => void
+  runtimeEvent: RuntimeEventPayload | null
+  onDismissRuntimeEvent: () => void
   selectedModel: ModelInfo | null
   snapshot: TelemetrySnapshot | null
   streaming: boolean
@@ -563,7 +732,6 @@ function ChatView({
   }, [messages])
 
   const hasModels = models.length > 0
-  const accelerator = typeof device?.gpuType === 'string' ? device.gpuType.toUpperCase() : 'CPU'
 
   return (
     <div className="chat-view">
@@ -575,14 +743,7 @@ function ChatView({
           selectedModel={selectedModel}
         />
         <div className="chat-header-right">
-          {snapshot && snapshot.tokensPerSec > 0 ? (
-            <span className="runtime-pill">
-              <span className="status-dot live" />
-              {formatNumber(snapshot.tokensPerSec, 1)} tok/s · {accelerator}
-            </span>
-          ) : (
-            <span className="runtime-pill subtle">{hasModels ? `Local · ${accelerator}` : 'No model'}</span>
-          )}
+          <StatusPill onOpenMonitor={onOpenMonitor} snapshot={snapshot} streaming={streaming} />
           <button className="secondary-button compact" type="button" onClick={onNewChat} disabled={messages.length === 0}>
             <Plus size={14} />
             New chat
@@ -601,14 +762,16 @@ function ChatView({
               <p>Runs entirely on this machine. Your prompts never leave the device.</p>
             </div>
           ) : (
-            <StarterModelCatalog
-              download={download}
-              onDownload={onDownload}
-              onManageModels={onManageModels}
-              onOpenWebsite={onOpenModelWebsite}
-              selectedModel={selectedModel}
-              variant="welcome"
-            />
+            <div className="chat-welcome">
+              <div className="welcome-glyph">
+                <BrainCircuit size={26} />
+              </div>
+              <h1>No model installed yet</h1>
+              <p>Pick a model matched to this Mac from the catalog to get started.</p>
+              <button className="primary-button" type="button" onClick={onManageModels}>
+                Browse models
+              </button>
+            </div>
           )
         ) : (
           <div className="message-column">
@@ -619,6 +782,24 @@ function ChatView({
           </div>
         )}
       </div>
+
+      {runtimeEvent ? (
+        <div className={`runtime-card ${runtimeEvent.type}`} role="alert">
+          <AlertTriangle size={17} />
+          <div>
+            <strong>{runtimeEvent.type === 'crashed' ? 'The model runtime crashed — PowerStation recovered' : 'Paused to protect your system'}</strong>
+            <p>{runtimeEvent.message}</p>
+          </div>
+          <div className="runtime-card-actions">
+            <button className="secondary-button compact" type="button" onClick={onManageModels}>
+              Switch model
+            </button>
+            <button className="ghost-button" type="button" aria-label="Dismiss" onClick={onDismissRuntimeEvent}>
+              <X size={15} />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <Composer disabled={!hasModels || !selectedModel} onSend={onSend} onStop={onStop} streaming={streaming} />
     </div>
@@ -703,13 +884,42 @@ function MessageBubble({ message, modelName }: { message: ChatTurn; modelName: s
     )
   }
 
-  const showStatus = message.streaming && !message.content && !message.error
+  const showStatus = message.streaming && !message.content && !message.error && !(message.toolCalls?.length)
+  const slow = !message.streaming && !message.error && message.tokensPerSec !== undefined && message.tokensPerSec > 0 && message.tokensPerSec < 5
+
   return (
     <article className="message assistant">
       <div className="assistant-head">
         <span className="assistant-name">{modelName}</span>
         {message.streaming ? <span className="caret-dot" /> : null}
       </div>
+
+      {message.admission && (message.admission.verdict === 'tight' || message.admission.schemaTokens > 0) ? (
+        <div className="admission-line" title={message.admission.summary}>
+          {message.admission.verdict === 'tight'
+            ? `Context capped at ${message.admission.contextTokens.toLocaleString()} tokens to fit memory safely.`
+            : null}
+          {message.admission.schemaTokens > 0
+            ? ` ${message.admission.toolCount} tools connected (~${message.admission.schemaTokens.toLocaleString()} tokens of context).`
+            : null}
+        </div>
+      ) : null}
+
+      {message.toolCalls?.length ? (
+        <div className="tool-call-stack">
+          {message.toolCalls.map((call, index) => (
+            <div className={`tool-call ${call.ok === null ? 'running' : call.ok ? 'done' : 'failed'}`} key={`${call.toolKey}-${index}`}>
+              <Wrench size={13} />
+              <span className="tool-call-name">{call.toolKey}</span>
+              <span className="tool-call-state">
+                {call.ok === null ? 'running…' : call.ok ? 'done' : 'failed'}
+              </span>
+              {call.summary ? <span className="tool-call-summary" title={call.summary}>{call.summary}</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {message.error ? (
         <div className="assistant-error">{message.error}</div>
       ) : showStatus ? (
@@ -720,14 +930,76 @@ function MessageBubble({ message, modelName }: { message: ChatTurn; modelName: s
       ) : (
         <Markdown source={message.content} />
       )}
+
+      {message.haltReason ? (
+        <div className="halt-note">
+          {message.haltReason === 'repeated-call'
+            ? 'Stopped: the model tried the exact same tool call three times. Rephrase the request or try a more capable model.'
+            : 'Stopped: this turn hit its tool-call budget. Send a follow-up message to continue.'}
+        </div>
+      ) : null}
+
       {!message.streaming && !message.error && message.content ? (
         <div className="assistant-foot">
           <CopyButton text={message.content} />
           {message.aborted ? <span className="muted">stopped</span> : null}
           {message.tokensPerSec ? <span className="muted">{formatNumber(message.tokensPerSec, 1)} tok/s</span> : null}
+          {slow ? <span className="muted slow-hint">This model runs slowly on your machine — consider a smaller one from Models.</span> : null}
         </div>
       ) : null}
     </article>
+  )
+}
+
+// --- Permission modal ----------------------------------------------------------
+
+function PermissionModal({
+  request,
+  onRespond,
+}: {
+  request: PermissionRequest
+  onRespond: (promptId: string, decision: 'allow-once' | 'allow-always' | 'deny') => void
+}) {
+  const argsPreview = useMemo(() => {
+    try {
+      const text = JSON.stringify(request.args, null, 2) ?? '{}'
+      return text.length > 1200 ? `${text.slice(0, 1200)}…` : text
+    } catch {
+      return String(request.args)
+    }
+  }, [request.args])
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Tool permission request">
+      <div className="permission-modal">
+        <div className="permission-head">
+          <ShieldQuestion size={20} />
+          <div>
+            <h3>Allow this tool call?</h3>
+            <p>
+              The model wants to run <strong>{request.toolName}</strong> from <strong>{request.serverName}</strong>.
+            </p>
+          </div>
+        </div>
+        <pre className="permission-args">{argsPreview}</pre>
+        <p className="permission-note">
+          Tools run on your machine with your permissions. Only allow calls you understand.
+        </p>
+        <div className="permission-actions">
+          <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, 'deny')}>
+            Deny
+          </button>
+          <div className="permission-allow">
+            <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, 'allow-always')}>
+              Always allow
+            </button>
+            <button className="primary-button" type="button" onClick={() => onRespond(request.promptId, 'allow-once')}>
+              Allow once
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 

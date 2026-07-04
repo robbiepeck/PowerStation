@@ -1,11 +1,17 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fixPath from 'fix-path'
 import { loadState } from './config.js'
 import { registerIpc } from './ipc.js'
 import { startTelemetry, stopTelemetry } from './telemetry.js'
-import { unloadModel } from './llm.js'
+import { shutdown as shutdownLlm, getActiveRequestIds, stopChat } from './llm.js'
+import { disconnectAll as disconnectMcp } from './mcp.js'
 import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
+
+// GUI apps launched from Finder/Dock get launchd's minimal PATH; fix it before
+// any MCP server is spawned (npx/uvx would otherwise fail with ENOENT).
+fixPath()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
@@ -41,6 +47,22 @@ function createMainWindow() {
     mainWindow?.show()
     startTelemetry((snapshot) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('telemetry:update', snapshot)
+      // Auto-pause: when the OS reports critical memory pressure during
+      // generation, stop the generation rather than letting the machine swap
+      // itself into a beachball. The user gets a one-tap set of choices.
+      if (snapshot.pressure.level === 'critical') {
+        const active = getActiveRequestIds()
+        if (active.length) {
+          for (const requestId of active) stopChat(requestId)
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('runtime:event', {
+              type: 'autopaused',
+              message:
+                'Generation was paused because your Mac hit critical memory pressure. Close some apps, switch to a smaller model, or continue anyway.',
+            })
+          }
+        }
+      }
     })
     scheduleInitialUpdateCheck(() => mainWindow)
   })
@@ -99,5 +121,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopTelemetry()
-  void unloadModel()
+  shutdownLlm()
+  void disconnectMcp()
 })

@@ -1,0 +1,124 @@
+import { describe, expect, it } from 'vitest'
+import {
+  admittedContextTokens,
+  checkFit,
+  estimateKvCacheBytes,
+  kvBytesPerToken,
+  type KvGeometry,
+} from './admission.js'
+
+// Llama-3.1-8B geometry: 32 layers, 8 KV heads (GQA), head_dim 128.
+const LLAMA_8B: KvGeometry = { nLayers: 32, nKvHeads: 8, headDim: 128 }
+const GB = 1024 ** 3
+
+describe('kvBytesPerToken', () => {
+  it('matches the known Llama-3.1-8B figure (~128KB/token)', () => {
+    // 2 (K+V) * 32 layers * 8 heads * 128 dim * 2 bytes = 131072 bytes
+    expect(kvBytesPerToken(LLAMA_8B)).toBe(131072)
+  })
+
+  it('scales KV cache linearly with context', () => {
+    const at8k = estimateKvCacheBytes(LLAMA_8B, 8192)
+    const at32k = estimateKvCacheBytes(LLAMA_8B, 32768)
+    expect(at32k).toBe(at8k * 4)
+    // 32k context on 8B ≈ 4GB, the widely-quoted figure.
+    expect(at32k / GB).toBeCloseTo(4, 0)
+  })
+
+  it('returns zero KV bytes when geometry is unknown', () => {
+    expect(estimateKvCacheBytes(null, 32768)).toBe(0)
+  })
+})
+
+describe('checkFit', () => {
+  const weights8bQ4 = 4.9e9 // ~4.9GB Q4_K_M file
+
+  it('passes an 8B Q4 model with 8k context on a 16GB machine (≈11GB Metal budget)', () => {
+    const report = checkFit({
+      weightsBytes: weights8bQ4,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+    })
+    expect(report.verdict).toBe('comfortable')
+    expect(report.fits).toBe(true)
+  })
+
+  it('rejects a 20GB model on a 16GB machine', () => {
+    const report = checkFit({
+      weightsBytes: 20e9,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+    })
+    expect(report.verdict).toBe('wont-fit')
+    expect(report.fits).toBe(false)
+    expect(report.suggestions.length).toBeGreaterThan(0)
+  })
+
+  it('flags a technically-fitting-but-tight load and suggests a smaller context', () => {
+    // 8B with a huge 128k context: KV alone ≈ 16GB.
+    const report = checkFit({
+      weightsBytes: weights8bQ4,
+      geometry: LLAMA_8B,
+      contextTokens: 131072,
+      budgetBytes: 24 * GB,
+    })
+    expect(report.verdict).not.toBe('comfortable')
+    expect(report.maxComfortableContext).not.toBeNull()
+    expect(report.maxComfortableContext!).toBeLessThan(131072)
+    expect(report.suggestions.some((s) => s.includes('context'))).toBe(true)
+  })
+
+  it('accounts for memory already in use', () => {
+    const free = checkFit({
+      weightsBytes: weights8bQ4,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+    })
+    const busy = checkFit({
+      weightsBytes: weights8bQ4,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+      usedBytes: 4 * GB,
+    })
+    expect(busy.headroomBytes).toBeLessThan(free.headroomBytes)
+  })
+
+  it('never reports a comfortable context below the 512-token minimum', () => {
+    const report = checkFit({
+      weightsBytes: 10e9,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11 * GB,
+    })
+    if (report.maxComfortableContext !== null) {
+      expect(report.maxComfortableContext).toBeGreaterThanOrEqual(512)
+    }
+  })
+})
+
+describe('admittedContextTokens', () => {
+  it('leaves a comfortable request unchanged', () => {
+    const admitted = admittedContextTokens({
+      weightsBytes: 4.9e9,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+    })
+    expect(admitted).toBe(8192)
+  })
+
+  it('shrinks an oversized context down to what fits', () => {
+    const admitted = admittedContextTokens({
+      weightsBytes: 4.9e9,
+      geometry: LLAMA_8B,
+      contextTokens: 131072,
+      budgetBytes: 11.2 * GB,
+    })
+    expect(admitted).toBeLessThan(131072)
+    expect(admitted).toBeGreaterThanOrEqual(512)
+  })
+})

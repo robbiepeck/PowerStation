@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle,
-  ArrowLeft,
   BadgeCheck,
   BookOpenCheck,
   Code2,
@@ -11,18 +10,33 @@ import {
   ExternalLink,
   FileDown,
   FolderSearch,
-  FolderOpen,
+  Gauge,
   HardDrive,
   Microchip,
+  Plug,
   Plus,
   RefreshCw,
   ShieldCheck,
   Thermometer,
   Trash2,
+  Wrench,
   Zap,
 } from 'lucide-react'
-import { STARTER_MODELS, type StarterModel } from './modelCatalog'
-import type { DeviceInfo, ModelInfo, Settings, StorageBreakdown, TelemetrySnapshot, UtilitySettings } from './types'
+import { getDesktop } from './desktop'
+import type {
+  Catalog,
+  CatalogModel,
+  DeviceInfo,
+  FitReport,
+  McpServerStatus,
+  McpToolInfoResponse,
+  ModelInfo,
+  Settings,
+  TelemetrySnapshot,
+  ToolCallingTier,
+  ToolPermission,
+  UtilitySettings,
+} from './types'
 import {
   Badge,
   MetricTile,
@@ -34,6 +48,8 @@ import {
   formatNumber,
 } from './ui'
 import type { MetricInfo } from './ui'
+
+const bridge = getDesktop()
 
 export type MetricKey = 'cpu' | 'ram' | 'gpu' | 'vram' | 'storage' | 'power' | 'thermal'
 export type MetricSeries = Record<MetricKey, number[]>
@@ -53,7 +69,7 @@ const METRIC_INFO: Record<MetricKey, MetricInfo> = {
   },
   vram: {
     title: 'VRAM',
-    body: 'VRAM is memory used by the graphics chip. On Apple Silicon this may come from shared memory, so it can overlap with normal RAM.',
+    body: 'VRAM is memory used by the graphics chip. On Apple Silicon this comes from shared memory, so it overlaps with normal RAM.',
   },
   storage: {
     title: 'Storage',
@@ -88,182 +104,165 @@ function createUtilityId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1e6)}`
 }
 
-function starterIcon(model: StarterModel) {
-  if (model.tone === 'compact') return Zap
-  if (model.tone === 'code') return Code2
-  if (model.tone === 'strong') return Cpu
-  if (model.tone === 'gemma') return ShieldCheck
-  if (model.tone === 'reasoning') return Microchip
-  if (model.tone === 'mistral') return Thermometer
-  return BookOpenCheck
-}
-
-function starterFileName(model: StarterModel) {
-  return decodeURIComponent(model.uri.split('/').pop() ?? '').toLowerCase()
-}
-
-function comparableModelName(value: string) {
-  return value.toLowerCase().replace(/\.gguf$/i, '').replace(/[^a-z0-9]+/g, '')
-}
-
-function isCurrentStarterModel(model: StarterModel, selectedModel?: ModelInfo | null) {
+function isCurrentCatalogModel(model: CatalogModel, selectedModel?: ModelInfo | null) {
   if (!selectedModel) return false
-  const target = starterFileName(model)
-  const selectedFile = selectedModel.fileName.toLowerCase()
-  const selectedPath = selectedModel.path.split('\\').join('/').toLowerCase()
-  const comparableTarget = comparableModelName(target)
-  const comparableSelected = comparableModelName(selectedFile)
-  return Boolean(target) && (selectedFile === target || selectedPath.endsWith(`/${target}`) || comparableSelected.includes(comparableTarget))
+  return selectedModel.fileName.toLowerCase() === model.fileName.toLowerCase()
 }
 
-export function StarterModelCatalog({
+// --- Catalog ------------------------------------------------------------------
+
+function FitBadge({ fit }: { fit: FitReport | null | undefined }) {
+  if (fit === undefined) return null
+  if (fit === null) return <Badge tone="neutral">fit unknown</Badge>
+  if (fit.verdict === 'comfortable') return <Badge tone="real">Fits comfortably</Badge>
+  if (fit.verdict === 'tight') return <Badge tone="estimated">Tight fit</Badge>
+  return <Badge tone="danger">Won't fit this Mac</Badge>
+}
+
+function TierBadge({ tier }: { tier: ToolCallingTier }) {
+  if (tier === 'multi') return <Badge tone="real">Agent-ready</Badge>
+  if (tier === 'single') return <Badge tone="estimated">Basic tools</Badge>
+  return <Badge tone="neutral">Chat only</Badge>
+}
+
+export function CatalogGrid({
+  catalog,
   download,
+  fitReports,
   onDownload,
-  onManageModels,
   onOpenWebsite,
   selectedModel,
-  variant = 'models',
 }: {
+  catalog: Catalog | null
   download: DownloadState
+  fitReports: Record<string, FitReport | null>
   onDownload: (uri: string) => void
-  onManageModels?: () => void
   onOpenWebsite: (url: string) => void
   selectedModel?: ModelInfo | null
-  variant?: 'models' | 'welcome'
 }) {
+  if (!catalog || !catalog.models.length) {
+    return <p className="empty-hint">Loading the model catalog…</p>
+  }
+
   const downloadingUri = download?.uri
   const downloadPct = download && download.totalSize ? (download.downloadedSize / download.totalSize) * 100 : 0
 
   return (
-    <section className={`starter-catalog ${variant}`}>
-      <div className="starter-catalog-head">
-        <span>Starter models</span>
-        <h2>{variant === 'welcome' ? 'Download a local model to begin' : 'Download from PowerStation'}</h2>
-        <p>
-          Pick a GGUF model and PowerStation will download it into the local model folder, import it, and select it for
-          chat when the download completes.
-        </p>
-      </div>
+    <div className="starter-grid">
+      {catalog.models.map((model) => {
+        const fit = fitReports[model.id]
+        const active = downloadingUri === model.downloadUrl
+        const current = isCurrentCatalogModel(model, selectedModel)
+        const busy = Boolean(download) && !download?.error
+        const failed = active && Boolean(download?.error)
+        const wontFit = fit != null && fit.verdict === 'wont-fit'
 
-      <div className="starter-grid">
-        {STARTER_MODELS.map((model) => {
-          const Icon = starterIcon(model)
-          const active = downloadingUri === model.uri
-          const current = isCurrentStarterModel(model, selectedModel)
-          const disabled = Boolean(download) && !download?.error
-          const failed = active && Boolean(download?.error)
-          const label = active && !download?.error ? 'Downloading' : failed ? 'Retry download' : 'Download'
+        return (
+          <article className={`starter-card ${current ? 'currently-used' : ''} ${wontFit ? 'wont-fit' : ''}`} key={model.id}>
+            <div className="starter-card-top">
+              <span className="starter-icon" aria-hidden="true">
+                {model.useCases.includes('coding') ? <Code2 size={18} /> : model.useCases.includes('agents') ? <Wrench size={18} /> : <BookOpenCheck size={18} />}
+              </span>
+              <div>
+                <h3>{model.name}</h3>
+                <p>{model.family}</p>
+              </div>
+            </div>
 
-          return (
-            <article className={`starter-card ${model.tone} ${current ? 'currently-used' : ''}`} key={model.id}>
-              <div className="starter-card-top">
-                <span className="starter-icon" aria-hidden="true">
-                  <Icon size={18} />
-                </span>
-                <div>
-                  <h3>{model.name}</h3>
-                  <p>{model.bestFor}</p>
+            <div className="starter-badges">
+              <FitBadge fit={fit} />
+              <TierBadge tier={model.toolCalling} />
+            </div>
+
+            <div className="starter-specs" aria-label={`${model.name} specs`}>
+              <span>{model.totalParamsB}B{model.activeParamsB ? ` · ${model.activeParamsB}B active` : ''}</span>
+              <span>{model.quant}</span>
+              <span>{formatBytes(model.sizeBytes)}</span>
+              <span>{model.minRamGb}GB+ RAM</span>
+              {model.expectedTps ? <span>{model.expectedTps}</span> : null}
+              <span>{model.license}</span>
+            </div>
+
+            <div className="starter-tradeoffs">
+              <div>
+                <strong>Great at</strong>
+                <ul>
+                  {model.goodAt.slice(0, 3).map((item) => (
+                    <li key={item}>
+                      <BadgeCheck size={13} />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <strong>Will struggle with</strong>
+                <ul>
+                  {model.strugglesWith.slice(0, 3).map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            {fit && fit.verdict !== 'comfortable' ? <p className="starter-fit-note">{fit.summary}</p> : null}
+
+            {active && !download?.error ? (
+              <div className="starter-download-status">
+                <div className="download-progress-head">
+                  <span>Downloading</span>
+                  <strong>
+                    {formatBytes(download?.downloadedSize ?? 0)} / {formatBytes(download?.totalSize ?? 0)}
+                  </strong>
+                </div>
+                <div className="meter-track medium">
+                  <span style={{ width: `${clamp(downloadPct, 2, 100)}%` }} />
                 </div>
               </div>
+            ) : null}
+            {failed && download?.error ? <p className="error-text">{download.error}</p> : null}
 
-              <div className="starter-specs" aria-label={`${model.name} specs`}>
-                <span>{model.family}</span>
-                <span>{model.parameters}</span>
-                <span>{model.quantization}</span>
-                <span>{model.downloadSize}</span>
-                <span>{model.recommendedMemory}</span>
-                <span>{model.license}</span>
-              </div>
-
-              <div className="starter-tradeoffs">
-                <div>
-                  <strong>Pros</strong>
-                  <ul>
-                    {model.pros.map((item) => (
-                      <li key={item}>
-                        <BadgeCheck size={13} />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <strong>Cons</strong>
-                  <ul>
-                    {model.cons.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-
-              {active ? (
-                <div className="starter-download-status">
-                  {download?.error ? (
-                    <p className="error-text">{download.error}</p>
-                  ) : (
-                    <>
-                      <div className="download-progress-head">
-                        <span>{label}</span>
-                        <strong>
-                          {formatBytes(download?.downloadedSize ?? 0)} / {formatBytes(download?.totalSize ?? 0)}
-                        </strong>
-                      </div>
-                      <div className="meter-track medium">
-                        <span style={{ width: `${clamp(downloadPct, 2, 100)}%` }} />
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : null}
-
-              <button
-                className="starter-website-button"
-                type="button"
-                onClick={() => onOpenWebsite(model.websiteUrl)}
-                aria-label={`View ${model.name} website`}
-              >
-                <ExternalLink size={15} />
-                View Website
+            <button
+              className="starter-website-button"
+              type="button"
+              onClick={() => onOpenWebsite(model.websiteUrl)}
+              aria-label={`View ${model.name} on Hugging Face`}
+            >
+              <ExternalLink size={15} />
+              View on Hugging Face
+            </button>
+            {current ? (
+              <button className="primary-button starter-download currently-used-button" type="button" disabled>
+                <BadgeCheck size={15} />
+                Currently used
               </button>
-              {current ? (
-                <button className="primary-button starter-download currently-used-button" type="button" disabled>
-                  <BadgeCheck size={15} />
-                  Currently Used
-                </button>
-              ) : (
-                <button
-                  className="primary-button starter-download"
-                  type="button"
-                  disabled={disabled && !failed}
-                  onClick={() => onDownload(model.uri)}
-                >
-                  <Download size={15} />
-                  {disabled && !active ? 'Download running' : label}
-                </button>
-              )}
-            </article>
-          )
-        })}
-      </div>
-
-      {onManageModels ? (
-        <button className="secondary-button starter-manage" type="button" onClick={onManageModels}>
-          Import a local file instead
-        </button>
-      ) : null}
-    </section>
+            ) : (
+              <button
+                className="primary-button starter-download"
+                type="button"
+                disabled={(busy && !failed) || wontFit}
+                title={wontFit ? fit?.summary : undefined}
+                onClick={() => onDownload(model.downloadUrl)}
+              >
+                <Download size={15} />
+                {wontFit ? "Won't fit" : busy && !active ? 'Download running' : failed ? 'Retry download' : 'Download'}
+              </button>
+            )}
+          </article>
+        )
+      })}
+    </div>
   )
 }
 
+// --- Monitor ------------------------------------------------------------------
+
 export function MonitorView({
   device,
-  onOpenStorage,
   series,
   snapshot,
 }: {
   device: DeviceInfo | null
-  onOpenStorage: () => void
   series: MetricSeries
   snapshot: TelemetrySnapshot | null
 }) {
@@ -280,10 +279,24 @@ export function MonitorView({
   const vramPct = snapshot.vram.totalGb ? ((snapshot.vram.usedGb ?? 0) / snapshot.vram.totalGb) * 100 : 0
   const storagePct = snapshot.storage.totalGb ? (snapshot.storage.usedGb / snapshot.storage.totalGb) * 100 : 0
   const gpuDisplay = snapshot.gpu.load != null ? `${formatNumber(snapshot.gpu.load)}%` : 'n/a'
+  const pressureLabel =
+    snapshot.pressure.level === 'critical'
+      ? 'Critical'
+      : snapshot.pressure.level === 'warn'
+        ? 'Elevated'
+        : snapshot.pressure.level === 'normal'
+          ? 'Normal'
+          : 'n/a'
 
   const rows = [
     { label: 'CPU', value: `${formatNumber(snapshot.cpu.load)}%`, detail: `${snapshot.cpu.cores} cores`, real: snapshot.cpu.real },
     { label: 'RAM', value: `${formatNumber(snapshot.ram.usedGb, 1)} GB`, detail: `${formatNumber(snapshot.ram.totalGb, 0)} GB total`, real: snapshot.ram.real },
+    {
+      label: 'Memory pressure',
+      value: pressureLabel,
+      detail: 'macOS kernel signal',
+      real: snapshot.pressure.real,
+    },
     {
       label: 'VRAM',
       value: snapshot.vram.totalGb ? `${formatNumber(snapshot.vram.usedGb ?? 0, 1)} GB` : 'n/a',
@@ -336,7 +349,11 @@ export function MonitorView({
           <strong>{snapshot.model.loaded ? 'Model loaded' : 'Idle'}</strong>
           {snapshot.model.loaded ? ' · generating uses GPU + RAM' : ' · no model in memory'}
         </span>
-        <span className="muted">CPU, RAM, VRAM and storage are live · power and thermal headroom are estimated without elevated access</span>
+        <span>
+          <strong>Pressure {pressureLabel.toLowerCase()}</strong>
+          {snapshot.pressure.level === 'critical' ? ' · PowerStation pauses generation automatically' : ''}
+        </span>
+        <span className="muted">CPU, RAM, VRAM, storage and pressure are live · power and thermal headroom are estimated without elevated access</span>
       </div>
 
       <div className="metric-stack wide">
@@ -385,7 +402,6 @@ export function MonitorView({
           icon={HardDrive}
           info={METRIC_INFO.storage}
           label="Storage"
-          onClick={onOpenStorage}
           series={series.storage}
           sub={
             <Badge tone={snapshot.storage.real ? 'real' : 'estimated'}>
@@ -439,140 +455,38 @@ export function MonitorView({
   )
 }
 
-export function StorageView({
-  loading,
-  onBack,
-  onRefresh,
-  onReveal,
-  result,
-  snapshot,
-}: {
-  loading: boolean
-  onBack: () => void
-  onRefresh: () => void
-  onReveal: (filePath: string) => void
-  result: StorageBreakdown | null
-  snapshot: TelemetrySnapshot | null
-}) {
-  const usedBytes = snapshot ? snapshot.storage.usedGb * 1_000_000_000 : 0
-  const totalBytes = snapshot ? snapshot.storage.totalGb * 1_000_000_000 : 0
-  const freeBytes = snapshot ? snapshot.storage.freeGb * 1_000_000_000 : 0
-
-  return (
-    <div className="storage-view">
-      <PanelHeader
-        eyebrow="Storage"
-        title="Storage breakdown"
-        action={
-          <div className="storage-actions">
-            <button className="secondary-button compact" type="button" onClick={onBack}>
-              <ArrowLeft size={14} />
-              Monitor
-            </button>
-            <button className="secondary-button compact" type="button" onClick={onRefresh} disabled={loading}>
-              <RefreshCw size={14} />
-              {loading ? 'Scanning' : 'Rescan'}
-            </button>
-          </div>
-        }
-      />
-
-      <div className="storage-summary">
-        <div>
-          <span>Used</span>
-          <strong>{formatBytes(usedBytes)}</strong>
-        </div>
-        <div>
-          <span>Free</span>
-          <strong>{formatBytes(freeBytes)}</strong>
-        </div>
-        <div>
-          <span>Total</span>
-          <strong>{formatBytes(totalBytes)}</strong>
-        </div>
-        <div>
-          <span>Potential cleanup</span>
-          <strong>{result ? formatBytes(result.cleanupBytes) : loading ? 'Scanning' : '—'}</strong>
-        </div>
-      </div>
-
-      <div className="storage-note">
-        <AlertTriangle size={15} />
-        <span>{result?.note ?? 'PowerStation is scanning common user-owned folders for large and stale files. Nothing is deleted automatically.'}</span>
-      </div>
-
-      {loading && !result ? <p className="empty-hint">Scanning storage. This can take a little while on large folders.</p> : null}
-
-      {result ? (
-        <>
-          <section className="storage-section">
-            <h3>Largest areas scanned</h3>
-            <div className="storage-root-grid">
-              {result.roots.slice(0, 6).map((root) => (
-                <div className="storage-root-card" key={root.path}>
-                  <span>{root.label}</span>
-                  <strong>{formatBytes(root.sizeBytes)}</strong>
-                  <small>{root.skipped ? `${root.skipped} skipped` : root.path}</small>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="storage-section">
-            <h3>Large files and folders</h3>
-            <div className="storage-table">
-              {result.items.length ? (
-                result.items.map((item) => (
-                  <div className={`storage-row ${item.potentiallyUnneeded ? 'cleanup' : ''}`} key={item.path}>
-                    <div className="storage-row-main">
-                      <FolderOpen size={15} />
-                      <div>
-                        <strong>{item.name}</strong>
-                        <span>{item.path}</span>
-                      </div>
-                    </div>
-                    <span>{item.category}</span>
-                    <span>{formatBytes(item.sizeBytes)}</span>
-                    <span>{new Date(item.modifiedAt).toLocaleDateString()}</span>
-                    <p>{item.reason}</p>
-                    <button className="secondary-button compact" type="button" onClick={() => onReveal(item.path)}>
-                      Reveal
-                    </button>
-                  </div>
-                ))
-              ) : (
-                <p className="empty-hint">No large user-owned files were found in the scanned locations.</p>
-              )}
-            </div>
-          </section>
-        </>
-      ) : null}
-    </div>
-  )
-}
+// --- Models ---------------------------------------------------------------------
 
 export function ModelsView({
+  catalog,
+  catalogRefreshing,
   device,
   download,
+  fitReports,
   models,
   onAddFolder,
   onDelete,
   onDownload,
   onOpenWebsite,
   onImportFile,
+  onRefreshCatalog,
   onRemove,
   onReveal,
   onSelect,
   selectedPath,
 }: {
+  catalog: Catalog | null
+  catalogRefreshing: boolean
   device: DeviceInfo | null
   download: DownloadState
+  fitReports: Record<string, FitReport | null>
   models: ModelInfo[]
   onAddFolder: () => void
   onDelete: (model: ModelInfo) => void
   onDownload: (uri: string) => void
   onOpenWebsite: (url: string) => void
   onImportFile: () => void
+  onRefreshCatalog: () => void
   onRemove: (model: ModelInfo) => void
   onReveal: (model: ModelInfo) => void
   onSelect: (model: ModelInfo) => void
@@ -584,9 +498,42 @@ export function ModelsView({
 
   return (
     <div className="models-view">
-      <PanelHeader eyebrow="Models" title="Local models" />
+      <PanelHeader
+        eyebrow="Models"
+        title="Local models"
+        action={
+          <div className="catalog-meta">
+            {catalog ? (
+              <span className="catalog-updated">
+                Catalog {catalog.updatedAt || 'bundled'} · {catalog.source}
+              </span>
+            ) : null}
+            <button className="secondary-button compact" type="button" onClick={onRefreshCatalog} disabled={catalogRefreshing}>
+              <RefreshCw size={14} className={catalogRefreshing ? 'spin-icon' : undefined} />
+              {catalogRefreshing ? 'Updating' : 'Update catalog'}
+            </button>
+          </div>
+        }
+      />
 
-      <StarterModelCatalog download={download} onDownload={onDownload} onOpenWebsite={onOpenWebsite} selectedModel={selectedModel} />
+      <section className="starter-catalog">
+        <div className="starter-catalog-head">
+          <span>Matched to this Mac</span>
+          <h2>Model catalog</h2>
+          <p>
+            Every card shows whether the model fits this machine's memory and what it's honestly good at. Downloads
+            install into PowerStation's local model folder and are selected automatically when they finish.
+          </p>
+        </div>
+        <CatalogGrid
+          catalog={catalog}
+          download={download}
+          fitReports={fitReports}
+          onDownload={onDownload}
+          onOpenWebsite={onOpenWebsite}
+          selectedModel={selectedModel}
+        />
+      </section>
 
       <div className="model-actions">
         <button className="secondary-button" type="button" onClick={onImportFile}>
@@ -644,8 +591,8 @@ export function ModelsView({
           <Database size={28} />
           <h3>No models yet</h3>
           <p>
-            Import a <code>.gguf</code> file you've downloaded, add a folder of models, or paste a Hugging Face URI above
-            to download one. Models run fully on-device — nothing leaves your machine.
+            Download one from the catalog above, import a <code>.gguf</code> file, or add a folder of models. Models
+            run fully on-device — nothing leaves your machine.
           </p>
         </div>
       ) : (
@@ -709,23 +656,37 @@ export function ModelsView({
   )
 }
 
+// --- Utilities --------------------------------------------------------------------
+
 export function UtilitiesView({
   enabled,
+  mcpStatuses,
   onSettingsChange,
   selectedModel,
+  selectedTier,
   settings,
 }: {
   enabled: boolean
+  mcpStatuses: McpServerStatus[]
   onSettingsChange: (patch: Partial<Settings>) => void
   selectedModel: ModelInfo | null
+  selectedTier: ToolCallingTier
   settings: Settings | null
 }) {
   const [skillDraft, setSkillDraft] = useState('')
   const [connectorDraft, setConnectorDraft] = useState('')
   const [mcpNameDraft, setMcpNameDraft] = useState('')
   const [mcpCommandDraft, setMcpCommandDraft] = useState('')
+  const [toolInfo, setToolInfo] = useState<McpToolInfoResponse | null>(null)
+  const [permissions, setPermissions] = useState<Record<string, ToolPermission>>({})
   const utilities = settings?.utilities ?? EMPTY_UTILITIES
   const disabled = !enabled || !settings
+  const toolsBlocked = selectedTier === 'none'
+
+  useEffect(() => {
+    void bridge.mcp.toolInfo().then(setToolInfo).catch(() => undefined)
+    void bridge.permissions.get().then(setPermissions).catch(() => undefined)
+  }, [mcpStatuses])
 
   const updateUtilities = (patch: Partial<UtilitySettings>) => {
     if (disabled) return
@@ -751,11 +712,19 @@ export function UtilitiesView({
     const command = mcpCommandDraft.trim()
     if (!name || !command) return
     updateUtilities({
-      mcpServers: [...utilities.mcpServers, { id: createUtilityId('mcp'), name, command }],
+      mcpServers: [...utilities.mcpServers, { id: createUtilityId('mcp'), name, command, enabled: true }],
     })
     setMcpNameDraft('')
     setMcpCommandDraft('')
   }
+
+  const setPermission = (toolKey: string, permission: ToolPermission) => {
+    setPermissions((prev) => ({ ...prev, [toolKey]: permission }))
+    void bridge.permissions.set({ toolKey, permission })
+  }
+
+  const statusFor = (id: string) => mcpStatuses.find((status) => status.id === id) ?? null
+  const schemaPct = toolInfo && toolInfo.contextTokens > 0 ? (toolInfo.schemaTokens / toolInfo.contextTokens) * 100 : 0
 
   return (
     <div className="utilities-view">
@@ -770,8 +739,28 @@ export function UtilitiesView({
                 : 'Download and select a local model to configure utilities.'}
             </p>
           </div>
-          <Badge tone={disabled ? 'neutral' : 'real'}>{disabled ? 'Locked' : 'Enabled'}</Badge>
+          <TierBadge tier={selectedTier} />
         </div>
+
+        {toolsBlocked && selectedModel ? (
+          <div className="tier-warning">
+            <AlertTriangle size={16} />
+            <span>
+              <strong>{selectedModel.name}</strong> isn't trained for tool calling, so MCP tools stay off — the model
+              would produce broken calls and blame would land on the app. Models marked <em>Agent-ready</em> in the
+              catalog unlock the full harness.
+            </span>
+          </div>
+        ) : null}
+        {selectedTier === 'single' && selectedModel ? (
+          <div className="tier-warning mild">
+            <AlertTriangle size={16} />
+            <span>
+              This model handles single tool calls reliably, but not long agent loops — PowerStation caps it at 3 tool
+              calls per turn.
+            </span>
+          </div>
+        ) : null}
 
         <fieldset className="utilities-fieldset" disabled={disabled}>
           <div className="utilities-grid">
@@ -834,58 +823,134 @@ export function UtilitiesView({
 
             <section className="utility-panel mcp-panel">
               <div className="utility-panel-head">
-                <Code2 size={16} />
+                <Plug size={16} />
                 <h4>MCP servers</h4>
               </div>
+
+              {toolInfo && toolInfo.schemaTokens > 0 ? (
+                <div className={schemaPct > 25 ? 'context-meter warn' : 'context-meter'}>
+                  <Gauge size={14} />
+                  <span>
+                    Tool definitions use ~{toolInfo.schemaTokens.toLocaleString()} tokens of your{' '}
+                    {toolInfo.contextTokens.toLocaleString()}-token context ({formatNumber(schemaPct, 0)}%)
+                    {schemaPct > 25 ? ' — consider disabling servers you are not using.' : ''}
+                  </span>
+                </div>
+              ) : null}
+
               <div className="mcp-add-grid">
                 <input
                   aria-label="MCP server name"
                   placeholder="Server name"
                   value={mcpNameDraft}
                   onChange={(event) => setMcpNameDraft(event.target.value)}
+                  disabled={toolsBlocked}
                 />
                 <input
                   aria-label="MCP server command"
-                  placeholder="Command or URL"
+                  placeholder='Command, e.g. npx -y @modelcontextprotocol/server-filesystem ~/Documents'
                   value={mcpCommandDraft}
                   onChange={(event) => setMcpCommandDraft(event.target.value)}
+                  disabled={toolsBlocked}
                 />
                 <button
                   className="secondary-button compact"
                   type="button"
                   onClick={addMcpServer}
-                  disabled={!mcpNameDraft.trim() || !mcpCommandDraft.trim()}
+                  disabled={toolsBlocked || !mcpNameDraft.trim() || !mcpCommandDraft.trim()}
                 >
                   <Plus size={14} />
                   Add server
                 </button>
               </div>
+
               <div className="utility-list">
                 {utilities.mcpServers.length ? (
-                  utilities.mcpServers.map((server) => (
-                    <div className="utility-item mcp-item" key={server.id}>
-                      <div>
-                        <strong>{server.name}</strong>
-                        <code>{server.command}</code>
+                  utilities.mcpServers.map((server) => {
+                    const status = statusFor(server.id)
+                    return (
+                      <div className="utility-item mcp-item" key={server.id}>
+                        <div className="mcp-item-main">
+                          <strong>{server.name}</strong>
+                          <code>{server.command}</code>
+                          <div className="mcp-item-status">
+                            {status ? (
+                              <Badge
+                                tone={
+                                  status.state === 'connected' ? 'real' : status.state === 'error' ? 'danger' : 'neutral'
+                                }
+                              >
+                                {status.state === 'connected'
+                                  ? `connected · ${status.toolCount} tools`
+                                  : status.state}
+                              </Badge>
+                            ) : (
+                              <Badge tone="neutral">{server.enabled ? 'not connected' : 'disabled'}</Badge>
+                            )}
+                            {status?.error ? <span className="mcp-error">{status.error}</span> : null}
+                          </div>
+                        </div>
+                        <div className="mcp-item-actions">
+                          <label className="mcp-toggle" title={server.enabled ? 'Disable server' : 'Enable server'}>
+                            <input
+                              type="checkbox"
+                              checked={server.enabled}
+                              onChange={(event) =>
+                                updateUtilities({
+                                  mcpServers: utilities.mcpServers.map((item) =>
+                                    item.id === server.id ? { ...item, enabled: event.target.checked } : item,
+                                  ),
+                                })
+                              }
+                            />
+                            <span>{server.enabled ? 'On' : 'Off'}</span>
+                          </label>
+                          <button
+                            className="ghost-button danger"
+                            type="button"
+                            title={`Remove ${server.name}`}
+                            onClick={() =>
+                              updateUtilities({
+                                mcpServers: utilities.mcpServers.filter((item) => item.id !== server.id),
+                              })
+                            }
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
-                      <button
-                        className="ghost-button danger"
-                        type="button"
-                        title={`Remove ${server.name}`}
-                        onClick={() =>
-                          updateUtilities({
-                            mcpServers: utilities.mcpServers.filter((item) => item.id !== server.id),
-                          })
-                        }
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))
+                    )
+                  })
                 ) : (
-                  <p className="utility-empty">No MCP servers added</p>
+                  <p className="utility-empty">
+                    No MCP servers added. MCP servers give the model tools — files, search, APIs — always behind a
+                    permission prompt.
+                  </p>
                 )}
               </div>
+
+              {toolInfo && toolInfo.tools.length ? (
+                <div className="tool-permission-list">
+                  <h5>Tool permissions</h5>
+                  {toolInfo.tools.map((tool) => (
+                    <div className="tool-permission-row" key={tool.key}>
+                      <div>
+                        <strong>{tool.name}</strong>
+                        <span>{tool.serverName}</span>
+                      </div>
+                      <select
+                        aria-label={`Permission for ${tool.key}`}
+                        value={permissions[tool.key] ?? 'ask'}
+                        onChange={(event) => setPermission(tool.key, event.target.value as ToolPermission)}
+                      >
+                        <option value="ask">Ask every time</option>
+                        <option value="allow">Always allow</option>
+                        <option value="deny">Never allow</option>
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </section>
           </div>
         </fieldset>
@@ -961,6 +1026,8 @@ function UtilityItemList({
   )
 }
 
+// --- Settings ---------------------------------------------------------------------
+
 export function SettingsView({ onChange, settings }: { onChange: (patch: Partial<Settings>) => void; settings: Settings }) {
   return (
     <div className="settings-view">
@@ -990,12 +1057,15 @@ export function SettingsView({ onChange, settings }: { onChange: (patch: Partial
             label="Context window"
             value={settings.contextTokens}
             min={512}
-            max={32768}
+            max={131072}
             step={512}
             unit="tok"
             onChange={(value) => onChange({ contextTokens: value })}
           />
-          <p className="policy-note subtle">Temperature, token cap, and context window are applied to local inference.</p>
+          <p className="policy-note subtle">
+            The context window is a request, not a promise — before every load PowerStation checks it against your
+            memory and shrinks it if it wouldn't fit safely.
+          </p>
         </section>
 
         <section className="settings-section">
@@ -1037,7 +1107,10 @@ export function SettingsView({ onChange, settings }: { onChange: (patch: Partial
 
       <div className="settings-footer">
         <ShieldCheck size={16} />
-        <span>All inference runs locally on this device. Prompts and responses never leave your machine.</span>
+        <span>
+          All inference runs locally on this device. Prompts and responses never leave your machine. Models live in
+          PowerStation's local models folder; chats stay in memory unless you copy them out.
+        </span>
       </div>
     </div>
   )

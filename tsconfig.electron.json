@@ -14,5 +14,6 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["electron/**/*.ts"]
+  "include": ["electron/**/*.ts"],
+  "exclude": ["electron/**/*.test.ts"]
 }

@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { readGgufFileInfo } from 'node-llama-cpp'
 import { getState, mutate } from './config.js'
+import type { KvGeometry } from './admission.js'
 
 export type ModelInfo = {
   path: string
@@ -13,6 +14,8 @@ export type ModelInfo = {
   contextLength: number | null
   sizeBytes: number
   source: 'folder' | 'imported'
+  /** KV-cache geometry from the GGUF header, used for admission control. */
+  geometry: KvGeometry | null
 }
 
 const SPLIT_PART = /-(\d{5})-of-(\d{5})\.gguf$/i
@@ -48,6 +51,29 @@ async function walkForGguf(dir: string, depth: number, found: string[], limit: n
   }
 }
 
+function asNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  // GGUF metadata can surface uint64 fields as BigInt.
+  if (typeof value === 'bigint') return Number(value)
+  // Per-layer arrays (some MoE/hybrid models): use the first value.
+  if (Array.isArray(value)) return asNumber(value[0])
+  return null
+}
+
+function extractGeometry(archMeta: Record<string, unknown>): KvGeometry | null {
+  const attention = (typeof archMeta.attention === 'object' && archMeta.attention !== null
+    ? archMeta.attention
+    : {}) as Record<string, unknown>
+  const nLayers = asNumber(archMeta.block_count)
+  const headCount = asNumber(attention.head_count) ?? asNumber(archMeta['attention.head_count'])
+  const nKvHeads = asNumber(attention.head_count_kv) ?? asNumber(archMeta['attention.head_count_kv']) ?? headCount
+  const embeddingLength = asNumber(archMeta.embedding_length)
+  const keyLength = asNumber(attention.key_length) ?? asNumber(archMeta['attention.key_length'])
+  const headDim = keyLength ?? (embeddingLength && headCount ? Math.round(embeddingLength / headCount) : null)
+  if (!nLayers || !nKvHeads || !headDim) return null
+  return { nLayers, nKvHeads, headDim }
+}
+
 async function readMetadata(filePath: string): Promise<Omit<ModelInfo, 'path' | 'fileName' | 'sizeBytes' | 'source'>> {
   const fileName = path.basename(filePath)
   const fallback = {
@@ -56,6 +82,7 @@ async function readMetadata(filePath: string): Promise<Omit<ModelInfo, 'path' | 
     parameters: null,
     quantization: quantFromName(fileName),
     contextLength: null,
+    geometry: null,
   }
   try {
     const info = (await readGgufFileInfo(filePath, { readTensorInfo: false, logWarnings: false })) as {
@@ -65,13 +92,14 @@ async function readMetadata(filePath: string): Promise<Omit<ModelInfo, 'path' | 
     const general = (metadata.general ?? {}) as Record<string, unknown>
     const architecture = typeof general.architecture === 'string' ? general.architecture : null
     const archMeta = architecture ? ((metadata[architecture] ?? {}) as Record<string, unknown>) : {}
-    const contextLength = typeof archMeta.context_length === 'number' ? archMeta.context_length : null
+    const contextLength = asNumber(archMeta.context_length)
     return {
       name: typeof general.name === 'string' && general.name.trim() ? general.name : fallback.name,
       architecture,
       parameters: typeof general.size_label === 'string' ? general.size_label : null,
       quantization: quantFromName(fileName),
       contextLength,
+      geometry: extractGeometry(archMeta),
     }
   } catch {
     return fallback
@@ -106,6 +134,18 @@ export async function listModels(): Promise<ModelInfo[]> {
   )
 
   return entries.filter((entry): entry is ModelInfo => entry !== null).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function getModelInfo(filePath: string): Promise<ModelInfo | null> {
+  const resolved = path.resolve(filePath)
+  let sizeBytes: number
+  try {
+    sizeBytes = (await fs.stat(resolved)).size
+  } catch {
+    return null
+  }
+  const meta = await readMetadata(resolved)
+  return { path: resolved, fileName: path.basename(resolved), sizeBytes, source: 'folder', ...meta }
 }
 
 export async function importModelFile(filePath: string): Promise<void> {
