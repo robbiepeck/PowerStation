@@ -1,0 +1,46 @@
+# A stale catalogue silently kills a recommendation product: models get
+# renamed, files re-quantized, packages unpublished. This re-verifies every
+# Hugging Face URL (and advertised size) and every npm package weekly, on any
+# catalogue edit, and on demand — and opens/updates an issue when checks fail.
+
+name: Catalogue freshness
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Mondays 09:00 UTC
+  push:
+    branches: [main]
+    paths: ['catalog/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify catalogue URLs and packages
+        id: freshness
+        run: node scripts/check-catalog-freshness.mjs > report.md
+      - name: Show report
+        if: always()
+        run: cat report.md
+      - name: Open or update the freshness issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="Catalogue freshness check failed"
+          BODY_FILE=report.md
+          EXISTING=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "in:title \"$TITLE\"" --json number --jq '.[0].number // empty')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --repo "$GITHUB_REPOSITORY" --body-file "$BODY_FILE"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$BODY_FILE" --label catalog
+          fi

@@ -29,14 +29,13 @@ model landscape and with what users hit first.
 
 ## Later
 
-- **MLX engine pack for Apple Silicon** — an optional faster backend (MLX outruns llama.cpp on Metal
-  for many models) shipped as a subprocess engine, following the multi-runtime pattern.
-- **Optional detected Ollama backend** — use an existing Ollama install if present, without making it
-  a dependency.
+- **MLX engine pack for Apple Silicon** — designed ([plan](docs/mlx-engine-plan.md)); staged after
+  signing. An optional faster backend shipped as a managed subprocess engine.
+- ~~**Optional detected Ollama backend**~~ — shipped in v0.4: Ollama models import with one click
+  (no re-download); chatting through the daemon itself remains out of scope.
 - **Windows polish** — deeper GPU detection (multi-GPU, AMD), Windows code signing (SmartScreen),
   and catalogue guidance written for VRAM tiers rather than unified memory.
 - **Linux support** — hardware detection and runtime variants per distro.
-- **Conversation persistence** — opt-in, local, with the same transparency as everything else.
 
 ## Explicitly out of scope (for now)
 

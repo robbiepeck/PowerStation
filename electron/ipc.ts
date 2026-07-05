@@ -6,6 +6,7 @@ import * as mcp from './mcp.js'
 import * as agent from './agent.js'
 import * as chats from './chats.js'
 import * as skills from './skills.js'
+import * as ollama from './ollama.js'
 import { composeSystemPrompt } from './skillFormat.js'
 import { getDeviceHealthProfile } from './device.js'
 import {
@@ -254,6 +255,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       }
     })()
     return id
+  })
+
+  // --- Ollama -----------------------------------------------------------------
+  ipcMain.handle('ollama:status', () => ollama.getOllamaStatus())
+  ipcMain.handle('ollama:import', async (_event, name: string) => {
+    // Resolve server-side from our own manifest listing — the renderer never
+    // supplies a file path.
+    const model = await ollama.resolveOllamaModel(name)
+    if (!model) throw new Error('That model was not found in Ollama.')
+    await models.importModelFile(model.blobPath)
+    return model.blobPath
   })
 
   // --- Benchmarks -------------------------------------------------------------

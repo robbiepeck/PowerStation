@@ -36,6 +36,7 @@ import type {
   FitReport,
   McpServerStatus,
   ModelInfo,
+  OllamaStatus,
   OnboardingState,
   PermissionRequest,
   RuntimeEventPayload,
@@ -58,6 +59,16 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'models', label: 'Models', icon: BrainCircuit },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
+]
+
+// First-run demo moment: prompts curated to be squarely within small-model
+// competence — no factual traps, no hard math — so the first impression is
+// what the model does well.
+const STARTER_PROMPTS: Array<{ label: string; prompt: string }> = [
+  { label: '✍️ Write a tiny poem', prompt: 'Write a three-line poem about morning coffee.' },
+  { label: '🧒 Explain something simply', prompt: "Explain what RAM does — like I'm ten years old." },
+  { label: '🍗 Brainstorm dinner', prompt: 'Give me five dinner ideas using chicken and rice — one line each.' },
+  { label: '💬 Fix my tone', prompt: 'Rewrite this more politely: "Send me the file now."' },
 ]
 
 const SERIES_LENGTH = 28
@@ -314,6 +325,20 @@ function useBenchmarks() {
   return { results, refresh }
 }
 
+function useOllama() {
+  const [status, setStatus] = useState<OllamaStatus | null>(null)
+  const refresh = useCallback(async () => {
+    const result = await bridge.ollama.status().catch(() => null)
+    setStatus(result)
+  }, [])
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+  return { status, refresh }
+}
+
 function useChat() {
   const [messages, setMessages] = useState<ChatTurn[]>([])
   const [streaming, setStreaming] = useState(false)
@@ -470,6 +495,7 @@ function App() {
   const chatHistory = useChatHistory()
   const benchmarks = useBenchmarks()
   const refreshBenchmarks = benchmarks.refresh
+  const ollama = useOllama()
   const [download, setDownload] = useState<DownloadState>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchBusyPath, setBenchBusyPath] = useState<string | null>(null)
@@ -571,6 +597,18 @@ function App() {
     chat.reset()
     void chatHistory.refresh()
   }, [chat, chatHistory])
+
+  const handleImportOllama = useCallback(
+    async (name: string) => {
+      try {
+        await bridge.ollama.import(name)
+        await refresh()
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : String(error))
+      }
+    },
+    [refresh],
+  )
 
   const handleBenchmark = useCallback(
     async (model: ModelInfo) => {
@@ -766,8 +804,10 @@ function App() {
               download={download}
               fitReports={fitReports}
               models={models}
+              ollama={ollama.status}
               onAddFolder={handleAddFolder}
               onBenchmark={(model) => void handleBenchmark(model)}
+              onImportOllama={(name) => void handleImportOllama(name)}
               onDelete={handleDelete}
               onDownload={handleDownload}
               onOpenWebsite={handleOpenModelWebsite}
@@ -959,6 +999,20 @@ function ChatView({
               </div>
               <h1>Chat with {selectedModel ? selectedModel.name : 'a local model'}</h1>
               <p>Runs entirely on this machine. Your prompts never leave the device.</p>
+              {selectedModel ? (
+                <div className="starter-prompts" aria-label="Try one of these">
+                  {STARTER_PROMPTS.map((starter) => (
+                    <button
+                      className="starter-prompt-chip"
+                      key={starter.label}
+                      type="button"
+                      onClick={() => onSend(starter.prompt)}
+                    >
+                      {starter.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="chat-welcome">

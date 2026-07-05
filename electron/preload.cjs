@@ -64,6 +64,10 @@ contextBridge.exposeInMainWorld('powerStation', {
     add: (payload) => ipcRenderer.invoke('connectors:add', payload),
     pickFolder: () => ipcRenderer.invoke('app:pickFolder'),
   },
+  ollama: {
+    status: () => ipcRenderer.invoke('ollama:status'),
+    import: (name) => ipcRenderer.invoke('ollama:import', name),
+  },
   chat: {
     send: (payload) => ipcRenderer.invoke('chat:send', payload),
     stop: (requestId) => ipcRenderer.invoke('chat:stop', requestId),

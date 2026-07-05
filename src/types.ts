@@ -42,6 +42,21 @@ export type ConnectorCatalog = {
   connectors: ConnectorEntry[]
 }
 
+export type OllamaModel = {
+  name: string
+  blobPath: string
+  sizeBytes: number
+  parameterSize: string | null
+  quantization: string | null
+}
+
+export type OllamaStatus = {
+  detected: boolean
+  running: boolean
+  version: string | null
+  models: OllamaModel[]
+}
+
 export type KvGeometry = {
   nLayers: number
   nKvHeads: number
@@ -372,6 +387,10 @@ export type PowerStationBridge = {
     get: () => Promise<ConnectorCatalog>
     add: (payload: { connectorId: string; folder?: string }) => Promise<McpServerConfig[]>
     pickFolder: () => Promise<string | null>
+  }
+  ollama: {
+    status: () => Promise<OllamaStatus>
+    import: (name: string) => Promise<string>
   }
   chat: {
     send: (payload: {

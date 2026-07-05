@@ -42,6 +42,7 @@ import type {
   McpServerStatus,
   McpToolInfoResponse,
   ModelInfo,
+  OllamaStatus,
   Settings,
   SkillInfo,
   TelemetrySnapshot,
@@ -487,10 +488,12 @@ export function ModelsView({
   download,
   fitReports,
   models,
+  ollama,
   onAddFolder,
   onBenchmark,
   onDelete,
   onDownload,
+  onImportOllama,
   onOpenWebsite,
   onImportFile,
   onRefreshCatalog,
@@ -508,10 +511,12 @@ export function ModelsView({
   download: DownloadState
   fitReports: Record<string, FitReport | null>
   models: ModelInfo[]
+  ollama: OllamaStatus | null
   onAddFolder: () => void
   onBenchmark: (model: ModelInfo) => void
   onDelete: (model: ModelInfo) => void
   onDownload: (uri: string) => void
+  onImportOllama: (name: string) => void
   onOpenWebsite: (url: string) => void
   onImportFile: () => void
   onRefreshCatalog: () => void
@@ -563,6 +568,48 @@ export function ModelsView({
           selectedModel={selectedModel}
         />
       </section>
+
+      {ollama?.detected && ollama.models.length > 0 ? (
+        <section className="ollama-card">
+          <div className="ollama-card-head">
+            <span className="connector-icon">
+              <Database size={16} />
+            </span>
+            <div>
+              <h3>Found in Ollama {ollama.running ? `(running v${ollama.version})` : '(installed)'}</h3>
+              <p>
+                Use models you already downloaded with Ollama — no re-download, no extra disk. They run in
+                PowerStation's own runtime with the same admission checks as any other model.
+              </p>
+            </div>
+          </div>
+          <div className="ollama-model-list">
+            {ollama.models.map((model) => {
+              const imported = models.some((m) => m.path === model.blobPath)
+              return (
+                <div className="ollama-model-row" key={model.name}>
+                  <div className="ollama-model-main">
+                    <strong>{model.name}</strong>
+                    <span>
+                      {[model.parameterSize, model.quantization, formatBytes(model.sizeBytes)]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </div>
+                  {imported ? (
+                    <Badge tone="real">imported ✓</Badge>
+                  ) : (
+                    <button className="secondary-button compact" type="button" onClick={() => onImportOllama(model.name)}>
+                      <FileDown size={14} />
+                      Use in PowerStation
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
 
       <div className="model-actions">
         <button className="secondary-button" type="button" onClick={onImportFile}>
