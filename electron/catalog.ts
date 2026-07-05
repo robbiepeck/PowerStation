@@ -13,6 +13,12 @@ import type { KvGeometry } from './admission.js'
 export type ToolCallingTier = 'none' | 'single' | 'multi'
 export type UseCase = 'everyday' | 'coding' | 'agents' | 'documents' | 'reasoning'
 
+export type VisionSupport = {
+  mmprojUrl: string
+  mmprojFileName: string
+  mmprojSizeBytes: number
+}
+
 export type CatalogModel = {
   id: string
   name: string
@@ -35,6 +41,12 @@ export type CatalogModel = {
   useCases: UseCase[]
   goodAt: string[]
   strugglesWith: string[]
+  /**
+   * The model's vision variant files, when they exist. Metadata only for now:
+   * the bundled runtime has no multimodal support yet (docs/vision-plan.md),
+   * so nothing downloads or gates on this until it does.
+   */
+  vision: VisionSupport | null
 }
 
 export type Catalog = {
@@ -102,6 +114,16 @@ function sanitizeModel(value: unknown): CatalogModel | null {
   const headDim = cleanNumber(geometryRecord?.headDim)
   const geometry: KvGeometry | null = nLayers && nKvHeads && headDim ? { nLayers, nKvHeads, headDim } : null
 
+  const visionRecord =
+    typeof record.vision === 'object' && record.vision !== null ? (record.vision as Record<string, unknown>) : null
+  const mmprojUrl = cleanString(visionRecord?.mmprojUrl, 500)
+  const mmprojFileName = cleanString(visionRecord?.mmprojFileName, 200)
+  const mmprojSizeBytes = cleanNumber(visionRecord?.mmprojSizeBytes)
+  const vision: VisionSupport | null =
+    visionRecord && isTrustedModelUrl(mmprojUrl) && mmprojFileName && mmprojSizeBytes
+      ? { mmprojUrl, mmprojFileName, mmprojSizeBytes }
+      : null
+
   const toolCalling = TIERS.includes(record.toolCalling as ToolCallingTier)
     ? (record.toolCalling as ToolCallingTier)
     : 'none'
@@ -131,6 +153,7 @@ function sanitizeModel(value: unknown): CatalogModel | null {
     useCases,
     goodAt: cleanStringArray(record.goodAt, 6, 200),
     strugglesWith: cleanStringArray(record.strugglesWith, 6, 200),
+    vision,
   }
 }
 

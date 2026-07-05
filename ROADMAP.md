@@ -31,6 +31,9 @@ model landscape and with what users hit first.
 
 - **MLX engine pack for Apple Silicon** — designed ([plan](docs/mlx-engine-plan.md)); staged after
   signing. An optional faster backend shipped as a managed subprocess engine.
+- **Vision (image input)** — groundwork shipped, blocked on multimodal support in the bundled
+  runtime; verified gap analysis and the two delivery paths in [docs/vision-plan.md](docs/vision-plan.md).
+  A CI watchdog flags every new runtime release so the unblock is caught immediately.
 - ~~**Optional detected Ollama backend**~~ — shipped in v0.4: Ollama models import with one click
   (no re-download); chatting through the daemon itself remains out of scope.
 - **Windows polish** — deeper GPU detection (multi-GPU, AMD), Windows code signing (SmartScreen),

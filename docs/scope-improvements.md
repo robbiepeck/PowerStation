@@ -61,6 +61,14 @@ store; one click registers the underlying GGUF blob as an imported model — no 
 extra disk. Inference runs in PowerStation's own runtime with the same admission checks; Ollama is
 never a dependency. (Chatting *through* the Ollama daemon remains out of scope.)
 
+### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
+Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face
+(schema + data + weekly CI verification shipped, plus an honest "vision-capable model" badge) —
+but `node-llama-cpp` 3.19.0, the newest release, exposes no multimodal API, and no server binary
+ships to shell out to. Full gap analysis and the two delivery paths in
+[vision-plan.md](vision-plan.md); a freshness-CI watchdog flags every new runtime release so the
+unblock is evaluated the week it lands. No vision UI ships until the runtime runs it.
+
 ### 8. MLX engine pack — *designed, staged after signing*
 Research showed MLX runs 1.2–3× faster than llama.cpp on Apple Silicon. The full engineering plan
 — engine registry, managed Python subprocess, parallel MLX catalogue variants, per-engine

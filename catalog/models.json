@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-07-05",
+  "updatedAt": "2026-07-06",
   "models": [
     {
       "id": "qwen3.5-4b",
@@ -14,14 +14,22 @@
       "quant": "Q4_K_M",
       "totalParamsB": 4,
       "activeParamsB": null,
-      "geometry": { "nLayers": 32, "nKvHeads": 4, "headDim": 256 },
+      "geometry": {
+        "nLayers": 32,
+        "nKvHeads": 4,
+        "headDim": 256
+      },
       "kvBytesPerToken": 32768,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 16,
       "expectedTps": "30-50 tok/s",
-      "useCases": ["everyday", "documents", "agents"],
+      "useCases": [
+        "everyday",
+        "documents",
+        "agents"
+      ],
       "goodAt": [
         "Fast, reliable tool calling for its size — top scores on 2026 small-model agent evals",
         "Everyday chat, summarising and writing with quick responses",
@@ -44,14 +52,23 @@
       "quant": "MXFP4",
       "totalParamsB": 21,
       "activeParamsB": 3.6,
-      "geometry": { "nLayers": 24, "nKvHeads": 8, "headDim": 64 },
+      "geometry": {
+        "nLayers": 24,
+        "nKvHeads": 8,
+        "headDim": 64
+      },
       "kvBytesPerToken": 49152,
       "maxContext": 131072,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 16,
       "expectedTps": "50-70 tok/s",
-      "useCases": ["everyday", "agents", "coding", "reasoning"],
+      "useCases": [
+        "everyday",
+        "agents",
+        "coding",
+        "reasoning"
+      ],
       "goodAt": [
         "Step-by-step reasoning with adjustable effort",
         "Multi-step tool calling for agent workflows",
@@ -76,14 +93,21 @@
       "quant": "Q4_K_M",
       "totalParamsB": 8,
       "activeParamsB": 4,
-      "geometry": { "nLayers": 42, "nKvHeads": 2, "headDim": 256 },
+      "geometry": {
+        "nLayers": 42,
+        "nKvHeads": 2,
+        "headDim": 256
+      },
       "kvBytesPerToken": 16384,
       "maxContext": 131072,
       "toolCalling": "single",
       "license": "Apache-2.0",
       "minRamGb": 16,
       "expectedTps": "40-60 tok/s",
-      "useCases": ["everyday", "documents"],
+      "useCases": [
+        "everyday",
+        "documents"
+      ],
       "goodAt": [
         "Strong multilingual support — 140+ languages, translation, multilingual documents",
         "Clear, well-written everyday chat on 16GB Macs",
@@ -93,7 +117,12 @@
         "Hard math and competition-level coding",
         "Long multi-step agent tasks can go off the rails — fine for single tool calls",
         "Recalling details spread across very long documents"
-      ]
+      ],
+      "vision": {
+        "mmprojUrl": "https://huggingface.co/lmstudio-community/gemma-4-E4B-it-GGUF/resolve/main/mmproj-gemma-4-E4B-it-BF16.gguf",
+        "mmprojFileName": "mmproj-gemma-4-E4B-it-BF16.gguf",
+        "mmprojSizeBytes": 991551840
+      }
     },
     {
       "id": "glm-4.7-flash",
@@ -107,14 +136,22 @@
       "quant": "Q4_K_M",
       "totalParamsB": 31.2,
       "activeParamsB": 3,
-      "geometry": { "nLayers": 47, "nKvHeads": 20, "headDim": 256 },
+      "geometry": {
+        "nLayers": 47,
+        "nKvHeads": 20,
+        "headDim": 256
+      },
       "kvBytesPerToken": 54272,
       "maxContext": 202752,
       "toolCalling": "multi",
       "license": "MIT",
       "minRamGb": 24,
       "expectedTps": "40-60 tok/s",
-      "useCases": ["agents", "coding", "everyday"],
+      "useCases": [
+        "agents",
+        "coding",
+        "everyday"
+      ],
       "goodAt": [
         "Multi-step agent loops and tool calling — best in its size class",
         "Coding and software-engineering tasks",
@@ -139,14 +176,21 @@
       "quant": "Q4_K_M",
       "totalParamsB": 30.5,
       "activeParamsB": 3.3,
-      "geometry": { "nLayers": 48, "nKvHeads": 4, "headDim": 128 },
+      "geometry": {
+        "nLayers": 48,
+        "nKvHeads": 4,
+        "headDim": 128
+      },
       "kvBytesPerToken": 98304,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 24,
       "expectedTps": "40-60 tok/s",
-      "useCases": ["coding", "agents"],
+      "useCases": [
+        "coding",
+        "agents"
+      ],
       "goodAt": [
         "Writing and editing code across many languages",
         "Multi-step agentic coding with tool calls",
@@ -171,14 +215,21 @@
       "quant": "Q4_K_M",
       "totalParamsB": 24,
       "activeParamsB": null,
-      "geometry": { "nLayers": 40, "nKvHeads": 8, "headDim": 128 },
+      "geometry": {
+        "nLayers": 40,
+        "nKvHeads": 8,
+        "headDim": 128
+      },
       "kvBytesPerToken": 163840,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 24,
       "expectedTps": "12-18 tok/s",
-      "useCases": ["coding", "agents"],
+      "useCases": [
+        "coding",
+        "agents"
+      ],
       "goodAt": [
         "Agentic coding: exploring a codebase, editing files, driving tools in a loop",
         "Reliable multi-step tool calling inside agent harnesses",
@@ -202,14 +253,22 @@
       "quant": "Q4_K_M",
       "totalParamsB": 25.2,
       "activeParamsB": 3.8,
-      "geometry": { "nLayers": 30, "nKvHeads": 8, "headDim": 256 },
+      "geometry": {
+        "nLayers": 30,
+        "nKvHeads": 8,
+        "headDim": 256
+      },
       "kvBytesPerToken": 24576,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 24,
       "expectedTps": "25-45 tok/s",
-      "useCases": ["everyday", "documents", "coding"],
+      "useCases": [
+        "everyday",
+        "documents",
+        "coding"
+      ],
       "goodAt": [
         "High-quality general chat and reasoning — near-frontier scores with only 4B active parameters",
         "Coding and math with a configurable thinking mode",
@@ -219,7 +278,12 @@
         "Tight fit on 24GB Macs — little headroom for other apps; 32GB is comfortable",
         "Recall accuracy drops on very long contexts",
         "Deep specialist knowledge trails larger dense models"
-      ]
+      ],
+      "vision": {
+        "mmprojUrl": "https://huggingface.co/lmstudio-community/gemma-4-26B-A4B-it-GGUF/resolve/main/mmproj-gemma-4-26B-A4B-it-BF16.gguf",
+        "mmprojFileName": "mmproj-gemma-4-26B-A4B-it-BF16.gguf",
+        "mmprojSizeBytes": 1194827744
+      }
     },
     {
       "id": "nemotron3-nano-30b",
@@ -233,14 +297,22 @@
       "quant": "Q4_K_M",
       "totalParamsB": 30,
       "activeParamsB": 3.5,
-      "geometry": { "nLayers": 52, "nKvHeads": 2, "headDim": 128 },
+      "geometry": {
+        "nLayers": 52,
+        "nKvHeads": 2,
+        "headDim": 128
+      },
       "kvBytesPerToken": 8192,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "NVIDIA Open Model License",
       "minRamGb": 32,
       "expectedTps": "45-60 tok/s",
-      "useCases": ["reasoning", "agents", "documents"],
+      "useCases": [
+        "reasoning",
+        "agents",
+        "documents"
+      ],
       "goodAt": [
         "Step-by-step reasoning with visible thinking and a controllable thinking budget",
         "Multi-step tool calling and agent workflows",
@@ -265,14 +337,23 @@
       "quant": "Q4_K_M",
       "totalParamsB": 35,
       "activeParamsB": 3,
-      "geometry": { "nLayers": 40, "nKvHeads": 2, "headDim": 256 },
+      "geometry": {
+        "nLayers": 40,
+        "nKvHeads": 2,
+        "headDim": 256
+      },
       "kvBytesPerToken": 20480,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 32,
       "expectedTps": "35-55 tok/s",
-      "useCases": ["agents", "coding", "everyday", "documents"],
+      "useCases": [
+        "agents",
+        "coding",
+        "everyday",
+        "documents"
+      ],
       "goodAt": [
         "Agentic coding and multi-step tool use — flagship-quality agent work on a 32GB Mac",
         "Fast responses for its size — only 3B of 35B parameters active per token",
@@ -295,14 +376,24 @@
       "quant": "MXFP4",
       "totalParamsB": 117,
       "activeParamsB": 5.1,
-      "geometry": { "nLayers": 36, "nKvHeads": 8, "headDim": 64 },
+      "geometry": {
+        "nLayers": 36,
+        "nKvHeads": 8,
+        "headDim": 64
+      },
       "kvBytesPerToken": 73728,
       "maxContext": 131072,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 64,
       "expectedTps": "30-45 tok/s",
-      "useCases": ["reasoning", "agents", "coding", "everyday", "documents"],
+      "useCases": [
+        "reasoning",
+        "agents",
+        "coding",
+        "everyday",
+        "documents"
+      ],
       "goodAt": [
         "Complex multi-step reasoning with adjustable effort",
         "Reliable multi-turn agent loops and tool calling",
@@ -327,14 +418,21 @@
       "quant": "Q4_K_M",
       "totalParamsB": 80,
       "activeParamsB": 3,
-      "geometry": { "nLayers": 48, "nKvHeads": 2, "headDim": 256 },
+      "geometry": {
+        "nLayers": 48,
+        "nKvHeads": 2,
+        "headDim": 256
+      },
       "kvBytesPerToken": 24576,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 64,
       "expectedTps": "20-30 tok/s",
-      "useCases": ["coding", "agents"],
+      "useCases": [
+        "coding",
+        "agents"
+      ],
       "goodAt": [
         "Agentic coding with reliable multi-step tool calling and error recovery",
         "Very large codebases — 256K context with a small memory footprint",
@@ -358,14 +456,22 @@
       "quant": "Q4_K_M",
       "totalParamsB": 80,
       "activeParamsB": 3,
-      "geometry": { "nLayers": 48, "nKvHeads": 2, "headDim": 256 },
+      "geometry": {
+        "nLayers": 48,
+        "nKvHeads": 2,
+        "headDim": 256
+      },
       "kvBytesPerToken": 24576,
       "maxContext": 262144,
       "toolCalling": "multi",
       "license": "Apache-2.0",
       "minRamGb": 64,
       "expectedTps": "20-30 tok/s",
-      "useCases": ["everyday", "documents", "agents"],
+      "useCases": [
+        "everyday",
+        "documents",
+        "agents"
+      ],
       "goodAt": [
         "Big-model chat quality with small-model speed",
         "Multi-step tool calling and agent workflows",

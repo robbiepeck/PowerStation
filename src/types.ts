@@ -269,6 +269,7 @@ export type CatalogModel = {
   useCases: UseCase[]
   goodAt: string[]
   strugglesWith: string[]
+  vision: { mmprojUrl: string; mmprojFileName: string; mmprojSizeBytes: number } | null
 }
 
 export type Catalog = {

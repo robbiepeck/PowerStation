@@ -74,6 +74,17 @@ async function checkModels() {
     if (!website.ok) {
       warnings.push(`**${model.id}** website URL broken (HTTP ${website.status}): ${model.websiteUrl}`)
     }
+
+    if (model.vision) {
+      const mmproj = await headOrRange(model.vision.mmprojUrl)
+      if (!mmproj.ok) {
+        failures.push(`**${model.id}** mmproj URL broken (HTTP ${mmproj.status}): ${model.vision.mmprojUrl}`)
+      } else if (mmproj.length > 0 && Math.abs(mmproj.length - model.vision.mmprojSizeBytes) / model.vision.mmprojSizeBytes > SIZE_TOLERANCE) {
+        failures.push(`**${model.id}** mmproj size drift: catalog ${model.vision.mmprojSizeBytes}, server ${mmproj.length}`)
+      } else {
+        passes.push(`${model.id}: mmproj OK`)
+      }
+    }
   }
 }
 
@@ -121,9 +132,32 @@ async function checkSkills() {
   }
 }
 
+async function checkRuntimeUpdates() {
+  // Vision is blocked on multimodal support in node-llama-cpp
+  // (docs/vision-plan.md). Flag every newer release so the unblock gets
+  // evaluated the week it ships instead of months later.
+  try {
+    const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
+    const installed = String(pkg.dependencies['node-llama-cpp'] ?? '').replace(/^[^0-9]*/, '')
+    const res = await fetch('https://registry.npmjs.org/node-llama-cpp/latest', { signal: AbortSignal.timeout(TIMEOUT_MS) })
+    if (!res.ok) return
+    const { version: latest } = await res.json()
+    if (latest && installed && latest !== installed) {
+      warnings.push(
+        `**node-llama-cpp ${latest} is out** (app pins ${installed}) — check the release notes for multimodal/vision support; see docs/vision-plan.md`,
+      )
+    } else {
+      passes.push(`runtime: node-llama-cpp up to date (${installed})`)
+    }
+  } catch {
+    /* watchdog is best-effort */
+  }
+}
+
 await checkModels()
 await checkConnectors()
 await checkSkills()
+await checkRuntimeUpdates()
 
 const lines = [
   '## Catalogue freshness report',

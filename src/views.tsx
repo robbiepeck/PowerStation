@@ -193,6 +193,14 @@ export function CatalogGrid({
             <div className="starter-badges">
               <FitBadge fit={fit} />
               <TierBadge tier={model.toolCalling} />
+              {model.vision ? (
+                <span
+                  className="badge neutral"
+                  title="This model can accept images. PowerStation's local runtime doesn't support image input yet — vision lands the moment the runtime does (see the roadmap)."
+                >
+                  vision-capable model
+                </span>
+              ) : null}
             </div>
 
             <div className="starter-specs" aria-label={`${model.name} specs`}>
