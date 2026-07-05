@@ -138,6 +138,7 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   })
   const record: BenchmarkRecord = {
     tokensPerSec: Math.round(result.tokensPerSec * 10) / 10,
+    promptTokensPerSec: Math.round(result.promptTokensPerSec),
     outputTokens: result.outputTokens,
     contextTokens,
     measuredAt: Date.now(),
@@ -679,9 +680,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           tools: toolDefinitions.length ? toolDefinitions : undefined,
           maxToolCalls,
           history: history?.length ? history : undefined,
+          autoCompact: state.settings.autoCompact,
           onToken: (token) => send('chat:token', { requestId, token }),
           onStatus: (status) => send('chat:status', { requestId, ...status }),
           onToolCall: (toolKey, args) => send('chat:toolCall', { requestId, toolKey, args }),
+          onCompacted: (payload) => send('chat:compacted', { requestId, ...payload }),
         })
         send('chat:done', {
           requestId,

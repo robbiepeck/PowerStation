@@ -32,6 +32,8 @@ export type ChatRequest = {
    * when resuming a persisted chat, so the model actually remembers it.
    */
   history?: Array<{ role: 'user' | 'assistant'; text: string }>
+  /** Compress older turns automatically when the context nears full (default on). */
+  autoCompact?: boolean
 }
 
 export type BenchmarkRequest = {
@@ -44,6 +46,8 @@ export type BenchmarkResult = {
   tokensPerSec: number
   outputTokens: number
   elapsedMs: number
+  /** Prompt-ingestion (reading) speed; 0 when it could not be measured. */
+  promptTokensPerSec: number
 }
 
 export type ChatResult = {
@@ -89,6 +93,7 @@ export type WorkerEvent =
   | { event: 'chat:token'; requestId: string; token: string }
   | { event: 'chat:status'; requestId: string; status: ChatStatus }
   | { event: 'chat:toolCall'; requestId: string; callId: number; toolKey: string; args: unknown }
+  | { event: 'chat:compacted'; requestId: string; summary: string; beforeTokens: number; afterTokensEstimate: number }
   | { event: 'state'; loadedPath: string | null; loadingPath: string | null; tokensPerSec: number }
 
 export type WorkerMessage = WorkerResponse | WorkerEvent

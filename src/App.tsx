@@ -426,6 +426,21 @@ function useChat() {
     const offSources = bridge.chat.onSources(({ requestId, sources }) => {
       patchAssistant(requestId, (turn) => ({ ...turn, sources }))
     })
+    const offCompacted = bridge.chat.onCompacted(({ requestId, summary, beforeTokens, afterTokensEstimate }) => {
+      // Insert a slim notice just before the in-flight assistant turn. The
+      // visible transcript is untouched — only the model-side memory shrank.
+      setMessages((prev) => {
+        const index = prev.findIndex((m) => m.requestId === requestId && m.role === 'assistant')
+        if (index < 0) return prev
+        const notice: ChatTurn = {
+          id: `c-${requestId}`,
+          role: 'assistant',
+          content: '',
+          notice: { summary, beforeTokens, afterTokensEstimate },
+        }
+        return [...prev.slice(0, index), notice, ...prev.slice(index)]
+      })
+    })
     const offDone = bridge.chat.onDone(({ requestId, tokensPerSec, aborted, haltReason, contextUsed, contextSize }) => {
       if (activeRef.current !== requestId) return
       patchAssistant(requestId, (turn) => ({
@@ -454,6 +469,7 @@ function useChat() {
       offToolCall()
       offToolResult()
       offSources()
+      offCompacted()
       offDone()
       offError()
     }
@@ -1545,6 +1561,20 @@ function MessageBubble({
   onOpenArtifact: (artifact: Artifact) => void
   onRegenerate: () => void
 }) {
+  if (message.notice) {
+    const saved = message.notice.beforeTokens - message.notice.afterTokensEstimate
+    return (
+      <div
+        className="compact-notice"
+        title={`Summary kept for the model:\n${message.notice.summary}`}
+      >
+        ⚡ Older messages compressed to keep the conversation going
+        {saved >= 100 ? ` (~${Math.round(saved / 100) / 10}k tokens freed)` : ''}. Hover to see what the model
+        remembers.
+      </div>
+    )
+  }
+
   if (message.role === 'user') {
     return (
       <article className="message user">

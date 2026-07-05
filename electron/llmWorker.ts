@@ -278,6 +278,9 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
       }
       active.session.setChatHistory(items)
     }
+    if (request.autoCompact !== false) {
+      await maybeCompact(active, request.requestId, request.systemPrompt ?? '')
+    }
     post({ event: 'chat:status', requestId: request.requestId, status: { phase: 'generating' } })
     const guard = new ToolGuard(request.maxToolCalls ?? 15, () => controller.abort())
     const functions = buildSessionFunctions(request, guard)
@@ -352,10 +355,66 @@ async function embed(request: EmbedRequest): Promise<number[][]> {
   return vectors
 }
 
+// --- Auto-compaction ---------------------------------------------------------
+// When the session nears the context limit, the model summarizes the older
+// turns for itself and the session is rebuilt as [system, summary, recent].
+// The user-facing transcript is untouched — only the model-side memory shrinks.
+
+const COMPACT_THRESHOLD = 0.75
+const COMPACT_KEEP_RECENT = 4 // history items (two exchanges)
+const COMPACT_PROMPT =
+  'Summarize our conversation so far in under 150 words, for your own memory: include names, facts, ' +
+  'decisions, preferences, and any unfinished task state. Reply with only the summary.'
+
+async function maybeCompact(active: LoadedState, requestId: string, systemPrompt: string): Promise<void> {
+  const beforeTokens = active.sequence.nextTokenIndex
+  if (beforeTokens < active.contextTokens * COMPACT_THRESHOLD) return
+  const nonSystem = active.session.getChatHistory().filter((item) => item.type !== 'system')
+  if (nonSystem.length <= COMPACT_KEEP_RECENT + 2) return // nothing old enough to fold
+
+  let summary: string
+  const generation = active.session.prompt(COMPACT_PROMPT, { temperature: 0, maxTokens: 220 })
+  activeGenerations.add(generation)
+  try {
+    summary = (await generation).trim()
+  } catch {
+    return // compaction is best-effort; the turn proceeds uncompacted
+  } finally {
+    activeGenerations.delete(generation)
+  }
+  if (!summary) return
+
+  const recent = nonSystem.slice(-COMPACT_KEEP_RECENT)
+  const items: ChatHistoryItem[] = []
+  if (systemPrompt) items.push({ type: 'system', text: systemPrompt })
+  items.push({
+    type: 'user',
+    text: `[Context note: the earlier conversation was compressed to save memory. Summary:]\n${summary}`,
+  })
+  items.push({ type: 'model', response: ['Understood. Continuing with that context.'] })
+  items.push(...recent)
+  active.session.setChatHistory(items)
+
+  // Logical history text can exceed the physical context when the runtime has
+  // already context-shifted, so cap the estimate at what was actually held.
+  const rawEstimate = active.model.tokenize(
+    items
+      .map((item) => ('text' in item ? String(item.text) : item.type === 'model' ? item.response.filter((r) => typeof r === 'string').join(' ') : ''))
+      .join(' '),
+  ).length
+  const afterTokensEstimate = Math.min(rawEstimate, beforeTokens)
+  post({ event: 'chat:compacted', requestId, summary, beforeTokens, afterTokensEstimate })
+}
+
 // A fixed prompt and token budget so every machine measures the same work.
 const BENCH_PROMPT = 'In one short paragraph, explain why the sky appears blue. Then list three interesting facts about light.'
 const BENCH_MAX_TOKENS = 128
 const BENCH_TIMEOUT_MS = 90_000
+// A long standard passage for measuring prompt ingestion (reading) speed —
+// what actually gates attachments, folder retrieval, and long chats.
+const BENCH_READ_PASSAGE =
+  'The history of computing spans mechanical calculators, electromechanical relays, vacuum tubes, transistors, and integrated circuits. ' +
+  'Each generation reduced cost and size while increasing reliability and speed, enabling entirely new categories of application. '.repeat(28)
 
 async function benchmark(request: BenchmarkRequest): Promise<BenchmarkResult> {
   if (activeGenerations.size > 0) throw new Error('A generation is already running — try again when it finishes.')
@@ -368,6 +427,40 @@ async function benchmark(request: BenchmarkRequest): Promise<BenchmarkResult> {
     temperature: 0,
     maxTokens: BENCH_MAX_TOKENS,
   })
+
+  // Reading speed: time the ingestion of a long passage (1-token reply), when
+  // the context window has room for it.
+  let promptTokensPerSec = 0
+  const passageTokens = active.model.tokenize(BENCH_READ_PASSAGE).length
+  if (passageTokens + 64 < active.contextTokens) {
+    const readController = new AbortController()
+    const readTimer = setTimeout(() => readController.abort(), BENCH_TIMEOUT_MS)
+    const readStart = Date.now()
+    try {
+      const reading = active.session.prompt(BENCH_READ_PASSAGE + '\n\nReply with just: ok', {
+        temperature: 0,
+        maxTokens: 1,
+        signal: readController.signal,
+        stopOnAbortSignal: true,
+      })
+      activeGenerations.add(reading)
+      try {
+        await reading
+      } finally {
+        activeGenerations.delete(reading)
+      }
+      const readElapsed = Date.now() - readStart
+      if (readElapsed > 0 && !readController.signal.aborted) {
+        promptTokensPerSec = (passageTokens / readElapsed) * 1000
+      }
+    } catch {
+      /* reading measurement is optional; generation speed still reports */
+    } finally {
+      clearTimeout(readTimer)
+      active.session.resetChatHistory()
+    }
+  }
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), BENCH_TIMEOUT_MS)
   const start = Date.now()
@@ -398,7 +491,7 @@ async function benchmark(request: BenchmarkRequest): Promise<BenchmarkResult> {
   const tokensPerSec = elapsedMs > 0 ? (outputTokens / elapsedMs) * 1000 : 0
   lastTokensPerSec = tokensPerSec
   publishState()
-  return { tokensPerSec, outputTokens, elapsedMs }
+  return { tokensPerSec, outputTokens, elapsedMs, promptTokensPerSec }
 }
 
 async function handleRequest(request: WorkerRequest): Promise<unknown> {

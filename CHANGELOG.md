@@ -2,6 +2,16 @@
 
 The "See what's new" card in the app links here.
 
+## v0.7.0 — Long conversations
+
+- **Auto-compaction** — when a chat nears the context limit, the model summarizes its older turns
+  for itself and keeps going; the transcript you see is never shortened, and a notice in the chat
+  (hover for the summary) shows exactly what the model now remembers. Toggle in Settings.
+- **Reading-speed benchmark** — benchmarks now measure prompt ingestion alongside generation
+  ("reads 1,500 tok/s · writes 34 tok/s"), the number that actually gates documents and folders.
+- **Recommendations on demand** — "Get a recommendation for this machine" in the Models view
+  re-runs the onboarding matchmaker any time, using your measured speeds.
+
 ## v0.6.0 — Agent trust
 
 - **Diff previews for file writes** — when a tool wants to write, edit or move a file, the

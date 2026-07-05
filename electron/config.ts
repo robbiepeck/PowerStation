@@ -11,11 +11,15 @@ export type Settings = {
   temperature: number
   maxTokens: number
   saveChats: boolean
+  /** Compress older turns automatically when a chat nears the context limit. */
+  autoCompact: boolean
   utilities: UtilitySettings
 }
 
 export type BenchmarkRecord = {
   tokensPerSec: number
+  /** Prompt-ingestion (reading) speed; 0 = not measured. */
+  promptTokensPerSec: number
   outputTokens: number
   contextTokens: number
   measuredAt: number
@@ -71,6 +75,7 @@ const defaultSettings: Settings = {
   temperature: 0.7,
   maxTokens: 1024,
   saveChats: true,
+  autoCompact: true,
   utilities: defaultUtilities,
 }
 
@@ -171,6 +176,7 @@ function sanitizeSettings(patch: Partial<Settings> | null | undefined, base: Set
     temperature: clampNumber(s.temperature, 0, 2, defaultSettings.temperature),
     maxTokens: clampNumber(s.maxTokens, 0, 4096, defaultSettings.maxTokens),
     saveChats: boolOr(s.saveChats, defaultSettings.saveChats),
+    autoCompact: boolOr(s.autoCompact, defaultSettings.autoCompact),
     utilities: sanitizeUtilities(utilities),
   }
 }
@@ -185,6 +191,7 @@ function sanitizeBenchmarks(value: unknown): Record<string, BenchmarkRecord> {
     if (!cleanKey || tokensPerSec === null || tokensPerSec <= 0) continue
     out[cleanKey] = {
       tokensPerSec,
+      promptTokensPerSec: clampNumber(r?.promptTokensPerSec, 0, 1e6, 0),
       outputTokens: clampNumber(r?.outputTokens, 0, 100000, 0),
       contextTokens: clampNumber(r?.contextTokens, 0, 1048576, 0),
       measuredAt: clampNumber(r?.measuredAt, 0, Number.MAX_SAFE_INTEGER, 0),

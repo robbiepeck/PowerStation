@@ -30,6 +30,7 @@ type ChatCallbacks = {
   onToken: (token: string) => void
   onStatus?: (status: ChatStatus) => void
   onToolCall?: (toolKey: string, args: unknown) => void
+  onCompacted?: (payload: { summary: string; beforeTokens: number; afterTokensEstimate: number }) => void
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -64,6 +65,15 @@ function handleWorkerMessage(message: WorkerMessage): void {
       case 'chat:token':
         chatCallbacks.get(message.requestId)?.onToken(message.token)
         return
+      case 'chat:compacted': {
+        const callbacks = chatCallbacks.get(message.requestId)
+        callbacks?.onCompacted?.({
+          summary: message.summary,
+          beforeTokens: message.beforeTokens,
+          afterTokensEstimate: message.afterTokensEstimate,
+        })
+        return
+      }
       case 'chat:status':
         chatCallbacks.get(message.requestId)?.onStatus?.(message.status)
         return
@@ -171,8 +181,8 @@ export async function getDeviceInfo(): Promise<WorkerDeviceInfo> {
 export async function chat(
   options: Omit<ChatRequest, 'requestId'> & { requestId: string } & ChatCallbacks,
 ): Promise<ChatResult> {
-  const { onToken, onStatus, onToolCall, ...request } = options
-  chatCallbacks.set(request.requestId, { onToken, onStatus, onToolCall })
+  const { onToken, onStatus, onToolCall, onCompacted, ...request } = options
+  chatCallbacks.set(request.requestId, { onToken, onStatus, onToolCall, onCompacted })
   try {
     return await call<ChatResult>({ cmd: 'chat', payload: request })
   } finally {

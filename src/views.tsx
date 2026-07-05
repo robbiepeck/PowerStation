@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Search as SearchIcon,
   ShieldCheck,
+  Wand2,
   Thermometer,
   Trash2,
   Wrench,
@@ -43,6 +44,7 @@ import type {
   McpToolInfoResponse,
   ModelInfo,
   OllamaStatus,
+  Recommendation,
   Settings,
   SkillInfo,
   TelemetrySnapshot,
@@ -197,6 +199,9 @@ export function CatalogGrid({
               {benchResults?.[model.fileName.toLowerCase()] ? (
                 <span className="measured-tps" title="Measured with a standard benchmark on this machine">
                   ⚡ {formatNumber(benchResults[model.fileName.toLowerCase()].tokensPerSec, 1)} tok/s measured
+                  {benchResults[model.fileName.toLowerCase()].promptTokensPerSec > 0
+                    ? ` · reads ${formatNumber(benchResults[model.fileName.toLowerCase()].promptTokensPerSec, 0)} tok/s`
+                    : ''}
                 </span>
               ) : model.expectedTps ? (
                 <span>{model.expectedTps}</span>
@@ -476,6 +481,135 @@ export function MonitorView({
   )
 }
 
+// --- Recommendation panel ---------------------------------------------------------
+
+const REC_USE_CASES: Array<{ id: string; label: string }> = [
+  { id: 'everyday', label: 'Everyday assistant' },
+  { id: 'coding', label: 'Coding' },
+  { id: 'agents', label: 'Agents & tools' },
+  { id: 'documents', label: 'Private documents' },
+  { id: 'reasoning', label: 'Deep reasoning' },
+]
+
+function RecommendPanel({
+  download,
+  models,
+  onDownload,
+}: {
+  download: DownloadState
+  models: ModelInfo[]
+  onDownload: (uri: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [useCase, setUseCase] = useState('everyday')
+  const [priority, setPriority] = useState<'speed' | 'balanced' | 'quality'>('balanced')
+  const [results, setResults] = useState<Recommendation[] | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    // Prefill from the onboarding answers.
+    void bridge.onboarding.get().then((state) => {
+      if (state.useCase) setUseCase(state.useCase)
+      if (state.priority === 'speed' || state.priority === 'balanced' || state.priority === 'quality') {
+        setPriority(state.priority)
+      }
+    }).catch(() => undefined)
+  }, [])
+
+  const run = async () => {
+    setBusy(true)
+    try {
+      setResults(await bridge.catalog.recommend({ useCase: useCase as Recommendation['model']['useCases'][number], priority }))
+    } catch {
+      setResults([])
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="recommend-collapsed">
+        <button className="secondary-button" type="button" onClick={() => setOpen(true)}>
+          <Wand2 size={15} />
+          Get a recommendation for this machine
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <section className="recommend-panel">
+      <div className="recommend-controls">
+        <label>
+          <span>I mainly want</span>
+          <select value={useCase} onChange={(event) => setUseCase(event.target.value)}>
+            {REC_USE_CASES.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Priority</span>
+          <select value={priority} onChange={(event) => setPriority(event.target.value as typeof priority)}>
+            <option value="speed">Fast replies</option>
+            <option value="balanced">Balanced</option>
+            <option value="quality">Smartest that fits</option>
+          </select>
+        </label>
+        <button className="primary-button compact-primary" type="button" disabled={busy} onClick={() => void run()}>
+          {busy ? 'Checking…' : 'Recommend'}
+        </button>
+        <button className="ghost-button" type="button" onClick={() => setOpen(false)}>
+          Close
+        </button>
+      </div>
+
+      {results !== null ? (
+        results.length === 0 ? (
+          <p className="utility-empty">Nothing in the catalogue comfortably fits this machine for that use.</p>
+        ) : (
+          <div className="recommend-results">
+            {results.map((rec, index) => {
+              const installed = models.some((m) => m.fileName.toLowerCase() === rec.model.fileName.toLowerCase())
+              const busyDownload = Boolean(download) && !download?.error
+              return (
+                <article className={index === 0 ? 'recommend-card top' : 'recommend-card'} key={rec.model.id}>
+                  <div className="recommend-card-head">
+                    <strong>{rec.model.name}</strong>
+                    {index === 0 ? <Badge tone="real">best match</Badge> : null}
+                    <span className="muted">{formatBytes(rec.model.sizeBytes)}</span>
+                  </div>
+                  <ul>
+                    {rec.reasons.slice(0, 2).map((reason) => (
+                      <li key={reason}>{reason}</li>
+                    ))}
+                  </ul>
+                  {installed ? (
+                    <Badge tone="neutral">already installed</Badge>
+                  ) : (
+                    <button
+                      className="secondary-button compact"
+                      type="button"
+                      disabled={busyDownload}
+                      onClick={() => onDownload(rec.model.downloadUrl)}
+                    >
+                      <Download size={14} />
+                      Download
+                    </button>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+        )
+      ) : null}
+    </section>
+  )
+}
+
 // --- Models ---------------------------------------------------------------------
 
 export function ModelsView({
@@ -568,6 +702,8 @@ export function ModelsView({
           selectedModel={selectedModel}
         />
       </section>
+
+      <RecommendPanel download={download} models={models} onDownload={onDownload} />
 
       {ollama?.detected && ollama.models.length > 0 ? (
         <section className="ollama-card">
@@ -695,7 +831,13 @@ export function ModelsView({
                   {model.contextLength ? <Badge tone="neutral">{formatNumber(model.contextLength)} ctx</Badge> : null}
                   <Badge tone="neutral">{formatBytes(model.sizeBytes)}</Badge>
                   {model.measuredTps ? (
-                    <Badge tone="real">{formatNumber(model.measuredTps, 1)} tok/s measured</Badge>
+                    <Badge tone="real">
+                      {formatNumber(model.measuredTps, 1)} tok/s
+                      {benchResults[model.fileName.toLowerCase()]?.promptTokensPerSec
+                        ? ` · reads ${formatNumber(benchResults[model.fileName.toLowerCase()].promptTokensPerSec, 0)}`
+                        : ''}{' '}
+                      measured
+                    </Badge>
                   ) : null}
                 </div>
                 <div className="model-row-actions">
@@ -1369,6 +1511,15 @@ export function SettingsView({
           <p className="policy-note subtle">
             The context window is a request, not a promise — before every load PowerStation checks it against your
             memory and shrinks it if it wouldn't fit safely.
+          </p>
+          <ToggleControl
+            label="Compress long chats automatically"
+            checked={settings.autoCompact}
+            onChange={(value) => onChange({ autoCompact: value })}
+          />
+          <p className="policy-note subtle">
+            When a conversation nears the context limit, the model summarizes its older turns for itself and keeps
+            going — the transcript you see is never shortened. A notice appears in the chat whenever this happens.
           </p>
         </section>
 

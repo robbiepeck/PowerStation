@@ -97,6 +97,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     onToolCall: (callback) => subscribe('chat:toolCall', callback),
     onToolResult: (callback) => subscribe('chat:toolResult', callback),
     onSources: (callback) => subscribe('chat:sources', callback),
+    onCompacted: (callback) => subscribe('chat:compacted', callback),
   },
   agent: {
     respondPermission: (payload) => ipcRenderer.invoke('agent:permissionResponse', payload),

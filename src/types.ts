@@ -94,11 +94,13 @@ export type Settings = {
   temperature: number
   maxTokens: number
   saveChats: boolean
+  autoCompact: boolean
   utilities: UtilitySettings
 }
 
 export type BenchmarkRecord = {
   tokensPerSec: number
+  promptTokensPerSec: number
   outputTokens: number
   contextTokens: number
   measuredAt: number
@@ -116,6 +118,8 @@ export type StoredChatMessage = {
   tokensPerSec?: number
   attachments?: StoredAttachment[]
   sources?: string[]
+  /** Inline notice (e.g. auto-compaction) rendered as a slim chip, not a bubble. */
+  notice?: { summary: string; beforeTokens: number; afterTokensEstimate: number }
 }
 
 export type StoredChat = {
@@ -493,6 +497,9 @@ export type PowerStationBridge = {
     onToolCall: (callback: (payload: ChatToolCallPayload) => void) => Unsubscribe
     onToolResult: (callback: (payload: ChatToolResultPayload) => void) => Unsubscribe
     onSources: (callback: (payload: { requestId: string; sources: string[] }) => void) => Unsubscribe
+    onCompacted: (
+      callback: (payload: { requestId: string; summary: string; beforeTokens: number; afterTokensEstimate: number }) => void,
+    ) => Unsubscribe
   }
   agent: {
     respondPermission: (payload: { promptId: string; decision: PermissionDecision }) => Promise<boolean>
@@ -547,4 +554,6 @@ export type ChatTurn = {
   admission?: ChatAdmissionPayload
   attachments?: StoredAttachment[]
   sources?: string[]
+  /** Inline notice (e.g. auto-compaction) rendered as a slim chip, not a bubble. */
+  notice?: { summary: string; beforeTokens: number; afterTokensEstimate: number }
 }
