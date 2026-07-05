@@ -194,3 +194,120 @@ export async function refreshCatalog(): Promise<Catalog> {
     return base
   }
 }
+
+// --- Connector gallery -------------------------------------------------------
+// Curated MCP servers, one click to add. Same remote/cache/bundled lifecycle
+// as the model catalog — and stricter validation, because these entries become
+// spawned child processes: only `npx -y <validated-npm-package> <safe-args>`
+// can ever be constructed from this data.
+
+export type ConnectorEntry = {
+  id: string
+  name: string
+  tagline: string
+  /** What the model concretely gets — shown on the card. */
+  detail: string
+  npmPackage: string
+  /** Literal args; the string "{folder}" is replaced by a user-picked folder. */
+  args: string[]
+  needsFolder: boolean
+  maintainer: 'official' | 'community'
+  worksOffline: boolean
+  permissionsNote: string
+}
+
+export type ConnectorCatalog = {
+  schemaVersion: number
+  updatedAt: string
+  source: 'bundled' | 'cached' | 'remote'
+  connectors: ConnectorEntry[]
+}
+
+const REMOTE_CONNECTORS_URL = 'https://raw.githubusercontent.com/robbiepeck/PowerStation/main/catalog/connectors.json'
+const NPM_PACKAGE_RE = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/
+// No leading dash (no flag injection), conservative charset, or the folder token.
+const SAFE_ARG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,119}$/
+
+function cachedConnectorsPath(): string {
+  return path.join(app.getPath('userData'), 'connectors-cache.json')
+}
+
+function bundledConnectorsPath(): string {
+  return path.join(app.getAppPath(), 'catalog', 'connectors.json')
+}
+
+function sanitizeConnector(value: unknown): ConnectorEntry | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  const id = cleanString(record.id, 60)
+  const name = cleanString(record.name, 80)
+  const npmPackage = cleanString(record.npmPackage, 214)
+  if (!id || !name || !NPM_PACKAGE_RE.test(npmPackage)) return null
+  const args = Array.isArray(record.args)
+    ? record.args.slice(0, 6).map((arg) => cleanString(arg, 120))
+    : []
+  if (!args.every((arg) => arg === '{folder}' || SAFE_ARG_RE.test(arg))) return null
+  return {
+    id,
+    name,
+    tagline: cleanString(record.tagline, 160),
+    detail: cleanString(record.detail, 400),
+    npmPackage,
+    args,
+    needsFolder: record.needsFolder === true || args.includes('{folder}'),
+    maintainer: record.maintainer === 'official' ? 'official' : 'community',
+    worksOffline: record.worksOffline === true,
+    permissionsNote: cleanString(record.permissionsNote, 200),
+  }
+}
+
+function sanitizeConnectorCatalog(raw: unknown, source: ConnectorCatalog['source']): ConnectorCatalog | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const record = raw as Record<string, unknown>
+  if (cleanNumber(record.schemaVersion) !== 1) return null
+  const connectors = Array.isArray(record.connectors)
+    ? record.connectors.map(sanitizeConnector).filter((c): c is ConnectorEntry => c !== null)
+    : []
+  if (!connectors.length) return null
+  return { schemaVersion: 1, updatedAt: cleanString(record.updatedAt, 40), source, connectors }
+}
+
+let currentConnectors: ConnectorCatalog | null = null
+
+async function readConnectorsFile(filePath: string, source: ConnectorCatalog['source']): Promise<ConnectorCatalog | null> {
+  try {
+    return sanitizeConnectorCatalog(JSON.parse(await fs.readFile(filePath, 'utf8')), source)
+  } catch {
+    return null
+  }
+}
+
+export async function getConnectorCatalog(): Promise<ConnectorCatalog> {
+  if (currentConnectors) return currentConnectors
+  const cached = await readConnectorsFile(cachedConnectorsPath(), 'cached')
+  const bundled = await readConnectorsFile(bundledConnectorsPath(), 'bundled')
+  if (cached && bundled) {
+    currentConnectors = cached.updatedAt >= bundled.updatedAt ? cached : bundled
+  } else {
+    currentConnectors = cached ?? bundled
+  }
+  if (!currentConnectors) {
+    currentConnectors = { schemaVersion: 1, updatedAt: '', source: 'bundled', connectors: [] }
+  }
+  return currentConnectors
+}
+
+export async function refreshConnectorCatalog(): Promise<ConnectorCatalog> {
+  const base = await getConnectorCatalog()
+  try {
+    const response = await fetch(REMOTE_CONNECTORS_URL, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw new Error(`Connector catalog fetch failed (${response.status})`)
+    const parsed = sanitizeConnectorCatalog(await response.json(), 'remote')
+    if (!parsed) throw new Error('Remote connector catalog failed validation')
+    await fs.writeFile(cachedConnectorsPath(), JSON.stringify({ ...parsed, source: undefined }, null, 1), 'utf8')
+    currentConnectors = parsed
+    return parsed
+  } catch {
+    return base
+  }
+}

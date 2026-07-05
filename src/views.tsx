@@ -1,38 +1,49 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   AlertTriangle,
   BadgeCheck,
   BookOpenCheck,
+  Brain,
   Code2,
   Cpu,
   Database,
   Download,
   ExternalLink,
   FileDown,
+  FlaskConical,
+  FolderOpen,
   FolderSearch,
   Gauge,
+  Globe,
   HardDrive,
+  ListOrdered,
   Microchip,
   Plug,
   Plus,
   RefreshCw,
+  Search as SearchIcon,
   ShieldCheck,
   Thermometer,
   Trash2,
   Wrench,
   Zap,
 } from 'lucide-react'
+import type { LucideIcon as LucideIconType } from 'lucide-react'
 import { getDesktop } from './desktop'
 import type {
   BenchmarkRecord,
   Catalog,
   CatalogModel,
+  ConnectorCatalog,
+  ConnectorEntry,
   DeviceInfo,
   FitReport,
+  McpServerConfig,
   McpServerStatus,
   McpToolInfoResponse,
   ModelInfo,
   Settings,
+  SkillInfo,
   TelemetrySnapshot,
   ToolCallingTier,
   ToolPermission,
@@ -96,8 +107,7 @@ export type DownloadState = {
 
 const EMPTY_UTILITIES: UtilitySettings = {
   systemPrompt: '',
-  skills: [],
-  connectors: [],
+  enabledSkills: [],
   mcpServers: [],
 }
 
@@ -707,8 +717,6 @@ export function UtilitiesView({
   selectedTier: ToolCallingTier
   settings: Settings | null
 }) {
-  const [skillDraft, setSkillDraft] = useState('')
-  const [connectorDraft, setConnectorDraft] = useState('')
   const [mcpNameDraft, setMcpNameDraft] = useState('')
   const [mcpCommandDraft, setMcpCommandDraft] = useState('')
   const [toolInfo, setToolInfo] = useState<McpToolInfoResponse | null>(null)
@@ -725,20 +733,6 @@ export function UtilitiesView({
   const updateUtilities = (patch: Partial<UtilitySettings>) => {
     if (disabled) return
     onSettingsChange({ utilities: { ...utilities, ...patch } })
-  }
-
-  const addSkill = () => {
-    const label = skillDraft.trim()
-    if (!label) return
-    updateUtilities({ skills: [...utilities.skills, { id: createUtilityId('skill'), label }] })
-    setSkillDraft('')
-  }
-
-  const addConnector = () => {
-    const label = connectorDraft.trim()
-    if (!label) return
-    updateUtilities({ connectors: [...utilities.connectors, { id: createUtilityId('connector'), label }] })
-    setConnectorDraft('')
   }
 
   const addMcpServer = () => {
@@ -815,45 +809,13 @@ export function UtilitiesView({
               </label>
             </section>
 
-            <section className="utility-panel">
-              <div className="utility-panel-head">
-                <ShieldCheck size={16} />
-                <h4>Skills</h4>
-              </div>
-              <UtilityAddRow
-                buttonLabel="Add skill"
-                onAdd={addSkill}
-                placeholder="Skill name or local folder path"
-                value={skillDraft}
-                onChange={setSkillDraft}
-              />
-              <UtilityItemList
-                emptyText="No skills added"
-                items={utilities.skills}
-                onRemove={(id) => updateUtilities({ skills: utilities.skills.filter((item) => item.id !== id) })}
-              />
-            </section>
+            <SkillsPanel contextTokens={settings?.contextTokens ?? 8192} />
 
-            <section className="utility-panel">
-              <div className="utility-panel-head">
-                <Database size={16} />
-                <h4>Connectors</h4>
-              </div>
-              <UtilityAddRow
-                buttonLabel="Add connector"
-                onAdd={addConnector}
-                placeholder="Connector name or service"
-                value={connectorDraft}
-                onChange={setConnectorDraft}
-              />
-              <UtilityItemList
-                emptyText="No connectors added"
-                items={utilities.connectors}
-                onRemove={(id) =>
-                  updateUtilities({ connectors: utilities.connectors.filter((item) => item.id !== id) })
-                }
-              />
-            </section>
+            <ConnectorGallery
+              mcpServers={utilities.mcpServers}
+              onServersChanged={(servers) => updateUtilities({ mcpServers: servers })}
+              toolsBlocked={toolsBlocked}
+            />
 
             <section className="utility-panel mcp-panel">
               <div className="utility-panel-head">
@@ -993,70 +955,298 @@ export function UtilitiesView({
   )
 }
 
-function UtilityAddRow({
-  buttonLabel,
-  onAdd,
+// --- Skills -----------------------------------------------------------------------
+
+const EMPTY_SKILL_DRAFT = { name: '', description: '', body: '' }
+
+function SkillsPanel({ contextTokens }: { contextTokens: number }) {
+  const [skills, setSkills] = useState<SkillInfo[] | null>(null)
+  const [editing, setEditing] = useState<string | 'new' | null>(null)
+  const [draft, setDraft] = useState(EMPTY_SKILL_DRAFT)
+  const [saving, setSaving] = useState(false)
+
+  const refresh = useCallback(async () => {
+    const list = await bridge.skills.list().catch(() => [])
+    setSkills(list)
+  }, [])
+
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+
+  const toggle = (skill: SkillInfo) => {
+    void bridge.skills.setEnabled({ slug: skill.slug, enabled: !skill.enabled }).then(refresh)
+  }
+
+  const startEdit = (skill: SkillInfo | null) => {
+    setEditing(skill ? skill.slug : 'new')
+    setDraft(skill ? { name: skill.name, description: skill.description, body: skill.body } : EMPTY_SKILL_DRAFT)
+  }
+
+  const saveDraft = async () => {
+    if (!draft.name.trim() || !draft.body.trim()) return
+    setSaving(true)
+    try {
+      await bridge.skills.save({ slug: editing === 'new' ? undefined : (editing ?? undefined), ...draft })
+      setEditing(null)
+      await refresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (skill: SkillInfo) => {
+    if (!window.confirm(`Delete the skill "${skill.name}"? The file is removed from disk.`)) return
+    await bridge.skills.delete(skill.slug)
+    if (editing === skill.slug) setEditing(null)
+    await refresh()
+  }
+
+  const enabledTokens = (skills ?? []).filter((s) => s.enabled).reduce((sum, s) => sum + s.tokenEstimate, 0)
+  const skillPct = contextTokens > 0 ? (enabledTokens / contextTokens) * 100 : 0
+
+  return (
+    <section className="utility-panel skills-panel">
+      <div className="utility-panel-head">
+        <BookOpenCheck size={16} />
+        <h4>Skills</h4>
+        <div className="panel-head-actions">
+          <button className="ghost-button" type="button" onClick={() => void bridge.skills.reveal()}>
+            Show files
+          </button>
+          <button className="secondary-button compact" type="button" onClick={() => startEdit(null)}>
+            <Plus size={14} />
+            New skill
+          </button>
+        </div>
+      </div>
+      <p className="panel-hint">
+        Skills are reusable instructions — plain markdown files — added to the system prompt while enabled. They work
+        with every model, including chat-only ones.
+      </p>
+
+      {enabledTokens > 0 ? (
+        <div className={skillPct > 25 ? 'context-meter warn' : 'context-meter'}>
+          <Gauge size={14} />
+          <span>
+            Enabled skills use ~{enabledTokens.toLocaleString()} tokens of your {contextTokens.toLocaleString()}-token
+            context ({formatNumber(skillPct, 0)}%)
+            {skillPct > 25 ? ' — long skills crowd out conversation on small models.' : ''}
+          </span>
+        </div>
+      ) : null}
+
+      <div className="skill-list">
+        {skills === null ? (
+          <p className="utility-empty">Loading skills…</p>
+        ) : skills.length === 0 && editing !== 'new' ? (
+          <p className="utility-empty">No skills yet — create one, or drop .md files into the skills folder.</p>
+        ) : (
+          skills.map((skill) => (
+            <div className={skill.enabled ? 'skill-card enabled' : 'skill-card'} key={skill.slug}>
+              <div className="skill-card-row">
+                <label className="skill-toggle" title={skill.enabled ? 'Disable skill' : 'Enable skill'}>
+                  <input type="checkbox" checked={skill.enabled} onChange={() => toggle(skill)} />
+                </label>
+                <button className="skill-card-main" type="button" onClick={() => startEdit(skill)}>
+                  <strong>{skill.name}</strong>
+                  <span>{skill.description || 'No description'}</span>
+                </button>
+                <div className="skill-card-side">
+                  <Badge tone="neutral">~{skill.tokenEstimate} tok</Badge>
+                  {skill.builtIn ? <Badge tone="neutral">starter</Badge> : null}
+                  <button
+                    className="ghost-button danger"
+                    type="button"
+                    title={`Delete ${skill.name}`}
+                    onClick={() => void remove(skill)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+              {editing === skill.slug ? (
+                <SkillEditor draft={draft} onChange={setDraft} onCancel={() => setEditing(null)} onSave={() => void saveDraft()} saving={saving} />
+              ) : null}
+            </div>
+          ))
+        )}
+        {editing === 'new' ? (
+          <div className="skill-card enabled">
+            <SkillEditor draft={draft} onChange={setDraft} onCancel={() => setEditing(null)} onSave={() => void saveDraft()} saving={saving} />
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function SkillEditor({
+  draft,
+  onCancel,
   onChange,
-  placeholder,
-  value,
+  onSave,
+  saving,
 }: {
-  buttonLabel: string
-  onAdd: () => void
-  onChange: (value: string) => void
-  placeholder: string
-  value: string
+  draft: typeof EMPTY_SKILL_DRAFT
+  onCancel: () => void
+  onChange: (draft: typeof EMPTY_SKILL_DRAFT) => void
+  onSave: () => void
+  saving: boolean
 }) {
   return (
-    <div className="utility-add-row">
-      <input
-        aria-label={buttonLabel}
-        placeholder={placeholder}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            onAdd()
-          }
-        }}
+    <div className="skill-editor">
+      <div className="skill-editor-meta">
+        <input
+          aria-label="Skill name"
+          placeholder="Skill name"
+          value={draft.name}
+          onChange={(event) => onChange({ ...draft, name: event.target.value })}
+        />
+        <input
+          aria-label="Skill description"
+          placeholder="One-line description"
+          value={draft.description}
+          onChange={(event) => onChange({ ...draft, description: event.target.value })}
+        />
+      </div>
+      <textarea
+        aria-label="Skill instructions"
+        placeholder="The instructions added to the system prompt while this skill is enabled…"
+        rows={8}
+        value={draft.body}
+        onChange={(event) => onChange({ ...draft, body: event.target.value })}
       />
-      <button className="secondary-button compact" type="button" onClick={onAdd} disabled={!value.trim()}>
-        <Plus size={14} />
-        {buttonLabel}
-      </button>
+      <div className="skill-editor-actions">
+        <span className="muted">~{Math.ceil(draft.body.length / 4)} tokens</span>
+        <div>
+          <button className="ghost-button" type="button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className="primary-button compact-primary"
+            type="button"
+            disabled={saving || !draft.name.trim() || !draft.body.trim()}
+            onClick={onSave}
+          >
+            {saving ? 'Saving…' : 'Save skill'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
 
-function UtilityItemList({
-  emptyText,
-  items,
-  onRemove,
+// --- Connector gallery ---------------------------------------------------------
+
+const CONNECTOR_ICONS: Record<string, LucideIconType> = {
+  filesystem: FolderOpen,
+  memory: Brain,
+  'web-fetch': Globe,
+  'web-search': SearchIcon,
+  'sequential-thinking': ListOrdered,
+  'everything-demo': FlaskConical,
+}
+
+function ConnectorGallery({
+  mcpServers,
+  onServersChanged,
+  toolsBlocked,
 }: {
-  emptyText: string
-  items: UtilitySettings['skills']
-  onRemove: (id: string) => void
+  mcpServers: McpServerConfig[]
+  onServersChanged: (servers: McpServerConfig[]) => void
+  toolsBlocked: boolean
 }) {
+  const [gallery, setGallery] = useState<ConnectorCatalog | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  useEffect(() => {
+    void bridge.connectors.get().then(setGallery).catch(() => undefined)
+  }, [])
+
+  const addedCount = (entry: ConnectorEntry) =>
+    mcpServers.filter((server) => server.command.startsWith(`npx -y ${entry.npmPackage}`)).length
+
+  const add = async (entry: ConnectorEntry) => {
+    setBusyId(entry.id)
+    try {
+      let folder: string | undefined
+      if (entry.needsFolder) {
+        const picked = await bridge.connectors.pickFolder()
+        if (!picked) return
+        folder = picked
+      }
+      const servers = await bridge.connectors.add({ connectorId: entry.id, folder })
+      onServersChanged(servers)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
-    <div className="utility-list">
-      {items.length ? (
-        items.map((item) => (
-          <div className="utility-item" key={item.id}>
-            <span>{item.label}</span>
-            <button
-              className="ghost-button danger"
-              type="button"
-              title={`Remove ${item.label}`}
-              onClick={() => onRemove(item.id)}
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        ))
-      ) : (
-        <p className="utility-empty">{emptyText}</p>
-      )}
-    </div>
+    <section className="utility-panel connector-panel">
+      <div className="utility-panel-head">
+        <Plug size={16} />
+        <h4>Connector gallery</h4>
+      </div>
+      <p className="panel-hint">
+        Curated tools the model can use — one click, no commands to paste. Every tool call still goes through your
+        permission prompts.
+      </p>
+      <div className="connector-grid">
+        {gallery === null ? (
+          <p className="utility-empty">Loading connectors…</p>
+        ) : (
+          gallery.connectors.map((entry) => {
+            const Icon = CONNECTOR_ICONS[entry.id] ?? Plug
+            const count = addedCount(entry)
+            const added = count > 0
+            return (
+              <article className={added ? 'connector-card added' : 'connector-card'} key={entry.id}>
+                <div className="connector-card-head">
+                  <span className="connector-icon">
+                    <Icon size={17} />
+                  </span>
+                  <div>
+                    <h5>{entry.name}</h5>
+                    <p>{entry.tagline}</p>
+                  </div>
+                </div>
+                <div className="connector-badges">
+                  <Badge tone={entry.maintainer === 'official' ? 'real' : 'neutral'}>
+                    {entry.maintainer === 'official' ? 'official' : 'community'}
+                  </Badge>
+                  {entry.worksOffline ? <Badge tone="neutral">works offline</Badge> : <Badge tone="estimated">uses internet</Badge>}
+                </div>
+                <p className="connector-detail">{entry.detail}</p>
+                {entry.permissionsNote ? <p className="connector-permissions">{entry.permissionsNote}</p> : null}
+                <button
+                  className={added ? 'secondary-button compact' : 'primary-button compact-primary'}
+                  type="button"
+                  disabled={toolsBlocked || busyId !== null}
+                  title={toolsBlocked ? 'The selected model is not tool-trained' : undefined}
+                  onClick={() => void add(entry)}
+                >
+                  {busyId === entry.id
+                    ? 'Adding…'
+                    : added
+                      ? entry.needsFolder
+                        ? `Added ${count} · add another folder`
+                        : 'Added ✓'
+                      : entry.needsFolder
+                        ? 'Add & choose folder…'
+                        : 'Add'}
+                </button>
+              </article>
+            )
+          })
+        )}
+      </div>
+    </section>
   )
 }
 

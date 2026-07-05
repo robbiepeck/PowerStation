@@ -19,10 +19,11 @@ model landscape and with what users hit first.
 
 - **macOS Developer ID signing & notarization** — a prerequisite for a friction-free consumer
   release (no Gatekeeper warning). The blocker before any public binary.
-- **On-device speed micro-benchmark** — a short generation after first load to show *measured*
-  tokens-per-second for your exact machine, making every subsequent recommendation credible.
-- **Skills & connector presets** — building on the MCP foundation, curated one-click tool bundles
-  and reusable skills (the Utilities panel currently exposes the primitives).
+- ~~**On-device speed micro-benchmark**~~ — shipped in v0.2: measured tokens/sec on your exact
+  machine, shown on every card and recommendation.
+- ~~**Skills & connector presets**~~ — shipped in v0.3: markdown skills (five starters, in-app
+  editing, token metering) and a curated one-click connector gallery. Next iteration:
+  relevance-triggered skills.
 - **Recommendation polish** — richer capability tiers and a "why this over that" comparison in the
   onboarding results.
 

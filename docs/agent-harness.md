@@ -7,9 +7,49 @@ reality that small local models are less reliable and more injectable than front
 The three ideas that make it work: **permissions on every call**, **capability gating by model**, and
 **loop guards**.
 
-## Connecting a tool server
+## Skills
 
-Open **Utilities** and add an MCP server by name and command, for example:
+Skills are reusable instruction packs — plain markdown files in PowerStation's data folder — added to
+the system prompt while enabled. They work with **every** model, including chat-only ones, and are
+the fastest way to make a small model reliably good at one job.
+
+- **Starters included**: Concise answers, Code reviewer, Writing editor, Meeting notes → actions, and
+  Step-by-step tutor ship with the app (seeded on first run; edit or delete them freely).
+- **Create and edit in-app** (Utilities → Skills), or drop `.md` files into the skills folder — the
+  format is a tiny frontmatter block (`name`, `description`) followed by the instructions.
+- **Token-metered**: enabled skills show their context cost, with a warning when they start crowding
+  out conversation on small context windows.
+
+```
+---
+name: Concise answers
+description: Short, direct replies — no filler.
+---
+Answer as briefly as the question allows...
+```
+
+## The connector gallery
+
+Utilities → **Connector gallery** offers curated MCP servers — one click, no commands to paste. Every
+entry is a verified npm package, spawned as `npx -y <package>` with validated arguments only:
+
+| Connector | What the model gets | Notes |
+| --- | --- | --- |
+| **Local files** | Read/write/search files in a folder you pick | Official · scoped to the chosen folder |
+| **Memory** | A local knowledge graph that persists across chats | Official · stored in the app's data folder |
+| **Web reading** | Fetch pages as clean markdown | Community · uses the internet |
+| **Web search** | DuckDuckGo search, no API key | Community · uses the internet |
+| **Sequential thinking** | A structured reasoning scratchpad | Official · measurably helps small models |
+| **Kitchen sink (demo)** | 13 harmless sample tools | Official · for trying out the harness |
+
+The gallery is data, not code — [`catalog/connectors.json`](../catalog/connectors.json) in this repo,
+fetched alongside the model catalogue and strictly validated (npm package-name pattern, no flag
+injection, folder arguments only from the OS folder picker).
+
+## Connecting a custom server
+
+Anything not in the gallery: open **Utilities** and add an MCP server by name and command, for
+example:
 
 ```
 npx -y @modelcontextprotocol/server-filesystem ~/Documents

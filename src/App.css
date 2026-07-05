@@ -3137,3 +3137,214 @@
   gap: 0.6rem;
   margin-top: 0.5rem;
 }
+
+/* ---------------------------------------------------------------- v0.3: skills */
+
+.panel-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+}
+
+.panel-hint {
+  margin: 0 0 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.skills-panel,
+.connector-panel {
+  grid-column: 1 / -1;
+}
+
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skill-card {
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--surface);
+  transition: border-color 0.14s ease;
+}
+
+.skill-card.enabled {
+  border-color: rgba(0, 132, 118, 0.45);
+}
+
+.skill-card-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.skill-toggle {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.skill-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.skill-card-main strong {
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+
+.skill-card-main span {
+  font-size: 0.76rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-card-side {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.skill-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.7rem 0.75rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.skill-editor-meta {
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
+  gap: 0.5rem;
+}
+
+.skill-editor input,
+.skill-editor textarea {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+.skill-editor textarea {
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.skill-editor-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.skill-editor-actions > div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.compact-primary {
+  padding: 0.42rem 0.85rem;
+  font-size: 0.8rem;
+}
+
+/* ------------------------------------------------------------- connector gallery */
+
+.connector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.7rem;
+}
+
+.connector-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.connector-card.added {
+  border-color: rgba(0, 132, 118, 0.4);
+}
+
+.connector-card-head {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.connector-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: rgba(0, 132, 118, 0.1);
+  color: var(--teal);
+}
+
+.connector-card-head h5 {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--ink);
+}
+
+.connector-card-head p {
+  margin: 0.1rem 0 0;
+  font-size: 0.76rem;
+  color: var(--text);
+}
+
+.connector-badges {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.connector-detail {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  color: var(--muted);
+  flex: 1;
+}
+
+.connector-permissions {
+  margin: 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 7px;
+  background: var(--surface-muted);
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.connector-card .primary-button,
+.connector-card .secondary-button {
+  align-self: flex-start;
+}

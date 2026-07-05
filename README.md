@@ -50,10 +50,12 @@ those three gaps:
    memory-pressure signal and auto-pauses generation if the system gets into trouble.
    → [Memory & monitoring](docs/memory-and-monitoring.md)
 
-3. **An agent harness that respects small models.** MCP servers connect over stdio with every
-   tool call gated by an allow / ask / deny permission model. Tool schemas are token-metered.
-   Models that aren't tool-trained get chat only — with the reason stated — instead of
-   present-and-broken agent features. → [Agent harness](docs/agent-harness.md)
+3. **An agent harness that respects small models.** A one-click **connector gallery** (local files,
+   memory, web reading, web search…) and **skills** — reusable instruction packs with starters
+   included and in-app editing. MCP servers connect over stdio with every tool call gated by an
+   allow / ask / deny permission model; tool schemas and skills are token-metered. Models that
+   aren't tool-trained get chat only — with the reason stated — instead of present-and-broken
+   agent features. → [Agent harness](docs/agent-harness.md)
 
 ## Requirements
 

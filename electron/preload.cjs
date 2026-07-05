@@ -52,6 +52,18 @@ contextBridge.exposeInMainWorld('powerStation', {
     deleteAll: () => ipcRenderer.invoke('chats:deleteAll'),
     reveal: () => ipcRenderer.invoke('chats:reveal'),
   },
+  skills: {
+    list: () => ipcRenderer.invoke('skills:list'),
+    save: (payload) => ipcRenderer.invoke('skills:save', payload),
+    delete: (slug) => ipcRenderer.invoke('skills:delete', slug),
+    setEnabled: (payload) => ipcRenderer.invoke('skills:setEnabled', payload),
+    reveal: () => ipcRenderer.invoke('skills:reveal'),
+  },
+  connectors: {
+    get: () => ipcRenderer.invoke('connectors:get'),
+    add: (payload) => ipcRenderer.invoke('connectors:add', payload),
+    pickFolder: () => ipcRenderer.invoke('app:pickFolder'),
+  },
   chat: {
     send: (payload) => ipcRenderer.invoke('chat:send', payload),
     stop: (requestId) => ipcRenderer.invoke('chat:stop', requestId),

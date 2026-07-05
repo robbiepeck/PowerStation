@@ -5,8 +5,18 @@ import * as llm from './llm.js'
 import * as mcp from './mcp.js'
 import * as agent from './agent.js'
 import * as chats from './chats.js'
+import * as skills from './skills.js'
+import { composeSystemPrompt } from './skillFormat.js'
 import { getDeviceHealthProfile } from './device.js'
-import { getCatalog, refreshCatalog, type CatalogModel } from './catalog.js'
+import {
+  getCatalog,
+  refreshCatalog,
+  getConnectorCatalog,
+  refreshConnectorCatalog,
+  type CatalogModel,
+  type ConnectorEntry,
+} from './catalog.js'
+import { promises as fs } from 'node:fs'
 import { recommendModels, type Intent } from './recommend.js'
 import { getHardwareProfile } from './hardware.js'
 import { admittedContextTokens, checkFit, OFFLOAD_RAM_FRACTION, USABLE_BUDGET_FRACTION } from './admission.js'
@@ -75,6 +85,13 @@ async function getOffloadCeilingBytes(): Promise<number> {
   return Math.round(profile.totalRamBytes * OFFLOAD_RAM_FRACTION)
 }
 
+/** The user's base system prompt plus every enabled skill. */
+async function getEffectiveSystemPrompt(): Promise<string | undefined> {
+  const state = await getState()
+  const composed = composeSystemPrompt(state.settings.utilities.systemPrompt, await skills.getEnabledSkills())
+  return composed || undefined
+}
+
 /**
  * Measure real tokens/sec for a model on this machine and persist the result
  * (keyed by lowercase fileName so catalog entries and local files match up).
@@ -108,7 +125,8 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   const result = await llm.runBenchmark({
     modelPath,
     contextTokens,
-    systemPrompt: state.settings.utilities.systemPrompt || undefined,
+    // Same composed prompt as chat, so the warm session carries over.
+    systemPrompt: await getEffectiveSystemPrompt(),
   })
   const record: BenchmarkRecord = {
     tokensPerSec: Math.round(result.tokensPerSec * 10) / 10,
@@ -277,7 +295,73 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   ipcMain.handle('catalog:get', () => getCatalog())
-  ipcMain.handle('catalog:refresh', () => refreshCatalog())
+  ipcMain.handle('catalog:refresh', () => {
+    // One button refreshes both curated datasets.
+    void refreshConnectorCatalog()
+    return refreshCatalog()
+  })
+
+  // --- Skills ---------------------------------------------------------------
+  ipcMain.handle('skills:list', () => skills.listSkills())
+  ipcMain.handle('skills:save', (_event, payload: { slug?: string; name: string; description: string; body: string }) =>
+    skills.saveSkill(payload ?? { name: '', description: '', body: '' }),
+  )
+  ipcMain.handle('skills:delete', (_event, slug: string) => skills.deleteSkill(slug))
+  ipcMain.handle('skills:setEnabled', (_event, payload: { slug: string; enabled: boolean }) =>
+    skills.setSkillEnabled(payload?.slug, payload?.enabled === true),
+  )
+  ipcMain.handle('skills:reveal', () => skills.revealSkillsDir())
+
+  // --- Connector gallery -------------------------------------------------------
+  ipcMain.handle('connectors:get', () => getConnectorCatalog())
+  ipcMain.handle('app:pickFolder', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+  })
+  ipcMain.handle('connectors:add', async (_event, payload: { connectorId: string; folder?: string }) => {
+    const catalog = await getConnectorCatalog()
+    const entry: ConnectorEntry | undefined = catalog.connectors.find((c) => c.id === payload?.connectorId)
+    if (!entry) throw new Error('Unknown connector.')
+
+    let folder: string | null = null
+    if (entry.needsFolder) {
+      folder = typeof payload.folder === 'string' ? payload.folder : null
+      if (!folder) throw new Error('This connector needs a folder.')
+      const stat = await fs.stat(folder).catch(() => null)
+      if (!stat?.isDirectory()) throw new Error('The chosen folder does not exist.')
+    }
+
+    // Command is constructed HERE from the validated catalog entry — never
+    // from free-form remote strings.
+    const args = entry.args.map((arg) => (arg === '{folder}' ? folder! : arg))
+    const quoted = args.map((arg) => (arg.includes(' ') ? `"${arg}"` : arg))
+    const command = ['npx', '-y', entry.npmPackage, ...quoted].join(' ')
+
+    const state = await getState()
+    // Idempotent for folderless connectors: adding "Memory" twice re-enables
+    // the existing entry instead of spawning a duplicate server.
+    const existing = state.settings.utilities.mcpServers.find(
+      (server) => !entry.needsFolder && server.command.startsWith(`npx -y ${entry.npmPackage}`),
+    )
+    if (existing) {
+      await mutate((current) => {
+        const server = current.settings.utilities.mcpServers.find((s) => s.id === existing.id)
+        if (server) server.enabled = true
+      })
+    } else {
+      const name = entry.needsFolder ? `${entry.name} (${path.basename(folder!)})` : entry.name
+      await mutate((current) => {
+        current.settings.utilities.mcpServers.push({
+          id: `mcp-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+          name,
+          command,
+          enabled: true,
+        })
+      })
+    }
+    void reconcileMcpServers()
+    return (await getState()).settings.utilities.mcpServers
+  })
 
   ipcMain.handle('catalog:recommend', async (_event, intent: Intent) => {
     const [catalog, profile, budget, state] = await Promise.all([
@@ -469,7 +553,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           requestId,
           modelPath,
           prompt,
-          systemPrompt: state.settings.utilities.systemPrompt || undefined,
+          systemPrompt: await getEffectiveSystemPrompt(),
           contextTokens,
           temperature: state.settings.temperature,
           maxTokens: state.settings.maxTokens,

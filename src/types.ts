@@ -1,8 +1,3 @@
-export type UtilityItem = {
-  id: string
-  label: string
-}
-
 export type McpServerConfig = {
   id: string
   name: string
@@ -12,9 +7,39 @@ export type McpServerConfig = {
 
 export type UtilitySettings = {
   systemPrompt: string
-  skills: UtilityItem[]
-  connectors: UtilityItem[]
+  /** Slugs of enabled skills (markdown files in the skills folder). */
+  enabledSkills: string[]
   mcpServers: McpServerConfig[]
+}
+
+export type SkillInfo = {
+  slug: string
+  name: string
+  description: string
+  body: string
+  enabled: boolean
+  tokenEstimate: number
+  builtIn: boolean
+}
+
+export type ConnectorEntry = {
+  id: string
+  name: string
+  tagline: string
+  detail: string
+  npmPackage: string
+  args: string[]
+  needsFolder: boolean
+  maintainer: 'official' | 'community'
+  worksOffline: boolean
+  permissionsNote: string
+}
+
+export type ConnectorCatalog = {
+  schemaVersion: number
+  updatedAt: string
+  source: 'bundled' | 'cached' | 'remote'
+  connectors: ConnectorEntry[]
 }
 
 export type KvGeometry = {
@@ -335,6 +360,18 @@ export type PowerStationBridge = {
     delete: (id: string) => Promise<boolean>
     deleteAll: () => Promise<number>
     reveal: () => Promise<boolean>
+  }
+  skills: {
+    list: () => Promise<SkillInfo[]>
+    save: (payload: { slug?: string; name: string; description: string; body: string }) => Promise<SkillInfo | null>
+    delete: (slug: string) => Promise<boolean>
+    setEnabled: (payload: { slug: string; enabled: boolean }) => Promise<boolean>
+    reveal: () => Promise<boolean>
+  }
+  connectors: {
+    get: () => Promise<ConnectorCatalog>
+    add: (payload: { connectorId: string; folder?: string }) => Promise<McpServerConfig[]>
+    pickFolder: () => Promise<string | null>
   }
   chat: {
     send: (payload: {

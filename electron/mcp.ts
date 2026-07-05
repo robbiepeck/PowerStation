@@ -3,6 +3,7 @@
 // main process only — servers are child processes and must never be reachable
 // from the renderer directly.
 
+import { app } from 'electron'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { McpServerConfig } from './config.js'
@@ -104,6 +105,9 @@ async function doConnectServer(config: McpServerConfig): Promise<McpServerStatus
       // GUI apps on macOS don't inherit the shell PATH; main.ts runs fixPath()
       // at startup so the default environment here carries the corrected PATH.
       env: getDefaultEnvironment(),
+      // Servers that write relative files (e.g. the memory server's store)
+      // land in the app's data folder, not wherever the app happened to start.
+      cwd: app.getPath('userData'),
       stderr: 'pipe',
     })
     await client.connect(transport)

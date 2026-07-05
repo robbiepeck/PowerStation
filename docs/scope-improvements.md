@@ -6,7 +6,7 @@ direction lives in the [Roadmap](../ROADMAP.md); this page is the detailed versi
 
 | # | Item | Origin | Effort | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Real skills & connector gallery | Original goal #2 | Medium | Planned — next up |
+| 1 | Real skills & connector gallery | Original goal #2 | Medium | **Shipped v0.3** |
 | 2 | On-device speed micro-benchmark | Critique recommendation | Small | **Shipped v0.2** |
 | 3 | Conversation persistence | Roadmap / daily-use gap | Medium | **Shipped v0.2** |
 | 4 | Catalogue freshness CI | Critique: "stale catalogue is fatal" | Small | Planned |
@@ -19,12 +19,13 @@ direction lives in the [Roadmap](../ROADMAP.md); this page is the detailed versi
 
 ## The items in detail
 
-### 1. Real skills & connectors — *planned, next up*
-The Utilities panel currently stores skills and connectors as labels only. Build the real thing:
-skills as local folders of instructions injected into the system prompt when relevant, and a
-**connector gallery** — curated one-click MCP servers (filesystem, web fetch, memory, search)
-instead of pasted `npx` commands. This completes original goal #2 ("easily connecting up skills,
-connectors") and is the largest remaining gap between vision and app.
+### 1. Real skills & connectors — *shipped v0.3*
+Skills are real: markdown files in the data folder, seeded with five starters, editable in-app,
+token-metered, and injected into the system prompt while enabled (they work on every model,
+including chat-only ones). The **connector gallery** offers six curated, npm-verified MCP servers —
+local files (folder-picker scoped), memory, web reading, web search, sequential thinking, and a
+demo server — added with one click and remotely updatable via `catalog/connectors.json`. Completes
+original goal #2. Future upgrade path: relevance-triggered skill injection instead of always-on.
 
 ### 2. On-device speed micro-benchmark — *shipped v0.2*
 After a model is set up, run a short standard generation and record **measured tokens/sec on this

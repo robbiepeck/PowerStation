@@ -21,11 +21,6 @@ export type BenchmarkRecord = {
   measuredAt: number
 }
 
-export type UtilityItem = {
-  id: string
-  label: string
-}
-
 export type McpServerConfig = {
   id: string
   name: string
@@ -43,8 +38,8 @@ export type OnboardingState = {
 
 export type UtilitySettings = {
   systemPrompt: string
-  skills: UtilityItem[]
-  connectors: UtilityItem[]
+  /** Slugs of skills (markdown files in the skills folder) injected into the system prompt. */
+  enabledSkills: string[]
   mcpServers: McpServerConfig[]
 }
 
@@ -61,8 +56,7 @@ export type PersistedState = {
 
 const defaultUtilities: UtilitySettings = {
   systemPrompt: '',
-  skills: [],
-  connectors: [],
+  enabledSkills: [],
   mcpServers: [],
 }
 
@@ -92,20 +86,6 @@ function boolOr(value: unknown, fallback: boolean): boolean {
 
 function cleanString(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
-}
-
-function sanitizeUtilityItems(value: unknown, prefix: string): UtilityItem[] {
-  if (!Array.isArray(value)) return []
-  return value
-    .slice(0, 80)
-    .map((item, index) => {
-      const record = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
-      const label = cleanString(record?.label, 160)
-      if (!label) return null
-      const id = cleanString(record?.id, 120) || `${prefix}-${index}`
-      return { id, label }
-    })
-    .filter((item): item is UtilityItem => Boolean(item))
 }
 
 function sanitizeMcpServers(value: unknown): McpServerConfig[] {
@@ -153,10 +133,15 @@ function sanitizeOnboarding(value: unknown): OnboardingState {
 
 function sanitizeUtilities(value: unknown): UtilitySettings {
   const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  const enabledSkills = Array.isArray(record.enabledSkills)
+    ? record.enabledSkills
+        .slice(0, 100)
+        .map((slug) => cleanString(slug, 60).toLowerCase())
+        .filter((slug) => /^[a-z0-9-]+$/.test(slug))
+    : []
   return {
     systemPrompt: cleanString(record.systemPrompt, 20000),
-    skills: sanitizeUtilityItems(record.skills, 'skill'),
-    connectors: sanitizeUtilityItems(record.connectors, 'connector'),
+    enabledSkills: [...new Set(enabledSkills)],
     mcpServers: sanitizeMcpServers(record.mcpServers),
   }
 }

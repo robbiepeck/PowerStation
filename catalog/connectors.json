@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-05",
+  "connectors": [
+    {
+      "id": "filesystem",
+      "name": "Local files",
+      "tagline": "Read, write and organise files in a folder you choose.",
+      "detail": "The model can list, read, search, create and edit files — but only inside the folder you pick when adding it. The classic agent connector: summarise documents, tidy a downloads folder, draft files in place.",
+      "npmPackage": "@modelcontextprotocol/server-filesystem",
+      "args": ["{folder}"],
+      "needsFolder": true,
+      "maintainer": "official",
+      "worksOffline": true,
+      "permissionsNote": "Scoped to the folder you choose. File writes and deletes always ask first."
+    },
+    {
+      "id": "memory",
+      "name": "Memory",
+      "tagline": "Let the model remember facts across chats.",
+      "detail": "A local knowledge graph the model can add to and search: people, preferences, project facts. Pairs with saved chats — the model can recall what you told it last week. Stored as a plain file in PowerStation's data folder.",
+      "npmPackage": "@modelcontextprotocol/server-memory",
+      "args": [],
+      "needsFolder": false,
+      "maintainer": "official",
+      "worksOffline": true,
+      "permissionsNote": "Everything it remembers stays in a local file on this machine."
+    },
+    {
+      "id": "web-fetch",
+      "name": "Web reading",
+      "tagline": "Fetch web pages and articles as clean text.",
+      "detail": "Give the model a URL and it can read the page — articles, docs, release notes — converted to markdown so small context windows aren't wasted on HTML noise.",
+      "npmPackage": "@kazuph/mcp-fetch",
+      "args": [],
+      "needsFolder": false,
+      "maintainer": "community",
+      "worksOffline": false,
+      "permissionsNote": "Fetches only the URLs the model asks for; each fetch can be gated behind a permission prompt."
+    },
+    {
+      "id": "web-search",
+      "name": "Web search",
+      "tagline": "Search the web with DuckDuckGo — no API key needed.",
+      "detail": "Lets the model look things up: current facts, docs, news. Uses DuckDuckGo, so there is nothing to sign up for. Combine with Web reading so the model can search, then read the best result.",
+      "npmPackage": "duckduckgo-mcp-server",
+      "args": [],
+      "needsFolder": false,
+      "maintainer": "community",
+      "worksOffline": false,
+      "permissionsNote": "Search queries go to DuckDuckGo. Nothing else leaves the machine."
+    },
+    {
+      "id": "sequential-thinking",
+      "name": "Sequential thinking",
+      "tagline": "A scratchpad tool that helps small models reason step by step.",
+      "detail": "Gives the model a structured place to think through hard problems one step at a time, revising as it goes. Measurably helps smaller models on planning and multi-step tasks.",
+      "npmPackage": "@modelcontextprotocol/server-sequential-thinking",
+      "args": [],
+      "needsFolder": false,
+      "maintainer": "official",
+      "worksOffline": true,
+      "permissionsNote": "Pure reasoning aid — no access to files or the network."
+    },
+    {
+      "id": "everything-demo",
+      "name": "Kitchen sink (demo)",
+      "tagline": "A test server with 13 sample tools — for trying out the harness.",
+      "detail": "The MCP reference test server: echo, adding numbers, sample images and more. Nothing useful for real work, but perfect for watching permission prompts and tool calls in action before you connect anything real.",
+      "npmPackage": "@modelcontextprotocol/server-everything",
+      "args": [],
+      "needsFolder": false,
+      "maintainer": "official",
+      "worksOffline": true,
+      "permissionsNote": "Harmless demo tools; nothing touches your files or network."
+    }
+  ]
+}
