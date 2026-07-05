@@ -16,6 +16,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# electron-builder publishes installers to the tag's GitHub Release, which
+# needs write access — the default workflow token is read-only.
+permissions:
+  contents: write
+
 jobs:
   check:
     name: Lint, test, build (${{ matrix.os }})
