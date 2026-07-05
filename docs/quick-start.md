@@ -4,12 +4,15 @@ From a clean checkout to your first local chat in a few minutes.
 
 ## 1. Requirements
 
-- **macOS on Apple Silicon** (M-series) with **16 GB unified memory or more**.
+- **macOS on Apple Silicon** (M-series) with **16 GB unified memory or more**, or
+  **Windows 10/11 x64** (beta) with **16 GB RAM** — ideally with a discrete GPU (8 GB+ VRAM).
 - **Node.js 20+** and **npm**.
-- Xcode Command Line Tools (`xcode-select --install`) — the native runtime ships prebuilt, but the
-  CLT are handy if a source build is ever needed.
+- macOS only: Xcode Command Line Tools (`xcode-select --install`) — the native runtime ships
+  prebuilt, but the CLT are handy if a source build is ever needed.
 
-See the [Setup Guide](setup.md) if you hit anything native-build related.
+Prefer an installer over building from source? On Windows, grab `PowerStation-windows-x64` from the
+latest [CI run's artifacts](https://github.com/robbiepeck/PowerStation/actions) (or a GitHub Release
+when one is tagged). See the [Setup Guide](setup.md) if you hit anything native-build related.
 
 ## 2. Get it running
 

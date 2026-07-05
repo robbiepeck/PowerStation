@@ -22,13 +22,16 @@ total ≈ weights + KV-cache(context) + compute buffers
   catalogue carries a measured **bytes-per-token** value that overrides it.
 - **compute buffers** — a floor plus a fraction of the weights.
 
-This total is compared against your **usable budget**: the Metal working-set limit the GPU may use
-(reported by the actual inference backend), minus ~10% OS headroom.
+This total is compared against your **usable budget** — the accelerator memory the backend that
+will run inference actually reports (the Metal working-set limit on Apple Silicon; discrete VRAM
+under CUDA/Vulkan on Windows) — minus ~10% OS headroom.
 
 The result is one of three verdicts:
 
 - **Comfortable** — loads as requested.
-- **Tight** — loads, but the context is capped and the UI says so.
+- **Tight** — loads, but with a caveat the UI states plainly. Two flavours: the context is capped
+  to fit the GPU budget, or — when the model exceeds the GPU budget but fits within ~80% of system
+  RAM — it runs with layers **offloaded to the CPU**, which works but is much slower.
 - **Won't fit** — refused with an explanation, before anything is loaded.
 
 When a load doesn't fit comfortably, admission control walks a **degradation ladder** — shrink the
@@ -40,7 +43,9 @@ real-world figures (for example, ~128 KB/token and ~4 GB of KV cache at 32K cont
 ## Runtime protection: memory-pressure auto-pause
 
 Admission control handles the load; the memory-pressure signal handles the session. On macOS the
-kernel exposes a memory-pressure level without any elevated privileges. PowerStation samples it in the
+kernel exposes a memory-pressure level without any elevated privileges; on Windows there is no single
+kernel pressure number without a driver, so PowerStation derives the level from available physical
+memory and labels it as derived. PowerStation samples it in the
 telemetry loop, and on the transition into **critical** pressure it **auto-pauses generation** and
 offers a one-tap choice — free up memory, switch to a smaller model, or continue anyway. The pause
 latches on the transition, so a sustained episode fires once, not once per telemetry tick.
@@ -60,7 +65,7 @@ trying to build.
 | CPU load, RAM used/total | Measured (live). |
 | GPU-usable memory (VRAM budget) | Measured from the inference backend. |
 | Storage used/free | Measured. |
-| **Memory pressure** | Measured — macOS kernel signal, no privileges needed. |
+| **Memory pressure** | macOS: measured kernel signal, no privileges needed. Windows: derived from available memory (labelled as such). |
 | Tokens per second | Measured during generation. |
 | GPU utilisation | Not available without elevated access on macOS — shown as n/a. |
 | **Power draw (watts)** | **Estimated** — real wattage isn't readable on macOS without elevated access, so this is a labelled estimate derived from load, never presented as a sensor reading. |

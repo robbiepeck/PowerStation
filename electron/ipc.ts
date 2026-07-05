@@ -8,7 +8,7 @@ import { getDeviceHealthProfile } from './device.js'
 import { getCatalog, refreshCatalog, type CatalogModel } from './catalog.js'
 import { recommendModels, type Intent } from './recommend.js'
 import { getHardwareProfile } from './hardware.js'
-import { admittedContextTokens, checkFit, USABLE_BUDGET_FRACTION } from './admission.js'
+import { admittedContextTokens, checkFit, OFFLOAD_RAM_FRACTION, USABLE_BUDGET_FRACTION } from './admission.js'
 import { getState, mutate, patchSettings, managedModelsDir, type Settings, type ToolPermission } from './config.js'
 
 // Model downloads come from a free-text field, so constrain them to the schemes
@@ -59,6 +59,11 @@ async function getGpuBudgetBytes(): Promise<number> {
   if (device?.vram && device.vram.total > 0) return device.vram.total
   const profile = await getHardwareProfile()
   return profile.gpuBudgetBytes
+}
+
+async function getOffloadCeilingBytes(): Promise<number> {
+  const profile = await getHardwareProfile()
+  return Math.round(profile.totalRamBytes * OFFLOAD_RAM_FRACTION)
 }
 
 /** Reconnect/disconnect MCP servers so connections mirror the settings. */
@@ -203,7 +208,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('fit:check', async (_event, payload: { catalogId?: string; modelPath?: string; contextTokens?: number }) => {
     const state = await getState()
     const contextTokens = payload.contextTokens ?? state.settings.contextTokens
-    const budget = await getGpuBudgetBytes()
+    const [budget, offloadCeilingBytes] = await Promise.all([getGpuBudgetBytes(), getOffloadCeilingBytes()])
     if (payload.catalogId) {
       const catalog = await getCatalog()
       const entry = catalog.models.find((model) => model.id === payload.catalogId)
@@ -214,6 +219,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         kvBytesPerToken: entry.kvBytesPerToken,
         contextTokens: Math.min(contextTokens, entry.maxContext ?? contextTokens),
         budgetBytes: budget,
+        offloadCeilingBytes,
       })
     }
     if (payload.modelPath) {
@@ -228,6 +234,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         kvBytesPerToken: entry?.kvBytesPerToken ?? null,
         contextTokens,
         budgetBytes: budget,
+        offloadCeilingBytes,
       })
     }
     return null
@@ -308,10 +315,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         // Admission control: verify the model + requested context fit BEFORE
         // asking the worker to load anything, and shrink the context if that
         // is what it takes to stay safe.
-        const [info, entry, budget] = await Promise.all([
+        const [info, entry, budget, offloadCeilingBytes] = await Promise.all([
           models.getModelInfo(modelPath),
           findCatalogEntryForModel(modelPath),
           getGpuBudgetBytes(),
+          getOffloadCeilingBytes(),
         ])
         const fitRequest = {
           weightsBytes: Math.max(info?.sizeBytes ?? 0, entry?.sizeBytes ?? 0),
@@ -319,6 +327,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           kvBytesPerToken: entry?.kvBytesPerToken ?? null,
           contextTokens: state.settings.contextTokens,
           budgetBytes: budget,
+          offloadCeilingBytes,
         }
         const fit = checkFit(fitRequest)
         if (!fit.fits && fit.maxComfortableContext === null) {

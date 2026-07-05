@@ -5,16 +5,17 @@ it recommends and installs. It is generated from [`catalog/models.json`](../cata
 — the same manifest the app fetches at launch — so treat that file as the source of truth if
 this page ever drifts.
 
-> **At a glance:** macOS on Apple Silicon, **16 GB unified memory minimum**. 12 curated
-> open-weight models spanning the 16 GB → 64 GB tiers, all verified against Hugging Face.
+> **At a glance:** macOS on Apple Silicon (primary) and Windows x64 (beta), **16 GB memory
+> minimum**. 12 curated open-weight models spanning the 16 GB → 64 GB tiers, all verified
+> against Hugging Face.
 
 ---
 
 ## Devices PowerStation supports
 
-PowerStation targets **macOS on Apple Silicon (M-series)** only. On these machines the CPU and
-GPU share one pool of **unified memory**, so there is no separate VRAM number — what matters is
-how much of that pool the GPU may use for a model.
+PowerStation's primary platform is **macOS on Apple Silicon (M-series)**, with **Windows 10/11
+x64** supported in beta. On a Mac the CPU and GPU share one pool of **unified memory**, so there
+is no separate VRAM number — what matters is how much of that pool the GPU may use for a model.
 
 - **Detected, never asked.** PowerStation reads your chip, total unified memory, the usable GPU
   budget (from the actual Metal backend that will run inference) and free disk on first launch.
@@ -37,6 +38,24 @@ how much of that pool the GPU may use for a model.
 
 Apple Silicon is the cheapest way to run 70B–120B-class models locally, because unified memory
 doubles as GPU memory.
+
+### Windows PCs (beta)
+
+On Windows the picture splits in two:
+
+- **Discrete GPU (NVIDIA/AMD).** The fast budget is your **VRAM**, measured from the CUDA/Vulkan
+  backend that will actually run inference. Models that fit entirely in VRAM run at full speed.
+  Models larger than VRAM but within ~80% of your system RAM still run — llama.cpp offloads the
+  overflow layers to the CPU — and PowerStation marks these honestly as **"Runs on CPU · slower"**
+  rather than pretending they're fast or blocking them outright.
+- **No discrete GPU.** Inference runs on the CPU out of system RAM. Everything works, but expect a
+  fraction of the speeds listed below; stick to the smaller models.
+
+The same 16 GB system-RAM floor applies. Rough guidance: 16 GB RAM + 8 GB VRAM handles the 16 GB
+tier at full speed and the 24 GB tier via offload; 32 GB RAM + 12–16 GB VRAM makes the 24–32 GB
+tiers practical. One honest caveat: the per-model notes below are written for Apple Silicon's
+unified memory — on Windows, trust the app's live fit badges, which are computed from your actual
+measured VRAM and RAM.
 
 ### Speed, honestly
 

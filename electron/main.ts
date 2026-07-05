@@ -11,7 +11,8 @@ import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
 
 // GUI apps launched from Finder/Dock get launchd's minimal PATH; fix it before
 // any MCP server is spawned (npx/uvx would otherwise fail with ENOENT).
-fixPath()
+// macOS-specific by design — Windows GUI apps inherit the user PATH already.
+if (process.platform === 'darwin') fixPath()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)

@@ -31,6 +31,8 @@ import type { HardwareProfile, Recommendation, UseCase } from './types'
 import type { DownloadState } from './views'
 
 const bridge = getDesktop()
+const isMac = bridge.platform === 'darwin'
+const machineNoun = isMac ? 'Mac' : 'PC'
 
 type Step = 'scan' | 'floor' | 'intent' | 'priority' | 'recommend'
 
@@ -172,7 +174,7 @@ export function OnboardingFlow({
               <div className="ob-scan-pulse" aria-hidden="true">
                 <Microchip size={30} />
               </div>
-              <h1>Reading your Mac…</h1>
+              <h1>Reading your {machineNoun}…</h1>
               <p>PowerStation checks your chip, memory and disk so you never have to guess what fits.</p>
             </div>
           ) : (
@@ -183,7 +185,7 @@ export function OnboardingFlow({
                 <div className="ob-hw-card">
                   <Cpu size={17} />
                   <strong>{formatNumber(ramGb, 0)} GB</strong>
-                  <span>unified memory</span>
+                  <span>{profile.isAppleSilicon ? 'unified memory' : 'system memory'}</span>
                 </div>
                 <div className="ob-hw-card">
                   <Microchip size={17} />
@@ -199,7 +201,7 @@ export function OnboardingFlow({
               {profile.meetsFloor ? (
                 <>
                   <p className="ob-note">
-                    Everything runs on this Mac. Prompts, chats and models never leave it.
+                    Everything runs on this {machineNoun}. Prompts, chats and models never leave it.
                   </p>
                   <button className="primary-button ob-next" type="button" onClick={() => setStep('intent')}>
                     Continue
@@ -226,15 +228,16 @@ export function OnboardingFlow({
             <span className="ob-floor-icon">
               <AlertTriangle size={22} />
             </span>
-            <h1>This Mac has {formatNumber(ramGb, 0)} GB of memory — below what local AI realistically needs</h1>
+            <h1>This {machineNoun} has {formatNumber(ramGb, 0)} GB of memory — below what local AI realistically needs</h1>
             <p>
               Capable local models want <strong>16 GB or more</strong>. With {formatNumber(ramGb, 0)} GB, only very
-              small models fit, they compete with macOS for memory, and agent features won't work reliably. We'd rather
-              tell you now than after a download.
+              small models fit, they compete with the operating system for memory, and agent features won't work
+              reliably. We'd rather tell you now than after a download.
             </p>
             <p>
-              For a good experience, use an Apple Silicon Mac with 16 GB+ of unified memory — 24–32 GB is the sweet
-              spot for agents and coding.
+              {isMac
+                ? 'For a good experience, use an Apple Silicon Mac with 16 GB+ of unified memory — 24–32 GB is the sweet spot for agents and coding.'
+                : 'For a good experience, use a PC with 16 GB+ of RAM — ideally with a discrete GPU (8 GB+ VRAM) so models run at full speed.'}
             </p>
             <div className="ob-floor-actions">
               <button className="secondary-button" type="button" onClick={() => onSkipToModels()}>

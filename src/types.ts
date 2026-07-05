@@ -136,6 +136,8 @@ export type FitVerdict = 'comfortable' | 'tight' | 'wont-fit'
 export type FitReport = {
   verdict: FitVerdict
   fits: boolean
+  /** True when the model only fits by offloading layers to the CPU (slower). */
+  offload: boolean
   weightsBytes: number
   kvCacheBytes: number
   buffersBytes: number

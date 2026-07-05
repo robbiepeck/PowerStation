@@ -25,6 +25,12 @@ export type FitRequest = {
    * this override wins when present.
    */
   kvBytesPerToken?: number | null
+  /**
+   * CPU-offload ceiling (typically OFFLOAD_RAM_FRACTION × total RAM). A model
+   * that exceeds the GPU budget but fits under this ceiling gets a 'tight'
+   * verdict with offload=true instead of 'wont-fit' — it runs, just slower.
+   */
+  offloadCeilingBytes?: number | null
 }
 
 export type FitVerdict = 'comfortable' | 'tight' | 'wont-fit'
@@ -32,6 +38,8 @@ export type FitVerdict = 'comfortable' | 'tight' | 'wont-fit'
 export type FitReport = {
   verdict: FitVerdict
   fits: boolean
+  /** True when the model only fits by offloading layers to the CPU (slower). */
+  offload: boolean
   weightsBytes: number
   kvCacheBytes: number
   buffersBytes: number
@@ -56,6 +64,13 @@ const BUFFER_WEIGHT_FRACTION = 0.08
 const OS_HEADROOM_FRACTION = 0.1
 /** Fraction of the raw accelerator budget that models may actually use. */
 export const USABLE_BUDGET_FRACTION = 1 - OS_HEADROOM_FRACTION
+/**
+ * Models larger than the GPU budget can still run with layers offloaded to the
+ * CPU (llama.cpp splits automatically) at a real speed cost — but only while
+ * everything fits in system RAM with room for the OS. This fraction of total
+ * RAM is the ceiling for that "runs, but slower" tier.
+ */
+export const OFFLOAD_RAM_FRACTION = 0.8
 // Below this remaining-headroom fraction a load is "tight": it works, but big
 // prompts or other apps can push it over.
 const TIGHT_HEADROOM_FRACTION = 0.15
@@ -100,8 +115,12 @@ export function checkFit(request: FitRequest): FitReport {
   const headroomBytes = usableBudget - totalBytes
   const headroomPct = usableBudget > 0 ? (headroomBytes / usableBudget) * 100 : -100
 
-  const fits = headroomBytes >= 0
-  const comfortable = fits && headroomBytes >= usableBudget * TIGHT_HEADROOM_FRACTION
+  const fitsGpu = headroomBytes >= 0
+  const comfortable = fitsGpu && headroomBytes >= usableBudget * TIGHT_HEADROOM_FRACTION
+  // Too big for the GPU budget, but small enough to run with layers offloaded
+  // to the CPU: a real option llama.cpp handles automatically, at a speed cost.
+  const offload = !fitsGpu && request.offloadCeilingBytes != null && totalBytes <= request.offloadCeilingBytes
+  const fits = fitsGpu || offload
   const verdict: FitVerdict = comfortable ? 'comfortable' : fits ? 'tight' : 'wont-fit'
 
   // Solve for the largest context that keeps the comfortable margin.
@@ -116,6 +135,9 @@ export function checkFit(request: FitRequest): FitReport {
 
   const suggestions: string[] = []
   if (verdict !== 'comfortable') {
+    if (offload) {
+      suggestions.push('For full speed, choose a model that fits your GPU memory.')
+    }
     if (maxComfortableContext && maxComfortableContext < request.contextTokens) {
       suggestions.push(`Reduce the context window to ${maxComfortableContext.toLocaleString()} tokens or less.`)
     }
@@ -126,20 +148,26 @@ export function checkFit(request: FitRequest): FitReport {
   const summary =
     verdict === 'comfortable'
       ? `Fits comfortably: needs ~${formatGb(totalBytes)} of ${formatGb(usableBudget)} available.`
-      : verdict === 'tight'
-        ? `Fits, but tightly: needs ~${formatGb(totalBytes)} of ${formatGb(usableBudget)} available. Expect pressure with other apps open.`
-        : `Won't fit: needs ~${formatGb(totalBytes)} but only ${formatGb(usableBudget)} is available.`
+      : offload
+        ? `Runs, but not fully on the GPU: needs ~${formatGb(totalBytes)} against a ~${formatGb(usableBudget)} GPU budget, so layers will offload to the CPU — expect much slower responses.`
+        : verdict === 'tight'
+          ? `Fits, but tightly: needs ~${formatGb(totalBytes)} of ${formatGb(usableBudget)} available. Expect pressure with other apps open.`
+          : `Won't fit: needs ~${formatGb(totalBytes)} but only ${formatGb(usableBudget)} is available.`
 
   return {
     verdict,
     fits,
+    offload,
     weightsBytes: request.weightsBytes,
     kvCacheBytes,
     buffersBytes,
     totalBytes,
+    // In offload mode the meaningful headroom is against the RAM ceiling.
     budgetBytes: usableBudget,
-    headroomBytes,
-    headroomPct,
+    headroomBytes: offload ? request.offloadCeilingBytes! - totalBytes : headroomBytes,
+    headroomPct: offload
+      ? ((request.offloadCeilingBytes! - totalBytes) / request.offloadCeilingBytes!) * 100
+      : headroomPct,
     maxComfortableContext,
     summary,
     suggestions,

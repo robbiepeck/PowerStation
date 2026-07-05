@@ -3,7 +3,7 @@
 // is detected; the questionnaire only covers what can't be: what they want to
 // do and how they trade speed against quality.
 
-import { checkFit, type FitReport } from './admission.js'
+import { checkFit, OFFLOAD_RAM_FRACTION, type FitReport } from './admission.js'
 import type { CatalogModel, UseCase } from './catalog.js'
 
 export type Intent = {
@@ -65,11 +65,12 @@ export function recommendModels(options: {
       kvBytesPerToken: model.kvBytesPerToken,
       contextTokens: requestedContext,
       budgetBytes: gpuBudgetBytes,
+      offloadCeilingBytes: Math.round(totalRamBytes * OFFLOAD_RAM_FRACTION),
     })
     if (fit.verdict === 'wont-fit') continue
 
     const defaultContextTokens =
-      fit.verdict === 'comfortable'
+      fit.verdict === 'comfortable' || fit.offload
         ? requestedContext
         : Math.max(4096, Math.min(requestedContext, fit.maxComfortableContext ?? 4096))
 
@@ -99,6 +100,10 @@ export function recommendModels(options: {
     if (fit.verdict === 'comfortable') {
       score += 15
       reasons.push(`Fits your machine comfortably — needs ~${(fit.totalBytes / 1e9).toFixed(0)} GB of the ~${(fit.budgetBytes / 1e9).toFixed(0)} GB available to models.`)
+    } else if (fit.offload) {
+      // Runs via partial CPU offload — real, but a much slower experience.
+      score -= 25
+      reasons.push(fit.summary)
     } else {
       score -= 10
       reasons.push(`Fits, but tightly — PowerStation will cap its context at ${defaultContextTokens.toLocaleString()} tokens to stay safe.`)

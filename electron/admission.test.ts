@@ -100,6 +100,63 @@ describe('checkFit', () => {
   })
 })
 
+describe('CPU-offload tier', () => {
+  it('classifies a model too big for the GPU but within the RAM ceiling as tight/offload', () => {
+    // gpt-oss-20b on a 16GB machine: ~12.1GB weights vs ~10.8GB usable GPU
+    // budget, but within 80% of 16GiB system RAM → runs with CPU offload.
+    const report = checkFit({
+      weightsBytes: 12.11e9,
+      geometry: null,
+      kvBytesPerToken: 49152,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+      offloadCeilingBytes: Math.round(16 * GB * 0.8),
+    })
+    expect(report.verdict).toBe('tight')
+    expect(report.offload).toBe(true)
+    expect(report.fits).toBe(true)
+    expect(report.summary).toContain('CPU')
+    expect(report.headroomBytes).toBeGreaterThan(0)
+  })
+
+  it('still refuses a model beyond both the GPU budget and the RAM ceiling', () => {
+    const report = checkFit({
+      weightsBytes: 20e9,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+      offloadCeilingBytes: Math.round(16 * GB * 0.8),
+    })
+    expect(report.verdict).toBe('wont-fit')
+    expect(report.offload).toBe(false)
+    expect(report.fits).toBe(false)
+  })
+
+  it('keeps the strict verdict when no offload ceiling is provided', () => {
+    const report = checkFit({
+      weightsBytes: 12.11e9,
+      geometry: null,
+      kvBytesPerToken: 49152,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+    })
+    expect(report.verdict).toBe('wont-fit')
+    expect(report.offload).toBe(false)
+  })
+
+  it('never reports offload for a model that fits the GPU', () => {
+    const report = checkFit({
+      weightsBytes: 4.9e9,
+      geometry: LLAMA_8B,
+      contextTokens: 8192,
+      budgetBytes: 11.2 * GB,
+      offloadCeilingBytes: Math.round(16 * GB * 0.8),
+    })
+    expect(report.offload).toBe(false)
+    expect(report.verdict).toBe('comfortable')
+  })
+})
+
 describe('admittedContextTokens', () => {
   it('leaves a comfortable request unchanged', () => {
     const admitted = admittedContextTokens({

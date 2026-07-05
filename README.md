@@ -15,9 +15,10 @@ on open-weight models, entirely on your machine.
 [Contributing](CONTRIBUTING.md) ·
 [Roadmap](ROADMAP.md)
 
-![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-111111?logo=apple&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon%20·%20Windows%20x64-111111?logo=apple&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-008476)
 ![Status](https://img.shields.io/badge/status-beta-b17018)
+[![CI](https://github.com/robbiepeck/PowerStation/actions/workflows/ci.yml/badge.svg)](https://github.com/robbiepeck/PowerStation/actions/workflows/ci.yml)
 
 </div>
 
@@ -56,12 +57,15 @@ those three gaps:
 
 ## Requirements
 
-- **macOS on Apple Silicon** (M-series).
-- **16 GB unified memory or more.** Below that, PowerStation tells you honestly that local AI
-  isn't realistic on the machine rather than degrade silently. 24–32 GB is the sweet spot for
-  agents and coding.
+- **macOS on Apple Silicon** (M-series) — the primary platform — or **Windows 10/11 x64** (beta).
+- **16 GB memory or more.** Below that, PowerStation tells you honestly that local AI isn't
+  realistic on the machine rather than degrade silently. On a Mac, 24–32 GB unified memory is the
+  sweet spot for agents and coding; on Windows, a discrete GPU (8 GB+ VRAM) makes the same
+  difference — models larger than your GPU still run via CPU offload, just slower, and the app
+  says so up front.
 
-Windows and Linux are out of scope for now — see the [Roadmap](ROADMAP.md).
+Windows support is new and CI-built but less battle-tested than macOS — issues welcome. Linux is
+on the [Roadmap](ROADMAP.md).
 
 ## Quick Start
 

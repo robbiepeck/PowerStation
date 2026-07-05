@@ -114,8 +114,9 @@ function FitBadge({ fit }: { fit: FitReport | null | undefined }) {
   if (fit === undefined) return null
   if (fit === null) return <Badge tone="neutral">fit unknown</Badge>
   if (fit.verdict === 'comfortable') return <Badge tone="real">Fits comfortably</Badge>
+  if (fit.offload) return <Badge tone="estimated">Runs on CPU · slower</Badge>
   if (fit.verdict === 'tight') return <Badge tone="estimated">Tight fit</Badge>
-  return <Badge tone="danger">Won't fit this Mac</Badge>
+  return <Badge tone="danger">Won't fit this machine</Badge>
 }
 
 function TierBadge({ tier }: { tier: ToolCallingTier }) {
@@ -293,7 +294,7 @@ export function MonitorView({
     {
       label: 'Memory pressure',
       value: pressureLabel,
-      detail: 'macOS kernel signal',
+      detail: bridge.platform === 'darwin' ? 'macOS kernel signal' : 'derived from available memory',
       real: snapshot.pressure.real,
     },
     {
@@ -1071,9 +1072,9 @@ export function SettingsView({ onChange, settings }: { onChange: (patch: Partial
           <h3>Memory safety</h3>
           <p className="policy-note subtle">
             Memory management is automatic. Before any model loads, PowerStation computes its real footprint
-            (weights + context cache + buffers) against your Mac's measured GPU budget and refuses or shrinks the
-            request if it wouldn't fit. While generating, it watches the macOS memory-pressure signal and pauses
-            automatically if the system gets into trouble — no knobs to mistune.
+            (weights + context cache + buffers) against your machine's measured GPU budget and refuses or shrinks the
+            request if it wouldn't fit. While generating, it watches the operating system's memory-pressure signal and
+            pauses automatically if the system gets into trouble — no knobs to mistune.
           </p>
           <div className="policy-note">
             <ShieldCheck size={17} />

@@ -12,6 +12,8 @@ model landscape and with what users hit first.
 - Agent harness: MCP tools over stdio, allow/ask/deny permissions, context metering, loop guards.
 - Capability gating by model tier; memory-pressure auto-pause; ambient status pill + full monitor.
 - MIT licence; local-first data posture.
+- **Windows x64 support (beta)** — platform-aware hardware detection and memory pressure, a
+  CPU-offload fit tier for discrete-GPU machines, and a CI-built NSIS installer + portable exe.
 
 ## Next
 
@@ -30,8 +32,9 @@ model landscape and with what users hit first.
   for many models) shipped as a subprocess engine, following the multi-runtime pattern.
 - **Optional detected Ollama backend** — use an existing Ollama install if present, without making it
   a dependency.
-- **Windows and Linux support** — hardware detection, runtime variants (CUDA/Vulkan), and signing per
-  platform. macOS/Apple Silicon is deliberately first.
+- **Windows polish** — deeper GPU detection (multi-GPU, AMD), Windows code signing (SmartScreen),
+  and catalogue guidance written for VRAM tiers rather than unified memory.
+- **Linux support** — hardware detection and runtime variants per distro.
 - **Conversation persistence** — opt-in, local, with the same transparency as everything else.
 
 ## Explicitly out of scope (for now)
