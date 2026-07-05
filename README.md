@@ -71,7 +71,14 @@ those three gaps:
 Windows support is new and CI-built but less battle-tested than macOS — issues welcome. Linux is
 on the [Roadmap](ROADMAP.md).
 
-## Quick Start
+## Download
+
+Grab the latest installer from **[Releases](https://github.com/robbiepeck/PowerStation/releases/latest)** —
+macOS (Apple Silicon `.dmg`) and Windows x64 (installer or portable). Builds are not yet
+code-signed, so Gatekeeper/SmartScreen will warn on first launch (right-click → Open on macOS;
+"More info → Run anyway" on Windows).
+
+## Quick Start (from source)
 
 ```bash
 git clone https://github.com/robbiepeck/PowerStation.git
