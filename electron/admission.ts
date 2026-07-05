@@ -54,6 +54,8 @@ const MIN_BUFFER_BYTES = 512 * 1024 * 1024
 const BUFFER_WEIGHT_FRACTION = 0.08
 // Leave this fraction of the budget untouched so the OS never starts swapping.
 const OS_HEADROOM_FRACTION = 0.1
+/** Fraction of the raw accelerator budget that models may actually use. */
+export const USABLE_BUDGET_FRACTION = 1 - OS_HEADROOM_FRACTION
 // Below this remaining-headroom fraction a load is "tight": it works, but big
 // prompts or other apps can push it over.
 const TIGHT_HEADROOM_FRACTION = 0.15
@@ -90,7 +92,7 @@ function formatGb(bytes: number): string {
 }
 
 export function checkFit(request: FitRequest): FitReport {
-  const usableBudget = Math.max(0, Math.round(request.budgetBytes * (1 - OS_HEADROOM_FRACTION)) - (request.usedBytes ?? 0))
+  const usableBudget = Math.max(0, Math.round(request.budgetBytes * USABLE_BUDGET_FRACTION) - (request.usedBytes ?? 0))
   const perToken = resolvePerToken(request)
   const kvCacheBytes = perToken ? perToken * Math.max(0, request.contextTokens) : 0
   const buffersBytes = estimateBufferBytes(request.weightsBytes)

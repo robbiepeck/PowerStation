@@ -8,7 +8,7 @@ import { getDeviceHealthProfile } from './device.js'
 import { getCatalog, refreshCatalog, type CatalogModel } from './catalog.js'
 import { recommendModels, type Intent } from './recommend.js'
 import { getHardwareProfile } from './hardware.js'
-import { admittedContextTokens, checkFit } from './admission.js'
+import { admittedContextTokens, checkFit, USABLE_BUDGET_FRACTION } from './admission.js'
 import { getState, mutate, patchSettings, managedModelsDir, type Settings, type ToolPermission } from './config.js'
 
 // Model downloads come from a free-text field, so constrain them to the schemes
@@ -30,10 +30,22 @@ function isTrustedExternalUrl(url: string): boolean {
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:') return false
     if (parsed.hostname === 'huggingface.co') return true
-    return parsed.hostname === 'github.com' && parsed.pathname.startsWith('/robbiepeck/PowerStation')
+    // Path-boundary check: a bare prefix would also match /robbiepeck/PowerStation-evil.
+    return (
+      parsed.hostname === 'github.com' &&
+      (parsed.pathname === '/robbiepeck/PowerStation' || parsed.pathname.startsWith('/robbiepeck/PowerStation/'))
+    )
   } catch {
     return false
   }
+}
+
+// One home for the capability heuristic: catalog tier wins; otherwise the
+// GGUF's own chat template is the best signal for tool training. Geometry
+// alone is NOT evidence — every valid transformer GGUF has geometry.
+function resolveToolTier(info: { templateSupportsTools: boolean | null } | null, entry: CatalogModel | null) {
+  if (entry) return entry.toolCalling
+  return info?.templateSupportsTools ? ('single' as const) : ('none' as const)
 }
 
 async function findCatalogEntryForModel(modelPath: string): Promise<CatalogModel | null> {
@@ -53,12 +65,19 @@ async function getGpuBudgetBytes(): Promise<number> {
 async function reconcileMcpServers(): Promise<void> {
   const state = await getState()
   const wanted = new Map(state.settings.utilities.mcpServers.filter((server) => server.enabled).map((s) => [s.id, s]))
-  const connected = new Set(mcp.getMcpStatuses().filter((status) => status.state === 'connected' || status.state === 'connecting').map((status) => status.id))
-  for (const id of connected) {
-    if (!wanted.has(id)) await mcp.disconnectServer(id)
+  const statuses = new Map(mcp.getMcpStatuses().map((status) => [status.id, status.state]))
+  for (const [id, serverState] of statuses) {
+    if (!wanted.has(id) && (serverState === 'connected' || serverState === 'connecting')) {
+      await mcp.disconnectServer(id)
+    }
   }
   for (const [id, config] of wanted) {
-    if (!connected.has(id)) void mcp.connectServer(config)
+    const serverState = statuses.get(id)
+    // Never auto-retry a failed server — that turns every settings change into
+    // a child-process spawn. Errors retry via the explicit reconnect button or
+    // by toggling the server off and on.
+    if (serverState === 'connected' || serverState === 'connecting' || serverState === 'error') continue
+    void mcp.connectServer(config)
   }
 }
 
@@ -72,12 +91,24 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   llm.setToolExecutor(agent.executeToolCall)
   llm.onRuntimeEvent((event) => send('runtime:event', event))
   agent.setPermissionRequester((request) => send('agent:permissionRequest', request))
+  agent.setPermissionExpiredNotifier((promptId) => send('agent:permissionExpired', { promptId }))
   agent.setToolResultReporter((event) => send('chat:toolResult', event))
   mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
   void reconcileMcpServers()
 
   // --- Models ---------------------------------------------------------------
-  ipcMain.handle('models:list', () => models.listModels())
+  // Each model is enriched with its resolved tool-calling tier so the renderer
+  // never re-implements the capability heuristic.
+  ipcMain.handle('models:list', async () => {
+    const [list, catalog] = await Promise.all([models.listModels(), getCatalog()])
+    return list.map((model) => ({
+      ...model,
+      toolCalling: resolveToolTier(
+        model,
+        catalog.models.find((entry) => entry.fileName.toLowerCase() === model.fileName.toLowerCase()) ?? null,
+      ),
+    }))
+  })
   ipcMain.handle('models:getSelected', async () => (await getState()).selectedModelPath)
   ipcMain.handle('models:select', (_event, filePath: string | null) => models.selectModel(filePath))
   ipcMain.handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
@@ -147,7 +178,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // --- Hardware, catalog, recommendations ------------------------------------
   ipcMain.handle('hardware:profile', async () => {
     const device = await llm.getDeviceInfo().catch(() => null)
-    return getHardwareProfile(device?.vram?.total ?? null)
+    const profile = await getHardwareProfile(device?.vram?.total ?? null)
+    // One canonical "usable for AI" number, shared with the fit math, so the
+    // onboarding reveal and every fit summary quote the same figure.
+    return { ...profile, usableBudgetBytes: Math.round(profile.gpuBudgetBytes * USABLE_BUDGET_FRACTION) }
   })
 
   ipcMain.handle('catalog:get', () => getCatalog())
@@ -187,7 +221,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       if (!info) return null
       const entry = await findCatalogEntryForModel(payload.modelPath)
       return checkFit({
-        weightsBytes: info.sizeBytes,
+        // The catalog total wins for multi-part models where the local stat
+        // may undercount; the larger of the two is the safe estimate.
+        weightsBytes: Math.max(info.sizeBytes, entry?.sizeBytes ?? 0),
         geometry: info.geometry,
         kvBytesPerToken: entry?.kvBytesPerToken ?? null,
         contextTokens,
@@ -246,9 +282,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // --- Settings & device ----------------------------------------------------
   ipcMain.handle('settings:get', async () => (await getState()).settings)
   ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
+    const before = JSON.stringify((await getState()).settings.utilities.mcpServers)
     const settings = await patchSettings(patch)
-    // MCP server list may have changed — mirror connections to the new config.
-    void reconcileMcpServers()
+    // Only touch MCP connections when the server list itself changed —
+    // settings:update fires on every keystroke of unrelated fields.
+    if (JSON.stringify(settings.utilities.mcpServers) !== before) void reconcileMcpServers()
     return settings
   })
   ipcMain.handle('device:info', async () => {
@@ -276,7 +314,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           getGpuBudgetBytes(),
         ])
         const fitRequest = {
-          weightsBytes: info?.sizeBytes ?? 0,
+          weightsBytes: Math.max(info?.sizeBytes ?? 0, entry?.sizeBytes ?? 0),
           geometry: info?.geometry ?? entry?.geometry ?? null,
           kvBytesPerToken: entry?.kvBytesPerToken ?? null,
           contextTokens: state.settings.contextTokens,
@@ -295,7 +333,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         // Agent tools: only register them for models that can actually use
         // them — an untrained model flailing at tool calls reads as a broken
         // app, not a limited model.
-        const tier = entry?.toolCalling ?? (info?.geometry ? 'single' : 'none')
+        const tier = resolveToolTier(info, entry)
         const toolDefinitions = tier === 'none' ? [] : agent.getAgentToolDefinitions()
         const maxToolCalls = tier === 'multi' ? 15 : 3
 
@@ -305,7 +343,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           verdict: fit.verdict,
           summary: fit.summary,
           toolCount: toolDefinitions.length,
-          schemaTokens: toolDefinitions.length ? agent.estimateToolSchemaTokens() : 0,
+          schemaTokens: agent.estimateToolSchemaTokens(toolDefinitions),
         })
 
         const result = await llm.chat({

@@ -1,170 +1,93 @@
 # PowerStation
 
-PowerStation is a desktop app for downloading, running, and monitoring open-source local language models on your own computer.
+**Local AI for your Mac — the agent harness built for small models.**
 
-The aim of the project is to make local AI easier to use without hiding what it costs your machine. PowerStation gives users a friendly interface for choosing a model, starting a local chat session, and watching how much CPU, RAM, GPU/VRAM, power, heat, and generation speed the model is using.
+PowerStation is a desktop app that makes locally-hosted open-weight models genuinely usable: it detects your hardware, recommends the models your machine can honestly run, downloads and sets them up in one click, and gives you a local desktop experience — chat, a system prompt, MCP tools behind permission prompts — with live, truthful resource monitoring the whole time.
 
-PowerStation is intended for people who want the privacy and control of local models, but still want guardrails around memory pressure, compute load, and laptop performance.
+Everything runs on your machine. Prompts, chats, and models never leave it.
 
-## Current Status
+## Why PowerStation
 
-PowerStation is early desktop software. The macOS Apple Silicon build is available now. Windows builds are supported from source, and public Windows release binaries are planned.
+Existing local-LLM apps tell you whether a model *fits*. Almost none tell you what a model that fits can actually *do*, manage the fit between an agentic workload and your hardware at runtime, or make small models reliable at tool use. PowerStation is built around exactly those three gaps:
 
-PowerStation does not have a web version. Browser apps cannot reliably inspect host-level model memory usage, GPU/VRAM pressure, power draw, or local runtime state, so PowerStation is desktop-only.
+1. **Scan, don't ask.** On first run PowerStation reads your chip, unified memory, usable GPU budget, and free disk — then asks only the two things it can't detect: what you want to use AI for, and whether you prefer faster or smarter answers. It recommends up to three models with honest capability cards ("great at / will struggle with"), expected tokens-per-second for your machine class, and a one-click download that ends in a working chat.
 
-A "computer repair" feature that helps diagnose (and pontentially fix) problems with memory, ram, and other performance issues with computer devices is planned, with extremely careful use of agentic tools when editing essential computer files.
+2. **Admission control, not an OOM dashboard.** Before any model loads, PowerStation computes weights + KV-cache + buffers against your real memory budget and refuses or shrinks the context *before* your Mac starts swapping — including correct math for 2026 hybrid-attention models whose real KV cost is far below the naive estimate. At runtime it watches macOS memory-pressure signals and auto-pauses generation at critical pressure. The full monitor panel is one click away; a single status pill covers the rest of the time.
 
-PowerStation aims to eventually provide a powerful model harness (skills, connectors) and fine tuning abilities. 
+3. **An agent harness that respects small models.** MCP servers connect over stdio with every tool call gated by an allow / ask / deny permission model. Tool schemas are token-metered so you can see what connectors cost a small context window. Models that aren't tool-trained get chat only — with the reason stated — instead of present-and-broken agent features. Loop guards halt repeated identical calls and runaway tool budgets.
+
+4. **Crash-isolated runtime.** Inference runs in a separate utility process. If llama.cpp hits a native crash, you get a recovery card with next steps — not a dead app.
+
+## Requirements
+
+- macOS on Apple Silicon (M-series).
+- **16 GB unified memory or more.** Below that, PowerStation will tell you honestly that local AI isn't realistic on the machine rather than degrade silently. 24–32 GB is the sweet spot for agents and coding.
+
+Windows and Linux are out of scope for now.
 
 ## Download
 
-Latest release: [v0.0.9](https://github.com/robbiepeck/PowerStation/releases/tag/v0.0.9)
+Releases are published on [GitHub Releases](https://github.com/robbiepeck/PowerStation/releases). The macOS build is currently ad-hoc signed (not yet notarized), so Gatekeeper may warn on first open.
 
-| Platform | Status | Download |
-| --- | --- | --- |
-| macOS Apple Silicon | Available | [PowerStation-0.0.9-macOS-arm64.dmg](https://github.com/robbiepeck/PowerStation/releases/download/v0.0.9/PowerStation-0.0.9-macOS-arm64.dmg) |
-| macOS Intel | Planned | Public binary pending |
-| Windows x64 | Build supported, public binary pending | Build from source with `npm run package:win` |
+## The model catalog
 
-The current macOS release is ad-hoc signed, but not yet Developer ID signed or notarized. macOS may show a Gatekeeper warning the first time you open it.
+The catalog is a versioned JSON manifest that lives in this repository ([catalog/models.json](catalog/models.json)) and is fetched at launch — so model recommendations stay current without waiting for an app release. The in-app **Update catalog** button re-fetches it; a bundled copy is the offline fallback. Every entry is verified against Hugging Face and carries the data the app actually uses: exact file size, KV-cache geometry (with effective per-token cost for hybrid-attention models), tool-calling tier, license, minimum RAM tier, and honest good-at / struggles-with notes.
 
-## What PowerStation Does
+Current spread: 16 GB tier (Qwen3.5 4B, gpt-oss 20B, Gemma 4 E4B) → 24–32 GB tier (GLM-4.7 Flash, Qwen3 Coder 30B, Devstral Small 2, Gemma 4 26B, Nemotron 3 Nano, Qwen3.6 35B) → 64 GB tier (gpt-oss 120B, Qwen3 Coder Next, Qwen3 Next 80B). You can also import any `.gguf` file or folder you already have.
 
-- Downloads selected GGUF models from Hugging Face inside the app.
-- Imports existing `.gguf` model files from your computer.
-- Runs local chats through `node-llama-cpp`.
-- Shows live device telemetry while models run.
-- Tracks CPU, RAM, GPU/VRAM where available, storage used/free, estimated power draw, thermal headroom, and tokens per second.
-- Opens a storage breakdown view for large files, stale downloads, caches, Trash, and local model storage.
-- Shows estimated device age, reported battery capacity, and rough performance capacity where available.
-- Provides runtime controls for memory budget, compute cap, context window, idle unload, and low-power bias.
-- Uses GitHub Releases for app distribution.
+You are responsible for reviewing and complying with each model's license.
 
-## How To Use
+## Using MCP tools
 
-1. Download the app for your platform.
-2. Install and open PowerStation.
-3. On first launch, choose a starter model from the model catalog.
-4. Click `Download`. PowerStation downloads the model into its managed local model folder.
-5. When the download finishes, PowerStation imports and selects the model automatically.
-6. Open the Chat or Workbench view and start a local conversation.
-7. Open Monitor to watch resource usage while the model is running.
-8. Open Models to download another starter model, import a `.gguf` file, or add a model folder.
-9. Open Settings to adjust runtime limits and generation behavior.
+1. Open **Utilities** and add an MCP server, e.g. `npx -y @modelcontextprotocol/server-filesystem ~/Documents`.
+2. PowerStation connects over stdio and lists the server's tools with a context-cost meter.
+3. When the model wants to call a tool, you get a permission prompt — allow once, always allow, or deny. "Always allow" is remembered per tool and editable in Utilities.
+4. Agent features unlock based on the selected model's tool-calling tier from the catalog: multi-step models get the full harness; single-call models are capped at 3 tool calls per turn; untrained models stay chat-only.
 
-Start with a smaller model if you are testing on a laptop or a machine with limited RAM. Larger models usually produce better answers, but they also use more memory and run more slowly on CPU-only machines.
-
-## Starter Models
-
-PowerStation includes a starter catalog of downloadable local models. These are chosen to cover small, balanced, coding, reasoning, and heavier general-purpose use cases.
-
-| Model | Family | Best for | Approx. download | Suggested memory | License shown in app |
-| --- | --- | --- | ---: | ---: | --- |
-| Qwen3 0.6B | Qwen | Fast first run and weak laptops | 639 MB | 4 GB RAM | Apache-2.0 |
-| Gemma 3 1B IT | Gemma | Lightweight Google-tuned chat and summaries | 1.00 GB | 4 GB RAM | Gemma |
-| Llama 3.2 3B Instruct | Llama | General chat with a familiar assistant style | 2.02 GB | 8 GB RAM | Llama 3.2 |
-| Qwen3 4B | Qwen | Everyday chat and summarising | 2.50 GB | 8 GB RAM | Apache-2.0 |
-| Gemma 3 4B IT | Gemma | Instruction following and everyday writing | 3.16 GB | 8 GB RAM | Gemma |
-| Qwen3 8B | Qwen | Better reasoning and higher quality answers | 5.03 GB | 12 GB RAM | Apache-2.0 |
-| DeepSeek R1 Distill 7B | DeepSeek | Reasoning-heavy prompts and problem solving | 4.68 GB | 12 GB RAM | MIT |
-| Qwen2.5 Coder 3B | Qwen Coder | Code snippets, review, and refactors | 2.10 GB | 8 GB RAM | Qwen research |
-| Mistral Nemo 12B | Mistral | Higher quality chat on machines with more memory | 7.48 GB | 16 GB RAM | Apache-2.0 |
-
-Models are downloaded as GGUF files and run on-device. You are responsible for reviewing and complying with each model's license.
-
-## Importing Your Own Models
-
-PowerStation can also use local `.gguf` files that you already have.
-
-1. Open Models.
-2. Choose an existing `.gguf` file or add a folder containing models.
-3. Select the imported model.
-4. Start a local chat session.
-
-This is useful if you already manage models manually or want to use a model that is not in the starter catalog yet.
-
-## Runtime Guardrails
-
-PowerStation exposes controls for memory budget, compute cap, context window, idle unload, and low-power bias.
-
-These controls are designed to help users understand and manage local model load. Some limits are advisory because low-level allocation is ultimately handled by llama.cpp and the operating system.
-
-## Updates
-
-PowerStation uses this repository's GitHub Releases for distribution.
-
-macOS updates are currently manual DMG downloads. Automatic in-app replacement requires Developer ID signing and notarization, which is not configured yet.
-
-When signed update releases are enabled, the app can show an Update button in the sidebar. Clicking it will download the latest desktop package and restart into the update when ready.
+Tool output is treated as untrusted data, capped in size, and never executed.
 
 ## Development
 
-PowerStation is built with Electron, React, TypeScript, `node-llama-cpp`, and `systeminformation`.
-
-Install dependencies:
+Built with Electron, React, TypeScript, `node-llama-cpp` (bundled runtime — no Ollama required), `@modelcontextprotocol/sdk`, and `systeminformation`.
 
 ```bash
-npm install
+npm install          # install dependencies
+npm run desktop:dev  # run the app in development
+npm test             # unit tests (admission-control math)
+npm run build        # typecheck + build renderer and electron
+npm run lint         # eslint
+npm run package:mac  # package the macOS app (artifacts in release/)
 ```
 
-Run the desktop app in development:
+### Project structure
 
-```bash
-npm run desktop:dev
-```
+- `electron/main.ts` — app lifecycle, telemetry loop, memory-pressure auto-pause.
+- `electron/llmWorker.ts` — inference worker (node-llama-cpp) in an isolated utility process; loop guards live here.
+- `electron/llm.ts` — main-process host: worker supervision, streaming, crash recovery, downloads.
+- `electron/admission.ts` — pre-flight fit math (weights + KV cache + buffers vs budget), unit-tested.
+- `electron/hardware.ts` — hardware detection and macOS memory-pressure reads.
+- `electron/catalog.ts` / `catalog/models.json` — remotely-updatable model catalog with validation.
+- `electron/recommend.ts` — (hardware × intent) → ranked recommendations with reasons.
+- `electron/mcp.ts` / `electron/agent.ts` — MCP client manager and the permission-gated tool executor.
+- `electron/preload.cjs` — the controlled bridge; renderer never touches Node APIs directly.
+- `src/onboarding.tsx` — scan-and-reveal first-run flow.
+- `src/` — React interface (chat, monitor, models, utilities, settings).
 
-Run checks:
+## Where your data lives
 
-```bash
-npm run build
-npm run lint
-```
-
-## Packaging
-
-Build the macOS Apple Silicon package:
-
-```bash
-npm run build && npx electron-builder --mac --arm64
-```
-
-Build an unpacked macOS Apple Silicon app directory:
-
-```bash
-npm run build && npx electron-builder --mac --arm64 --dir
-```
-
-Build Windows x64 packages:
-
-```bash
-npm run package:win
-```
-
-Build an unpacked Windows directory:
-
-```bash
-npm run package:win:dir
-```
-
-Artifacts are written to `release/`.
-
-Production macOS distribution should use Apple Developer ID signing and notarization. Ad-hoc signed local builds may trigger Gatekeeper warnings.
-
-## Project Structure
-
-- `electron/preload.cjs` exposes the controlled desktop bridge to the renderer.
-- `electron/llm.ts` owns GGUF model loading, local chat, and model downloading.
-- `electron/models.ts` indexes imported and managed model files.
-- `electron/telemetry.ts` samples host telemetry.
-- `electron/updates.ts` handles GitHub Release update checks.
-- `src/modelCatalog.ts` defines the starter model catalog shown on first run and in the Models view.
-- `src/` contains the React interface.
+- Models: PowerStation's managed models folder inside the app's user-data directory (revealable per model in the Models view).
+- Settings, permissions, and catalog cache: JSON files in the same user-data directory.
+- Chats: in memory only — nothing is written unless you copy it out.
+- Network traffic: model downloads and catalog updates from `huggingface.co` / this GitHub repo, and update checks against GitHub Releases. Nothing else.
 
 ## Roadmap
 
-- Public Windows installer releases.
 - macOS Developer ID signing and notarization.
-- Safer automatic desktop updates.
-- More starter models and clearer model recommendations.
-- Better per-model memory estimation before download and runtime.
-- More detailed GPU support across hardware vendors.
+- Skills and connector presets on top of the MCP foundation.
+- On-device micro-benchmark after first model load ("your machine: measured N tok/s").
+- Optional MLX engine pack for Apple Silicon speed.
+- Windows and Linux support.
+
+## License
+
+[MIT](LICENSE)

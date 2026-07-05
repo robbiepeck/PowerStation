@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('powerStation', {
   agent: {
     respondPermission: (payload) => ipcRenderer.invoke('agent:permissionResponse', payload),
     onPermissionRequest: (callback) => subscribe('agent:permissionRequest', callback),
+    onPermissionExpired: (callback) => subscribe('agent:permissionExpired', callback),
   },
   mcp: {
     statuses: () => ipcRenderer.invoke('mcp:statuses'),
@@ -66,7 +67,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     get: () => ipcRenderer.invoke('permissions:get'),
     set: (payload) => ipcRenderer.invoke('permissions:set', payload),
   },
-  runtime: {
+  runtimeEvents: {
     onEvent: (callback) => subscribe('runtime:event', callback),
   },
   telemetry: {

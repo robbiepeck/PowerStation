@@ -73,7 +73,20 @@ function toolKey(serverName: string, toolName: string): string {
   return `${serverName}:${toolName}`
 }
 
-export async function connectServer(config: McpServerConfig): Promise<McpServerStatus> {
+// One connect attempt per server at a time — overlapping calls (e.g. from
+// settings reconciliation) would each spawn a child process and orphan the
+// losers without ever closing them.
+const inFlightConnects = new Map<string, Promise<McpServerStatus>>()
+
+export function connectServer(config: McpServerConfig): Promise<McpServerStatus> {
+  const existing = inFlightConnects.get(config.id)
+  if (existing) return existing
+  const attempt = doConnectServer(config).finally(() => inFlightConnects.delete(config.id))
+  inFlightConnects.set(config.id, attempt)
+  return attempt
+}
+
+async function doConnectServer(config: McpServerConfig): Promise<McpServerStatus> {
   await disconnectServer(config.id)
   setStatus(config, 'connecting')
 
@@ -144,11 +157,9 @@ export function findTool(key: string): McpToolInfo | null {
   return getConnectedTools().find((tool) => tool.key === key) ?? null
 }
 
-export async function callTool(key: string, args: unknown): Promise<{ ok: boolean; text: string }> {
-  const tool = findTool(key)
-  if (!tool) return { ok: false, text: `Tool ${key} is not connected.` }
+export async function callTool(tool: McpToolInfo, args: unknown): Promise<{ ok: boolean; text: string }> {
   const connection = connections.get(tool.serverId)
-  if (!connection) return { ok: false, text: `Server for ${key} is not connected.` }
+  if (!connection) return { ok: false, text: `Server for ${tool.key} is not connected.` }
 
   try {
     const result = await connection.client.callTool(

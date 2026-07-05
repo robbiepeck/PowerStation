@@ -29,12 +29,18 @@ export type ToolResultEvent = {
 const PERMISSION_TIMEOUT_MS = 2 * 60 * 1000
 
 let permissionRequester: ((request: PermissionRequest) => void) | null = null
+let permissionExpiredNotifier: ((promptId: string) => void) | null = null
 let toolResultReporter: ((event: ToolResultEvent) => void) | null = null
 const pendingPermissions = new Map<string, (decision: PermissionDecision) => void>()
 let nextPromptId = 1
 
 export function setPermissionRequester(fn: typeof permissionRequester): void {
   permissionRequester = fn
+}
+
+/** Notifies the renderer that a prompt expired so it can dismiss the modal. */
+export function setPermissionExpiredNotifier(fn: typeof permissionExpiredNotifier): void {
+  permissionExpiredNotifier = fn
 }
 
 export function setToolResultReporter(fn: typeof toolResultReporter): void {
@@ -56,6 +62,9 @@ async function askUser(requestId: string, tool: mcp.McpToolInfo, args: unknown):
   return new Promise<PermissionDecision>((resolve) => {
     const timer = setTimeout(() => {
       pendingPermissions.delete(promptId)
+      // Tell the renderer, or the modal outlives the decision and a late
+      // "Allow" click silently does nothing.
+      permissionExpiredNotifier?.(promptId)
       resolve('deny')
     }, PERMISSION_TIMEOUT_MS)
     pendingPermissions.set(promptId, (decision) => {
@@ -97,8 +106,7 @@ export function getAgentToolDefinitions(): ToolDefinition[] {
  * Rough token cost of registering the current tool schemas with the model.
  * Shown in the UI so users understand what MCP servers cost on small contexts.
  */
-export function estimateToolSchemaTokens(): number {
-  const definitions = getAgentToolDefinitions()
+export function estimateToolSchemaTokens(definitions: ToolDefinition[] = getAgentToolDefinitions()): number {
   if (!definitions.length) return 0
   const chars = definitions.reduce(
     (sum, definition) => sum + definition.key.length + definition.description.length + JSON.stringify(definition.parameters ?? {}).length,
@@ -130,7 +138,7 @@ export async function executeToolCall(toolKey: string, args: unknown, requestId:
     return 'The user declined this tool call. Do not retry it; continue without it or ask the user what to do.'
   }
 
-  const result = await mcp.callTool(toolKey, args)
+  const result = await mcp.callTool(tool, args)
   toolResultReporter?.({
     requestId,
     toolKey,

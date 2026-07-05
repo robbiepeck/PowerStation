@@ -1,7 +1,7 @@
 import os from 'node:os'
 import { app } from 'electron'
 import si from 'systeminformation'
-import { getDeviceInfo, getLastTokensPerSec, getLoadedPath } from './llm.js'
+import { getDeviceInfo, getLastTokensPerSec, getLoadedPath, isWorkerRunning } from './llm.js'
 import { getMemoryPressureLevel, type MemoryPressureLevel } from './hardware.js'
 
 export type TelemetrySnapshot = {
@@ -51,18 +51,26 @@ async function getPrimaryStorage() {
   }
 }
 
+// Telemetry must never be the thing that spawns (or respawns) the inference
+// worker — it only reads from it when it happens to be alive.
+function deviceInfoIfRunning() {
+  return isWorkerRunning() ? getDeviceInfo().catch(() => null) : Promise.resolve(null)
+}
+
 async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
   if (staticInfo) return staticInfo
-  const device = await getDeviceInfo().catch(() => null)
+  const device = await deviceInfoIfRunning()
   // Rough package power ceiling used only to scale the (estimated) power readout.
   const cores = os.cpus().length
   const tdpWatts = clamp(18 + cores * 3.5, 25, 130)
-  staticInfo = {
+  const resolved = {
     gpuName: device?.gpuNames?.[0] ?? null,
     gpuType: typeof device?.gpuType === 'string' ? device.gpuType : device?.gpuType === false ? 'cpu' : null,
     tdpWatts,
   }
-  return staticInfo
+  // Only cache once the worker has answered, so the GPU name isn't stuck null.
+  if (device) staticInfo = resolved
+  return resolved
 }
 
 async function sample(): Promise<TelemetrySnapshot> {
@@ -71,7 +79,7 @@ async function sample(): Promise<TelemetrySnapshot> {
     si.currentLoad().catch(() => null),
     si.mem().catch(() => null),
     si.cpuTemperature().catch(() => null),
-    getDeviceInfo().catch(() => null),
+    deviceInfoIfRunning(),
     getPrimaryStorage().catch(() => null),
     getMemoryPressureLevel().catch(() => null),
   ])

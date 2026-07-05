@@ -97,6 +97,11 @@ function handleWorkerMessage(message: WorkerMessage): void {
   else entry.reject(new Error(message.error))
 }
 
+// Respawn guard: a worker that crashes during native init must not be
+// re-forked in a tight loop (the telemetry tick used to do exactly that).
+let crashCooldownUntil = 0
+let recentCrashes = 0
+
 function handleWorkerExit(code: number): void {
   worker = null
   loadedPath = null
@@ -110,15 +115,31 @@ function handleWorkerExit(code: number): void {
   pending.clear()
   chatCallbacks.clear()
   // Only report crashes; code 0 is a deliberate shutdown.
-  if (code !== 0) for (const listener of runtimeListeners) listener({ type: 'crashed', message })
+  if (code !== 0) {
+    recentCrashes += 1
+    // Escalating cooldown: 5s after the first crash, up to 60s when crashing repeatedly.
+    crashCooldownUntil = Date.now() + Math.min(60000, 5000 * recentCrashes)
+    for (const listener of runtimeListeners) listener({ type: 'crashed', message })
+  }
+}
+
+export function isWorkerRunning(): boolean {
+  return worker !== null
 }
 
 function ensureWorker(): UtilityProcess {
   if (worker) return worker
+  if (Date.now() < crashCooldownUntil) {
+    throw new Error('The model runtime crashed recently and is cooling down. Try again in a moment.')
+  }
   const spawned = utilityProcess.fork(path.join(__dirname, 'llmWorker.js'), [], {
     serviceName: 'PowerStation LLM runtime',
   })
-  spawned.on('message', (message: unknown) => handleWorkerMessage(message as WorkerMessage))
+  spawned.on('message', (message: unknown) => {
+    // A responsive worker clears the crash streak.
+    recentCrashes = 0
+    handleWorkerMessage(message as WorkerMessage)
+  })
   spawned.on('exit', (code) => {
     if (worker === spawned || worker === null) handleWorkerExit(code)
   })
@@ -177,6 +198,8 @@ export function shutdown(): void {
   if (!worker) return
   const current = worker
   worker = null
+  const error = new Error('The model runtime is shutting down.')
+  for (const entry of pending.values()) entry.reject(error)
   pending.clear()
   chatCallbacks.clear()
   current.kill()

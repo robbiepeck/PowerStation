@@ -16,6 +16,9 @@ type LoadedState = {
   systemPrompt: string
   model: LoadedModel
   context: LoadedContext
+  // The context has a single sequence; it must be reused when the session is
+  // recreated (a disposed session does not return it to the pool).
+  sequence: ReturnType<LoadedContext['getSequence']>
   session: LlamaChatSession
 }
 
@@ -52,6 +55,12 @@ function clampContextSize(requested: number, trained: number): number {
 
 function abortAll(): void {
   for (const controller of abortControllers.values()) controller.abort()
+  // Settle any tool call awaiting a host reply, otherwise a generation blocked
+  // inside a tool handler keeps reset/unload waiting until the host times out.
+  for (const [callId, pending] of pendingToolCalls) {
+    pendingToolCalls.delete(callId)
+    pending.reject(new Error('Aborted'))
+  }
 }
 
 // Callers abort first, but node-llama-cpp only stops on the next loop turn, so
@@ -88,22 +97,20 @@ async function getDeviceInfo() {
 
 async function ensureModelLoaded(request: ChatRequest): Promise<LoadedState> {
   const systemPrompt = request.systemPrompt ?? ''
-  if (loaded && loaded.path === request.modelPath && loaded.systemPrompt === systemPrompt) {
-    const target = clampContextSize(request.contextTokens, loaded.model.trainContextSize)
-    if (loaded.contextTokens >= target) return loaded
-  }
-
-  // Reuse the loaded model when only the system prompt changed — recreate the
-  // session (fresh history) without paying the model load again.
-  if (loaded && loaded.path === request.modelPath && loaded.systemPrompt !== systemPrompt) {
+  if (loaded && loaded.path === request.modelPath) {
     const target = clampContextSize(request.contextTokens, loaded.model.trainContextSize)
     if (loaded.contextTokens >= target) {
-      loaded.session.dispose()
-      loaded.session = new LlamaChatSession({
-        contextSequence: loaded.context.getSequence(),
-        systemPrompt: systemPrompt || undefined,
-      })
-      loaded.systemPrompt = systemPrompt
+      // Reuse the loaded model when only the system prompt changed — recreate
+      // the session (fresh history) on the SAME sequence; the context only has
+      // one and a disposed session does not return it to the pool.
+      if (loaded.systemPrompt !== systemPrompt) {
+        loaded.session.dispose()
+        loaded.session = new LlamaChatSession({
+          contextSequence: loaded.sequence,
+          systemPrompt: systemPrompt || undefined,
+        })
+        loaded.systemPrompt = systemPrompt
+      }
       return loaded
     }
   }
@@ -119,11 +126,12 @@ async function ensureModelLoaded(request: ChatRequest): Promise<LoadedState> {
     post({ event: 'chat:status', requestId: request.requestId, status: { phase: 'creating-context', modelPath: request.modelPath } })
     const contextSize = clampContextSize(request.contextTokens, model.trainContextSize)
     const context = await model.createContext({ contextSize })
+    const sequence = context.getSequence()
     const session = new LlamaChatSession({
-      contextSequence: context.getSequence(),
+      contextSequence: sequence,
       systemPrompt: systemPrompt || undefined,
     })
-    loaded = { path: request.modelPath, contextTokens: contextSize, systemPrompt, model, context, session }
+    loaded = { path: request.modelPath, contextTokens: contextSize, systemPrompt, model, context, sequence, session }
     post({ event: 'chat:status', requestId: request.requestId, status: { phase: 'ready', modelPath: request.modelPath } })
     return loaded
   } finally {

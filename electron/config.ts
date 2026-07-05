@@ -99,13 +99,20 @@ function sanitizeUtilityItems(value: unknown, prefix: string): UtilityItem[] {
 
 function sanitizeMcpServers(value: unknown): McpServerConfig[] {
   if (!Array.isArray(value)) return []
+  // Server names must be unique: tool keys (permissions, the model-facing
+  // function registry) are derived from them, and duplicates would collide.
+  const seenNames = new Set<string>()
   return value
     .slice(0, 40)
     .map((item, index) => {
       const record = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
-      const name = cleanString(record?.name, 120)
+      let name = cleanString(record?.name, 120)
       const command = cleanString(record?.command, 2000)
       if (!name || !command) return null
+      for (let n = 2; seenNames.has(name.toLowerCase()); n++) {
+        name = `${cleanString(record?.name, 110)} (${n})`
+      }
+      seenNames.add(name.toLowerCase())
       const id = cleanString(record?.id, 120) || `mcp-${index}`
       return { id, name, command, enabled: boolOr(record?.enabled, true) }
     })

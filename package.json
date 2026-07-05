@@ -2,9 +2,10 @@
   "name": "powerstation",
   "productName": "PowerStation",
   "private": true,
-  "version": "0.0.9",
-  "description": "A desktop GUI for hosting and monitoring local open-source models.",
+  "version": "0.1.0",
+  "description": "Local AI for your Mac: guided model choice, an agent harness built for small models, and honest resource monitoring.",
   "author": "Robbie Peck",
+  "license": "MIT",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -66,9 +67,14 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "catalog/**/*",
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "node_modules/node-llama-cpp/**",
+      "node_modules/@node-llama-cpp/**"
+    ],
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",

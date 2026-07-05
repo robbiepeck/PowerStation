@@ -90,19 +90,18 @@ function useSettings() {
   return { settings, update }
 }
 
+// The single owner of onboarding completion: updates renderer state AND
+// persists in one place, so no exit path can leave the flag unwritten.
 function useOnboarding() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   useEffect(() => {
     void bridge.onboarding.get().then(setOnboarding)
   }, [])
-  const complete = useCallback((payload: { useCase: string; priority: string }) => {
-    setOnboarding({ completed: true, useCase: payload.useCase, priority: payload.priority })
+  const complete = useCallback((payload: { useCase?: string; priority?: string }) => {
+    setOnboarding({ completed: true, useCase: payload.useCase ?? null, priority: payload.priority ?? null })
     void bridge.onboarding.complete(payload)
   }, [])
-  const markCompleted = useCallback(() => {
-    setOnboarding((prev) => (prev ? { ...prev, completed: true } : { completed: true, useCase: null, priority: null }))
-  }, [])
-  return { onboarding, complete, markCompleted }
+  return { onboarding, complete }
 }
 
 function useCatalog() {
@@ -218,7 +217,7 @@ function usePermissionPrompt() {
   const [request, setRequest] = useState<PermissionRequest | null>(null)
   const queue = useRef<PermissionRequest[]>([])
   useEffect(() => {
-    return bridge.agent.onPermissionRequest((payload) => {
+    const offRequest = bridge.agent.onPermissionRequest((payload) => {
       setRequest((current) => {
         if (current) {
           queue.current.push(payload)
@@ -227,6 +226,16 @@ function usePermissionPrompt() {
         return payload
       })
     })
+    // The main process auto-denies prompts after a timeout — dismiss the modal
+    // so a late "Allow" click can't appear to grant something already denied.
+    const offExpired = bridge.agent.onPermissionExpired(({ promptId }) => {
+      queue.current = queue.current.filter((item) => item.promptId !== promptId)
+      setRequest((current) => (current?.promptId === promptId ? queue.current.shift() ?? null : current))
+    })
+    return () => {
+      offRequest()
+      offExpired()
+    }
   }, [])
   const respond = useCallback((promptId: string, decision: 'allow-once' | 'allow-always' | 'deny') => {
     void bridge.agent.respondPermission({ promptId, decision })
@@ -238,7 +247,7 @@ function usePermissionPrompt() {
 function useRuntimeEvents() {
   const [event, setEvent] = useState<RuntimeEventPayload | null>(null)
   useEffect(() => {
-    return bridge.runtime.onEvent(setEvent)
+    return bridge.runtimeEvents.onEvent(setEvent)
   }, [])
   return { event, dismiss: () => setEvent(null) }
 }
@@ -375,20 +384,12 @@ function useChat() {
   return { messages, streaming, send, stop, reset }
 }
 
-// Match a local model file to its catalog entry to learn its capability tier.
-function resolveToolTier(model: ModelInfo | null, catalog: Catalog | null): ToolCallingTier {
-  if (!model) return 'none'
-  const entry = catalog?.models.find((item) => item.fileName.toLowerCase() === model.fileName.toLowerCase())
-  if (entry) return entry.toolCalling
-  return model.geometry ? 'single' : 'none'
-}
-
 // --- App shell --------------------------------------------------------------
 
 function App() {
   const [activeView, setActiveView] = useState<ViewId>('chat')
   const { settings, update: updateSettings } = useSettings()
-  const { onboarding, complete: completeOnboarding, markCompleted } = useOnboarding()
+  const { onboarding, complete: completeOnboarding } = useOnboarding()
   const { catalog, fitReports, refresh: refreshCatalog, refreshing: catalogRefreshing } = useCatalog()
   const { models, selectedPath, refresh, select } = useModels()
   const { snapshot, series } = useTelemetry()
@@ -402,7 +403,9 @@ function App() {
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
-  const selectedTier = useMemo(() => resolveToolTier(selectedModel, catalog), [selectedModel, catalog])
+  // The capability tier is resolved by the main process on models:list — one
+  // heuristic, one home.
+  const selectedTier: ToolCallingTier = selectedModel?.toolCalling ?? 'none'
   const utilitiesDisabled = !selectedModel
   const visibleView = activeView === 'utilities' && utilitiesDisabled ? 'models' : activeView
 
@@ -496,8 +499,8 @@ function App() {
           completeOnboarding(payload)
           setActiveView('chat')
         }}
-        onSkipToModels={() => {
-          markCompleted()
+        onSkipToModels={(payload) => {
+          completeOnboarding(payload ?? {})
           setActiveView('models')
         }}
       />

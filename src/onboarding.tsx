@@ -99,7 +99,8 @@ export function OnboardingFlow({
   download: DownloadState
   onDownload: (uri: string) => void
   onComplete: (payload: { useCase: string; priority: string }) => void
-  onSkipToModels: () => void
+  /** Persisting completion is the parent's job — every exit path goes through it. */
+  onSkipToModels: (payload?: { useCase?: string; priority?: string }) => void
 }) {
   const [step, setStep] = useState<Step>('scan')
   const [profile, setProfile] = useState<HardwareProfile | null>(null)
@@ -148,7 +149,9 @@ export function OnboardingFlow({
   )
 
   const ramGb = profile ? profile.totalRamBytes / 1024 ** 3 : 0
-  const budgetGb = profile ? profile.gpuBudgetBytes / 1e9 : 0
+  // The same post-headroom figure the fit math quotes, so onboarding and fit
+  // summaries never show two different "usable" numbers.
+  const budgetGb = profile ? profile.usableBudgetBytes / 1e9 : 0
 
   const chipLabel = useMemo(() => {
     if (!profile) return ''
@@ -234,14 +237,7 @@ export function OnboardingFlow({
               spot for agents and coding.
             </p>
             <div className="ob-floor-actions">
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={() => {
-                  void bridge.onboarding.complete({ useCase: 'everyday', priority: 'speed' })
-                  onSkipToModels()
-                }}
-              >
+              <button className="secondary-button" type="button" onClick={() => onSkipToModels()}>
                 Continue anyway — small models only
               </button>
             </div>
@@ -346,7 +342,7 @@ export function OnboardingFlow({
                 No catalog model comfortably fits this machine's memory. You can still import a small GGUF model of
                 your own from the Models tab.
               </p>
-              <button className="secondary-button" type="button" onClick={onSkipToModels}>
+              <button className="secondary-button" type="button" onClick={() => onSkipToModels()}>
                 Open Models
               </button>
             </div>
@@ -447,10 +443,7 @@ export function OnboardingFlow({
             <button
               className="ghost-button"
               type="button"
-              onClick={() => {
-                void bridge.onboarding.complete({ useCase: useCase ?? 'everyday', priority })
-                onSkipToModels()
-              }}
+              onClick={() => onSkipToModels(useCase ? { useCase, priority } : undefined)}
             >
               I'll pick my own model
             </button>

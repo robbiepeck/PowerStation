@@ -43,14 +43,17 @@ function createMainWindow() {
     },
   })
 
+  let wasCritical = false
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show()
     startTelemetry((snapshot) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('telemetry:update', snapshot)
       // Auto-pause: when the OS reports critical memory pressure during
       // generation, stop the generation rather than letting the machine swap
-      // itself into a beachball. The user gets a one-tap set of choices.
-      if (snapshot.pressure.level === 'critical') {
+      // itself into a beachball. Latched on the transition into critical so a
+      // sustained episode fires one event, not one per telemetry tick.
+      const critical = snapshot.pressure.level === 'critical'
+      if (critical && !wasCritical) {
         const active = getActiveRequestIds()
         if (active.length) {
           for (const requestId of active) stopChat(requestId)
@@ -63,6 +66,7 @@ function createMainWindow() {
           }
         }
       }
+      wasCritical = critical
     })
     scheduleInitialUpdateCheck(() => mainWindow)
   })

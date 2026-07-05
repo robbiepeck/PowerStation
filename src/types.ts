@@ -31,9 +31,13 @@ export type ModelInfo = {
   parameters: string | null
   quantization: string | null
   contextLength: number | null
+  /** Total size including sibling split parts. */
   sizeBytes: number
   source: 'folder' | 'imported'
   geometry: KvGeometry | null
+  templateSupportsTools: boolean | null
+  /** Capability tier resolved by the main process (catalog or template heuristic). */
+  toolCalling: ToolCallingTier
 }
 
 export type Settings = {
@@ -87,6 +91,8 @@ export type HardwareProfile = {
   totalRamBytes: number
   gpuBudgetBytes: number
   gpuBudgetIsMeasured: boolean
+  /** The canonical "usable for AI" figure — same number the fit math uses. */
+  usableBudgetBytes: number
   freeDiskBytes: number | null
   meetsFloor: boolean
 }
@@ -299,6 +305,7 @@ export type PowerStationBridge = {
   agent: {
     respondPermission: (payload: { promptId: string; decision: PermissionDecision }) => Promise<boolean>
     onPermissionRequest: (callback: (payload: PermissionRequest) => void) => Unsubscribe
+    onPermissionExpired: (callback: (payload: { promptId: string }) => void) => Unsubscribe
   }
   mcp: {
     statuses: () => Promise<McpServerStatus[]>
@@ -310,7 +317,7 @@ export type PowerStationBridge = {
     get: () => Promise<Record<string, ToolPermission>>
     set: (payload: { toolKey: string; permission: ToolPermission }) => Promise<boolean>
   }
-  runtime: {
+  runtimeEvents: {
     onEvent: (callback: (payload: RuntimeEventPayload) => void) => Unsubscribe
   }
   telemetry: { onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe }

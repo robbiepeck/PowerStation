@@ -79,7 +79,7 @@ export function recommendModels(options: {
     const useCaseIndex = model.useCases.indexOf(intent.useCase)
     if (useCaseIndex >= 0) {
       score += 40 - useCaseIndex * 5
-      reasons.push(useCaseLine(intent.useCase, model))
+      reasons.push(describeUseCaseFit(intent.useCase, model))
     }
 
     if (intent.useCase === 'agents' || model.useCases.includes('agents')) {
@@ -108,7 +108,7 @@ export function recommendModels(options: {
       reasons.push(`Expected speed on your machine class: ~${model.expectedTps}.`)
     }
     if (model.activeParamsB) {
-      reasons.push(`Mixture-of-experts design: ${model.totalParamsB}B knowledge with only ${model.activeParamsB}B active per token, so it responds fast.`)
+      reasons.push(`Efficient design: ${model.totalParamsB}B of knowledge, but only ~${model.activeParamsB}B works per token — so it answers fast.`)
     }
     if (intent.useCase === 'agents' && model.toolCalling === 'multi') {
       reasons.push('Trained for multi-step tool calling — suitable for connectors and MCP tools.')
@@ -121,7 +121,7 @@ export function recommendModels(options: {
   return ranked.slice(0, options.limit ?? 3)
 }
 
-function useCaseLine(useCase: UseCase, model: CatalogModel): string {
+function describeUseCaseFit(useCase: UseCase, model: CatalogModel): string {
   switch (useCase) {
     case 'coding':
       return `${model.name} is one of the strongest local coding models in its memory tier.`

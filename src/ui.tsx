@@ -40,7 +40,13 @@ export function MiniReadout({ label, value }: { label: string; value: string }) 
   )
 }
 
-export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'real' | 'estimated' | 'neutral' }) {
+export function Badge({
+  children,
+  tone = 'neutral',
+}: {
+  children: ReactNode
+  tone?: 'real' | 'estimated' | 'neutral' | 'danger'
+}) {
   return <span className={`badge ${tone}`}>{children}</span>
 }
 

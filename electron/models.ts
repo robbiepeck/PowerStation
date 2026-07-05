@@ -12,10 +12,13 @@ export type ModelInfo = {
   parameters: string | null
   quantization: string | null
   contextLength: number | null
+  /** Total size including sibling split parts (-0000N-of-0000N.gguf). */
   sizeBytes: number
   source: 'folder' | 'imported'
   /** KV-cache geometry from the GGUF header, used for admission control. */
   geometry: KvGeometry | null
+  /** Whether the embedded chat template mentions tool calling (null = no template read). */
+  templateSupportsTools: boolean | null
 }
 
 const SPLIT_PART = /-(\d{5})-of-(\d{5})\.gguf$/i
@@ -29,6 +32,33 @@ function quantFromName(fileName: string): string | null {
 function isSecondarySplitPart(fileName: string): boolean {
   const match = fileName.match(SPLIT_PART)
   return Boolean(match && match[1] !== '00001')
+}
+
+// Multi-part GGUFs are listed by their first part only, but the model needs
+// ALL parts in memory — admission control must see the summed size, not the
+// first shard, or a 63GB model reads as 21GB and "fits".
+async function totalSizeWithSplitParts(filePath: string, firstPartSize: number): Promise<number> {
+  const fileName = path.basename(filePath)
+  const match = fileName.match(SPLIT_PART)
+  if (!match || match[1] !== '00001') return firstPartSize
+  const prefix = fileName.slice(0, fileName.length - match[0].length)
+  const suffix = `-of-${match[2]}.gguf`
+  let total = 0
+  try {
+    const siblings = await fs.readdir(path.dirname(filePath))
+    for (const sibling of siblings) {
+      if (sibling.startsWith(prefix) && sibling.toLowerCase().endsWith(suffix.toLowerCase()) && SPLIT_PART.test(sibling)) {
+        try {
+          total += (await fs.stat(path.join(path.dirname(filePath), sibling))).size
+        } catch {
+          /* ignore unreadable sibling */
+        }
+      }
+    }
+  } catch {
+    return firstPartSize
+  }
+  return total > firstPartSize ? total : firstPartSize
 }
 
 async function walkForGguf(dir: string, depth: number, found: string[], limit: number): Promise<void> {
@@ -74,15 +104,22 @@ function extractGeometry(archMeta: Record<string, unknown>): KvGeometry | null {
   return { nLayers, nKvHeads, headDim }
 }
 
-async function readMetadata(filePath: string): Promise<Omit<ModelInfo, 'path' | 'fileName' | 'sizeBytes' | 'source'>> {
+type ModelMetadata = Omit<ModelInfo, 'path' | 'fileName' | 'sizeBytes' | 'source'>
+
+// GGUF headers don't change under a stable mtime+size, and chat:send needs
+// this on every message — cache to keep header parsing off the hot path.
+const metadataCache = new Map<string, { mtimeMs: number; size: number; meta: ModelMetadata }>()
+
+async function readMetadata(filePath: string): Promise<ModelMetadata> {
   const fileName = path.basename(filePath)
-  const fallback = {
+  const fallback: ModelMetadata = {
     name: fileName.replace(/\.gguf$/i, ''),
     architecture: null,
     parameters: null,
     quantization: quantFromName(fileName),
     contextLength: null,
     geometry: null,
+    templateSupportsTools: null,
   }
   try {
     const info = (await readGgufFileInfo(filePath, { readTensorInfo: false, logWarnings: false })) as {
@@ -90,9 +127,13 @@ async function readMetadata(filePath: string): Promise<Omit<ModelInfo, 'path' | 
     }
     const metadata = info.metadata ?? {}
     const general = (metadata.general ?? {}) as Record<string, unknown>
+    const tokenizer = (metadata.tokenizer ?? {}) as Record<string, unknown>
     const architecture = typeof general.architecture === 'string' ? general.architecture : null
     const archMeta = architecture ? ((metadata[architecture] ?? {}) as Record<string, unknown>) : {}
     const contextLength = asNumber(archMeta.context_length)
+    // The embedded Jinja chat template is the best available signal for
+    // whether a model was trained to emit tool calls.
+    const chatTemplate = typeof tokenizer.chat_template === 'string' ? tokenizer.chat_template : null
     return {
       name: typeof general.name === 'string' && general.name.trim() ? general.name : fallback.name,
       architecture,
@@ -100,10 +141,19 @@ async function readMetadata(filePath: string): Promise<Omit<ModelInfo, 'path' | 
       quantization: quantFromName(fileName),
       contextLength,
       geometry: extractGeometry(archMeta),
+      templateSupportsTools: chatTemplate === null ? null : /\btools?\b/i.test(chatTemplate),
     }
   } catch {
     return fallback
   }
+}
+
+async function readMetadataCached(filePath: string, stat: { mtimeMs: number; size: number }): Promise<ModelMetadata> {
+  const cached = metadataCache.get(filePath)
+  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) return cached.meta
+  const meta = await readMetadata(filePath)
+  metadataCache.set(filePath, { mtimeMs: stat.mtimeMs, size: stat.size, meta })
+  return meta
 }
 
 export async function listModels(): Promise<ModelInfo[]> {
@@ -122,13 +172,16 @@ export async function listModels(): Promise<ModelInfo[]> {
 
   const entries = await Promise.all(
     [...fromFolders.entries()].map(async ([filePath, source]) => {
-      let sizeBytes: number
+      let stat: { mtimeMs: number; size: number }
       try {
-        sizeBytes = (await fs.stat(filePath)).size
+        stat = await fs.stat(filePath)
       } catch {
         return null
       }
-      const meta = await readMetadata(filePath)
+      const [sizeBytes, meta] = await Promise.all([
+        totalSizeWithSplitParts(filePath, stat.size),
+        readMetadataCached(filePath, stat),
+      ])
       return { path: filePath, fileName: path.basename(filePath), sizeBytes, source, ...meta } satisfies ModelInfo
     }),
   )
@@ -138,13 +191,16 @@ export async function listModels(): Promise<ModelInfo[]> {
 
 export async function getModelInfo(filePath: string): Promise<ModelInfo | null> {
   const resolved = path.resolve(filePath)
-  let sizeBytes: number
+  let stat: { mtimeMs: number; size: number }
   try {
-    sizeBytes = (await fs.stat(resolved)).size
+    stat = await fs.stat(resolved)
   } catch {
     return null
   }
-  const meta = await readMetadata(resolved)
+  const [sizeBytes, meta] = await Promise.all([
+    totalSizeWithSplitParts(resolved, stat.size),
+    readMetadataCached(resolved, stat),
+  ])
   return { path: resolved, fileName: path.basename(resolved), sizeBytes, source: 'folder', ...meta }
 }
 

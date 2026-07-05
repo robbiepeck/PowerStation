@@ -42,7 +42,6 @@ import {
   MetricTile,
   PanelHeader,
   RangeControl,
-  ToggleControl,
   clamp,
   formatBytes,
   formatNumber,
@@ -1069,38 +1068,16 @@ export function SettingsView({ onChange, settings }: { onChange: (patch: Partial
         </section>
 
         <section className="settings-section">
-          <h3>Runtime policy</h3>
-          <RangeControl
-            label="Memory budget"
-            value={settings.memoryBudgetGb}
-            min={4}
-            max={64}
-            step={1}
-            unit="GB"
-            onChange={(value) => onChange({ memoryBudgetGb: value })}
-          />
-          <RangeControl
-            label="Compute cap"
-            value={settings.computeCap}
-            min={20}
-            max={100}
-            step={1}
-            unit="%"
-            onChange={(value) => onChange({ computeCap: value })}
-          />
-          <ToggleControl
-            label="Auto unload on idle"
-            checked={settings.autoUnloadIdle}
-            onChange={(value) => onChange({ autoUnloadIdle: value })}
-          />
-          <ToggleControl
-            label="Low power bias"
-            checked={settings.lowPowerBias}
-            onChange={(value) => onChange({ lowPowerBias: value })}
-          />
+          <h3>Memory safety</h3>
+          <p className="policy-note subtle">
+            Memory management is automatic. Before any model loads, PowerStation computes its real footprint
+            (weights + context cache + buffers) against your Mac's measured GPU budget and refuses or shrinks the
+            request if it wouldn't fit. While generating, it watches the macOS memory-pressure signal and pauses
+            automatically if the system gets into trouble — no knobs to mistune.
+          </p>
           <div className="policy-note">
-            <AlertTriangle size={17} />
-            <span>Memory budget and compute cap are advisory guides today — llama.cpp manages allocation directly.</span>
+            <ShieldCheck size={17} />
+            <span>The Monitor tab shows the live signals these decisions are based on, labelled as measured or estimated.</span>
           </div>
         </section>
       </div>
