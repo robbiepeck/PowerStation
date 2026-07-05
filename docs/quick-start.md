@@ -1,0 +1,71 @@
+# Quick Start
+
+From a clean checkout to your first local chat in a few minutes.
+
+## 1. Requirements
+
+- **macOS on Apple Silicon** (M-series) with **16 GB unified memory or more**.
+- **Node.js 20+** and **npm**.
+- Xcode Command Line Tools (`xcode-select --install`) — the native runtime ships prebuilt, but the
+  CLT are handy if a source build is ever needed.
+
+See the [Setup Guide](setup.md) if you hit anything native-build related.
+
+## 2. Get it running
+
+```bash
+git clone https://github.com/robbiepeck/PowerStation.git
+cd PowerStation
+npm install
+npm run desktop:dev
+```
+
+`npm install` pulls Electron and the `node-llama-cpp` runtime, so the first install takes a couple
+of minutes. `npm run desktop:dev` starts Vite and opens the app window.
+
+## 3. First run: pick a model
+
+The app opens on a **scan-and-reveal** screen — it has already read your chip, memory, usable-for-AI
+budget and free disk. Then:
+
+1. **Continue** past the hardware reveal.
+2. Answer two questions: **what you'll use it for** (everyday / coding / agents / documents /
+   reasoning) and **faster vs. smarter**.
+3. PowerStation shows up to **three recommended models** with honest capability cards and expected
+   speed for your machine. Pick one and hit **Download & set up** — it downloads into the app's
+   managed models folder and loads automatically.
+4. You land in a working **chat**, running entirely on your Mac.
+
+Prefer to choose yourself? Every card in the **Models** tab shows a *fits comfortably / tight /
+won't fit* badge computed from real memory math, plus what each model is honestly good and bad at.
+Full list in [Models & devices](models-and-devices.md).
+
+## 4. Try the agent tools (optional)
+
+If you picked an **Agent-ready** model, open **Utilities** and add an MCP server, for example:
+
+```
+npx -y @modelcontextprotocol/server-filesystem ~/Documents
+```
+
+PowerStation connects over stdio, lists the server's tools with a context-cost meter, and when the
+model wants to call a tool you get an **allow once / always allow / deny** prompt. Details in the
+[Agent harness](agent-harness.md) guide.
+
+## 5. Watch the machine
+
+The **status pill** in the chat header is your ambient monitor — "Running smoothly · N tok/s", or an
+amber/red warning if memory gets tight. Click it (or the **Monitor** tab) for the full live view of
+CPU, RAM, GPU, VRAM, storage, memory pressure, power and thermal headroom, each labelled as measured
+or estimated.
+
+## Troubleshooting
+
+- **"Won't fit this Mac" on every big model** — expected; your memory tier can't hold them. Stick to
+  the models marked *fits comfortably*. See [Models & devices](models-and-devices.md).
+- **A dev server is already on port 5173** — another project may be holding it, which can show the
+  wrong app. Stop that server, or run the app pointed at a free port (see the [Setup Guide](setup.md)).
+- **Gatekeeper warning on a packaged build** — the macOS build isn't notarized yet; see the
+  [Setup Guide](setup.md).
+
+Next: [Setup Guide](setup.md) · [Architecture](architecture.md)

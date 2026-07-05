@@ -1,57 +1,125 @@
+<div align="center">
+
+<img src="public/favicon.svg" alt="PowerStation" width="76" height="76" />
+
 # PowerStation
 
 **Local AI for your Mac — the agent harness built for small models.**
 
-PowerStation is a desktop app that makes locally-hosted open-weight models genuinely usable: it detects your hardware, recommends the models your machine can honestly run, downloads and sets them up in one click, and gives you a local desktop experience — chat, a system prompt, MCP tools behind permission prompts — with live, truthful resource monitoring the whole time.
+Guided model choice for your exact hardware, a local desktop workspace with
+skills, MCP tools and an agent harness, and honest resource monitoring — all running
+on open-weight models, entirely on your machine.
 
-Everything runs on your machine. Prompts, chats, and models never leave it.
+[Quick Start](docs/quick-start.md) ·
+[Setup Guide](docs/setup.md) ·
+[Contributing](CONTRIBUTING.md) ·
+[Roadmap](ROADMAP.md)
+
+![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon-111111?logo=apple&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-008476)
+![Status](https://img.shields.io/badge/status-beta-b17018)
+
+</div>
+
+---
+
+PowerStation makes locally-hosted open-weight models genuinely usable. It detects your
+hardware, recommends the models your machine can honestly run, downloads and sets them up
+in one click, and gives you a chat + agent experience with live, truthful resource
+monitoring the whole time.
+
+**Everything runs on your machine. Prompts, chats and models never leave it.**
 
 ## Why PowerStation
 
-Existing local-LLM apps tell you whether a model *fits*. Almost none tell you what a model that fits can actually *do*, manage the fit between an agentic workload and your hardware at runtime, or make small models reliable at tool use. PowerStation is built around exactly those three gaps:
+Existing local-LLM apps tell you whether a model *fits*. Almost none tell you what a model
+that fits can actually *do*, manage the fit between an agentic workload and your hardware
+at runtime, or make small models reliable at tool use. PowerStation is built around exactly
+those three gaps:
 
-1. **Scan, don't ask.** On first run PowerStation reads your chip, unified memory, usable GPU budget, and free disk — then asks only the two things it can't detect: what you want to use AI for, and whether you prefer faster or smarter answers. It recommends up to three models with honest capability cards ("great at / will struggle with"), expected tokens-per-second for your machine class, and a one-click download that ends in a working chat.
+1. **Scan, don't ask.** On first run PowerStation reads your chip, unified memory, usable
+   GPU budget and free disk — then asks only the two things it can't detect: what you want
+   to use AI for, and whether you prefer faster or smarter answers. It recommends up to
+   three models with honest "great at / will struggle with" capability cards, expected
+   tokens-per-second for your machine, and a one-click download that ends in a working chat.
 
-2. **Admission control, not an OOM dashboard.** Before any model loads, PowerStation computes weights + KV-cache + buffers against your real memory budget and refuses or shrinks the context *before* your Mac starts swapping — including correct math for 2026 hybrid-attention models whose real KV cost is far below the naive estimate. At runtime it watches macOS memory-pressure signals and auto-pauses generation at critical pressure. The full monitor panel is one click away; a single status pill covers the rest of the time.
+2. **Admission control, not an OOM dashboard.** Before any model loads, PowerStation computes
+   weights + context cache + buffers against your real memory budget and refuses or shrinks
+   the context *before* your Mac starts swapping. At runtime it watches the macOS
+   memory-pressure signal and auto-pauses generation if the system gets into trouble.
+   → [Memory & monitoring](docs/memory-and-monitoring.md)
 
-3. **An agent harness that respects small models.** MCP servers connect over stdio with every tool call gated by an allow / ask / deny permission model. Tool schemas are token-metered so you can see what connectors cost a small context window. Models that aren't tool-trained get chat only — with the reason stated — instead of present-and-broken agent features. Loop guards halt repeated identical calls and runaway tool budgets.
-
-4. **Crash-isolated runtime.** Inference runs in a separate utility process. If llama.cpp hits a native crash, you get a recovery card with next steps — not a dead app.
+3. **An agent harness that respects small models.** MCP servers connect over stdio with every
+   tool call gated by an allow / ask / deny permission model. Tool schemas are token-metered.
+   Models that aren't tool-trained get chat only — with the reason stated — instead of
+   present-and-broken agent features. → [Agent harness](docs/agent-harness.md)
 
 ## Requirements
 
-- macOS on Apple Silicon (M-series).
-- **16 GB unified memory or more.** Below that, PowerStation will tell you honestly that local AI isn't realistic on the machine rather than degrade silently. 24–32 GB is the sweet spot for agents and coding.
+- **macOS on Apple Silicon** (M-series).
+- **16 GB unified memory or more.** Below that, PowerStation tells you honestly that local AI
+  isn't realistic on the machine rather than degrade silently. 24–32 GB is the sweet spot for
+  agents and coding.
 
-Windows and Linux are out of scope for now.
+Windows and Linux are out of scope for now — see the [Roadmap](ROADMAP.md).
 
-## Download
+## Quick Start
 
-Releases are published on [GitHub Releases](https://github.com/robbiepeck/PowerStation/releases). The macOS build is currently ad-hoc signed (not yet notarized), so Gatekeeper may warn on first open.
+```bash
+git clone https://github.com/robbiepeck/PowerStation.git
+cd PowerStation
+npm install
+npm run desktop:dev
+```
 
-## The model catalog
+On first launch PowerStation scans your Mac, asks two questions, recommends models, and
+downloads your pick straight into a working chat. Full walkthrough in the
+[Quick Start guide](docs/quick-start.md); native-build prerequisites, packaging and
+troubleshooting in the [Setup Guide](docs/setup.md).
 
-The catalog is a versioned JSON manifest that lives in this repository ([catalog/models.json](catalog/models.json)) and is fetched at launch — so model recommendations stay current without waiting for an app release. The in-app **Update catalog** button re-fetches it; a bundled copy is the offline fallback. Every entry is verified against Hugging Face and carries the data the app actually uses: exact file size, KV-cache geometry (with effective per-token cost for hybrid-attention models), tool-calling tier, license, minimum RAM tier, and honest good-at / struggles-with notes.
+## Documentation
 
-Current spread: 16 GB tier (Qwen3.5 4B, gpt-oss 20B, Gemma 4 E4B) → 24–32 GB tier (GLM-4.7 Flash, Qwen3 Coder 30B, Devstral Small 2, Gemma 4 26B, Nemotron 3 Nano, Qwen3.6 35B) → 64 GB tier (gpt-oss 120B, Qwen3 Coder Next, Qwen3 Next 80B). You can also import any `.gguf` file or folder you already have.
+| Guide | What's inside |
+| --- | --- |
+| [Quick Start](docs/quick-start.md) | From clone to first local chat in a few minutes. |
+| [Setup Guide](docs/setup.md) | Prerequisites, building, packaging, data locations, troubleshooting. |
+| [Architecture](docs/architecture.md) | How the app works: processes, the isolated inference worker, IPC, data flow. |
+| [Models & devices](docs/models-and-devices.md) | The full model catalogue and which Mac each model needs. |
+| [Memory & monitoring](docs/memory-and-monitoring.md) | The admission-control math, auto-pause, and honest telemetry. |
+| [Agent harness](docs/agent-harness.md) | MCP tools, permissions, capability gating, loop guards. |
+| [Contributing](CONTRIBUTING.md) | Dev setup, how the catalogue works, proposing a model. |
+| [Roadmap](ROADMAP.md) | What's next. |
+| [Security](SECURITY.md) · [Threat model](THREAT_MODEL.md) | The local-first posture and the agent attack surface. |
 
-You are responsible for reviewing and complying with each model's license.
+## The model catalogue
 
-## Using MCP tools
+The catalogue is a versioned JSON manifest that lives in this repository
+([`catalog/models.json`](catalog/models.json)) and is fetched at launch — so recommendations
+stay current without waiting for an app release. The in-app **Update catalog** button
+re-fetches it; a bundled copy is the offline fallback. Every entry is verified against
+Hugging Face and carries the data the app actually uses: exact file size, KV-cache geometry
+(with effective per-token cost for hybrid-attention models), tool-calling tier, licence,
+minimum RAM tier and honest capability notes.
 
-1. Open **Utilities** and add an MCP server, e.g. `npx -y @modelcontextprotocol/server-filesystem ~/Documents`.
-2. PowerStation connects over stdio and lists the server's tools with a context-cost meter.
-3. When the model wants to call a tool, you get a permission prompt — allow once, always allow, or deny. "Always allow" is remembered per tool and editable in Utilities.
-4. Agent features unlock based on the selected model's tool-calling tier from the catalog: multi-step models get the full harness; single-call models are capped at 3 tool calls per turn; untrained models stay chat-only.
+See **[Models & devices](docs/models-and-devices.md)** for the full table and per-machine
+guidance. You can also import any `.gguf` file or folder you already have.
 
-Tool output is treated as untrusted data, capped in size, and never executed.
+## Where your data lives
+
+- **Models** — PowerStation's managed models folder inside the app's user-data directory.
+- **Settings, permissions, catalog cache** — JSON files in the same user-data directory.
+- **Chats** — in memory only; nothing is written unless you copy it out.
+- **Network** — model downloads and catalogue updates from `huggingface.co` / this GitHub
+  repo, and update checks against GitHub Releases. Nothing else.
+
+More detail in [Security](SECURITY.md) and the [Threat model](THREAT_MODEL.md).
 
 ## Development
 
-Built with Electron, React, TypeScript, `node-llama-cpp` (bundled runtime — no Ollama required), `@modelcontextprotocol/sdk`, and `systeminformation`.
+Built with Electron, React, TypeScript, `node-llama-cpp` (bundled runtime — no Ollama
+required), `@modelcontextprotocol/sdk` and `systeminformation`.
 
 ```bash
-npm install          # install dependencies
 npm run desktop:dev  # run the app in development
 npm test             # unit tests (admission-control math)
 npm run build        # typecheck + build renderer and electron
@@ -59,34 +127,8 @@ npm run lint         # eslint
 npm run package:mac  # package the macOS app (artifacts in release/)
 ```
 
-### Project structure
-
-- `electron/main.ts` — app lifecycle, telemetry loop, memory-pressure auto-pause.
-- `electron/llmWorker.ts` — inference worker (node-llama-cpp) in an isolated utility process; loop guards live here.
-- `electron/llm.ts` — main-process host: worker supervision, streaming, crash recovery, downloads.
-- `electron/admission.ts` — pre-flight fit math (weights + KV cache + buffers vs budget), unit-tested.
-- `electron/hardware.ts` — hardware detection and macOS memory-pressure reads.
-- `electron/catalog.ts` / `catalog/models.json` — remotely-updatable model catalog with validation.
-- `electron/recommend.ts` — (hardware × intent) → ranked recommendations with reasons.
-- `electron/mcp.ts` / `electron/agent.ts` — MCP client manager and the permission-gated tool executor.
-- `electron/preload.cjs` — the controlled bridge; renderer never touches Node APIs directly.
-- `src/onboarding.tsx` — scan-and-reveal first-run flow.
-- `src/` — React interface (chat, monitor, models, utilities, settings).
-
-## Where your data lives
-
-- Models: PowerStation's managed models folder inside the app's user-data directory (revealable per model in the Models view).
-- Settings, permissions, and catalog cache: JSON files in the same user-data directory.
-- Chats: in memory only — nothing is written unless you copy it out.
-- Network traffic: model downloads and catalog updates from `huggingface.co` / this GitHub repo, and update checks against GitHub Releases. Nothing else.
-
-## Roadmap
-
-- macOS Developer ID signing and notarization.
-- Skills and connector presets on top of the MCP foundation.
-- On-device micro-benchmark after first model load ("your machine: measured N tok/s").
-- Optional MLX engine pack for Apple Silicon speed.
-- Windows and Linux support.
+See the [Setup Guide](docs/setup.md) and [Architecture](docs/architecture.md) to go deeper,
+and [Contributing](CONTRIBUTING.md) before opening a PR.
 
 ## License
 
