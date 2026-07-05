@@ -101,10 +101,18 @@ export type BenchmarkRecord = {
   measuredAt: number
 }
 
+export type StoredAttachment = {
+  name: string
+  tokenEstimate: number
+  text: string
+}
+
 export type StoredChatMessage = {
   role: 'user' | 'assistant'
   content: string
   tokensPerSec?: number
+  attachments?: StoredAttachment[]
+  sources?: string[]
 }
 
 export type StoredChat = {
@@ -113,6 +121,7 @@ export type StoredChat = {
   createdAt: number
   updatedAt: number
   modelPath: string | null
+  ragFolder: { id: string; name: string } | null
   messages: StoredChatMessage[]
 }
 
@@ -121,7 +130,32 @@ export type ChatSummary = {
   title: string
   updatedAt: number
   messageCount: number
+  snippet?: string
 }
+
+export type ExtractedFile = {
+  name: string
+  path: string
+  chars: number
+  tokenEstimate: number
+  text: string
+  truncated: boolean
+}
+
+export type ExtractResult = { ok: true; file: ExtractedFile } | { ok: false; name: string; error: string }
+
+export type FolderIndexInfo = {
+  folderId: string
+  folder: string
+  name: string
+  fileCount: number
+  chunkCount: number
+  builtAt: number
+}
+
+export type IndexProgress = { phase: 'scanning' | 'embedding-model' | 'embedding'; done: number; total: number }
+
+export type WhatsNew = { currentVersion: string; previousVersion: string | null; show: boolean }
 
 export type MemoryPressureLevel = 'normal' | 'warn' | 'critical'
 
@@ -309,6 +343,8 @@ export type ChatDonePayload = {
   aborted: boolean
   toolCallCount: number
   haltReason: 'repeated-call' | 'call-budget' | null
+  contextUsed: number
+  contextSize: number
 }
 
 export type DownloadProgress = { id: string; totalSize: number; downloadedSize: number }
@@ -371,10 +407,31 @@ export type PowerStationBridge = {
   chats: {
     list: () => Promise<ChatSummary[]>
     get: (id: string) => Promise<StoredChat | null>
-    save: (payload: { id?: string; messages: StoredChatMessage[]; modelPath?: string }) => Promise<{ id: string } | null>
+    save: (payload: {
+      id?: string
+      messages: StoredChatMessage[]
+      modelPath?: string
+      ragFolder?: { id: string; name: string } | null
+    }) => Promise<{ id: string } | null>
     delete: (id: string) => Promise<boolean>
     deleteAll: () => Promise<number>
     reveal: () => Promise<boolean>
+    search: (query: string) => Promise<ChatSummary[]>
+    export: (id: string) => Promise<string | null>
+  }
+  files: {
+    pickAndExtract: () => Promise<ExtractResult[]>
+    extract: (paths: string[]) => Promise<ExtractResult[]>
+    pathForFile: (file: File) => string
+  }
+  rag: {
+    index: (folder: string) => Promise<FolderIndexInfo>
+    info: (folderId: string) => Promise<FolderIndexInfo | null>
+    onIndexProgress: (callback: (payload: IndexProgress) => void) => Unsubscribe
+  }
+  whatsNew: {
+    get: () => Promise<WhatsNew>
+    seen: () => Promise<boolean>
   }
   skills: {
     list: () => Promise<SkillInfo[]>
@@ -397,6 +454,8 @@ export type PowerStationBridge = {
       requestId: string
       prompt: string
       history?: Array<{ role: 'user' | 'assistant'; text: string }>
+      ragFolderId?: string
+      ragQuery?: string
     }) => Promise<{ requestId: string; ok: boolean }>
     stop: (requestId: string) => Promise<boolean>
     reset: () => Promise<void>
@@ -408,6 +467,7 @@ export type PowerStationBridge = {
     onAdmission: (callback: (payload: ChatAdmissionPayload) => void) => Unsubscribe
     onToolCall: (callback: (payload: ChatToolCallPayload) => void) => Unsubscribe
     onToolResult: (callback: (payload: ChatToolResultPayload) => void) => Unsubscribe
+    onSources: (callback: (payload: { requestId: string; sources: string[] }) => void) => Unsubscribe
   }
   agent: {
     respondPermission: (payload: { promptId: string; decision: PermissionDecision }) => Promise<boolean>
@@ -460,4 +520,6 @@ export type ChatTurn = {
   toolCalls?: ToolCallRecord[]
   haltReason?: 'repeated-call' | 'call-budget' | null
   admission?: ChatAdmissionPayload
+  attachments?: StoredAttachment[]
+  sources?: string[]
 }

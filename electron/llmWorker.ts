@@ -4,7 +4,15 @@
 // All node-llama-cpp state lives here; the main process talks over parentPort.
 
 import { getLlama, LlamaChatSession, defineChatSessionFunction, type ChatHistoryItem } from 'node-llama-cpp'
-import type { BenchmarkRequest, BenchmarkResult, ChatRequest, ChatResult, WorkerMessage, WorkerRequest } from './llmProtocol.js'
+import type {
+  BenchmarkRequest,
+  BenchmarkResult,
+  ChatRequest,
+  ChatResult,
+  EmbedRequest,
+  WorkerMessage,
+  WorkerRequest,
+} from './llmProtocol.js'
 
 type LlamaInstance = Awaited<ReturnType<typeof getLlama>>
 type LoadedModel = Awaited<ReturnType<LlamaInstance['loadModel']>>
@@ -296,10 +304,45 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
       aborted: controller.signal.aborted && guard.haltReason === null,
       toolCallCount: guard.callCount,
       haltReason: guard.haltReason,
+      contextUsed: active.sequence.nextTokenIndex,
+      contextSize: active.contextTokens,
     }
   } finally {
     abortControllers.delete(request.requestId)
   }
+}
+
+// --- Embeddings (chat-with-a-folder) ---------------------------------------
+// A small embedding model runs alongside the chat model. It is loaded lazily
+// on the first embed request and kept warm; disposing the chat model does not
+// touch it.
+
+type EmbedState = {
+  path: string
+  model: Awaited<ReturnType<Awaited<ReturnType<typeof getLlama>>['loadModel']>>
+  context: Awaited<ReturnType<EmbedState['model']['createEmbeddingContext']>>
+}
+
+let embedLoaded: EmbedState | null = null
+
+async function embed(request: EmbedRequest): Promise<number[][]> {
+  if (!embedLoaded || embedLoaded.path !== request.modelPath) {
+    if (embedLoaded) {
+      await embedLoaded.context.dispose()
+      await embedLoaded.model.dispose()
+      embedLoaded = null
+    }
+    const llama = await getLlamaInstance()
+    const model = await llama.loadModel({ modelPath: request.modelPath })
+    const context = await model.createEmbeddingContext()
+    embedLoaded = { path: request.modelPath, model, context }
+  }
+  const vectors: number[][] = []
+  for (const text of request.texts.slice(0, 64)) {
+    const embedding = await embedLoaded.context.getEmbeddingFor(text)
+    vectors.push([...embedding.vector])
+  }
+  return vectors
 }
 
 // A fixed prompt and token budget so every machine measures the same work.
@@ -359,6 +402,8 @@ async function handleRequest(request: WorkerRequest): Promise<unknown> {
       return chat(request.payload)
     case 'benchmark':
       return benchmark(request.payload)
+    case 'embed':
+      return embed(request.payload)
     case 'stop': {
       const controller = abortControllers.get(request.payload.requestId)
       if (controller) controller.abort()

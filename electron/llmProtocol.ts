@@ -53,6 +53,14 @@ export type ChatResult = {
   toolCallCount: number
   /** Set when the turn was halted by a loop guard. */
   haltReason: 'repeated-call' | 'call-budget' | null
+  /** Tokens currently held in the session context, and its total size. */
+  contextUsed: number
+  contextSize: number
+}
+
+export type EmbedRequest = {
+  modelPath: string
+  texts: string[]
 }
 
 export type ToolDefinition = {
@@ -67,6 +75,7 @@ export type WorkerRequest =
   | { id: number; cmd: 'deviceInfo' }
   | { id: number; cmd: 'chat'; payload: ChatRequest }
   | { id: number; cmd: 'benchmark'; payload: BenchmarkRequest }
+  | { id: number; cmd: 'embed'; payload: EmbedRequest }
   | { id: number; cmd: 'stop'; payload: { requestId: string } }
   | { id: number; cmd: 'reset' }
   | { id: number; cmd: 'unload' }

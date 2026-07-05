@@ -29,7 +29,9 @@ hardware, recommends the models your machine can honestly run, downloads and set
 in one click, and gives you a chat + agent experience with live, truthful resource
 monitoring the whole time.
 
-**Everything runs on your machine. Prompts, chats and models never leave it.**
+**Everything runs on your machine. Prompts, chats, documents and models never leave it.**
+Attach files (text, code, PDF) or a whole folder — indexed and retrieved with a local embedding
+model — and chat with your documents entirely offline.
 
 ## Why PowerStation
 
@@ -116,8 +118,11 @@ guidance. You can also import any `.gguf` file or folder you already have.
 - **Settings, permissions, catalog cache, benchmarks** — JSON files in the same user-data directory.
 - **Chats** — saved locally as plain JSON files (one per conversation) so they survive restarts;
   revealable and deletable from Settings, and saving can be turned off entirely.
+- **Attachments & folder indexes** — extracted file text lives with its chat; folder indexes and
+  the small embedding model live in the same user-data directory.
 - **Network** — model downloads and catalogue updates from `huggingface.co` / this GitHub
-  repo, and update checks against GitHub Releases. Nothing else.
+  repo, and update checks against GitHub Releases. Nothing else — attachments and folder
+  retrieval are fully local.
 
 More detail in [Security](SECURITY.md) and the [Threat model](THREAT_MODEL.md).
 

@@ -95,8 +95,12 @@ Everything PowerStation writes stays on your machine, under the app's user-data 
 - **Models** — the managed models folder (each model is revealable in Finder from the Models view).
 - **`powerstation-config.json`** — settings, tool permissions, onboarding state, benchmark results.
 - **`catalog-cache.json`** — the last validated catalogue fetched from the repo.
-- **`chats/`** — saved conversations, one plain JSON file each. Revealable and deletable from
-  Settings; turn off "Save chats on this device" to stop new writes.
+- **`chats/`** — saved conversations, one plain JSON file each (including any attached-file text,
+  so resumed chats keep their documents). Revealable and deletable from Settings; turn off "Save
+  chats on this device" to stop new writes.
+- **`rag/`** — one JSON index per knowledge folder you attach (chunks + embedding vectors).
+- **`embeddings/`** — the small embedding model (~84 MB, downloaded once) that powers
+  chat-with-a-folder. Fully offline after the first download.
 
 Network traffic is limited to model downloads and catalogue updates from `huggingface.co` / this
 GitHub repo, plus update checks against GitHub Releases. See [Security](../SECURITY.md).

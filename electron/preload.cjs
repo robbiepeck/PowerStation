@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron')
+const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 function subscribe(channel, callback) {
   const listener = (_event, payload) => callback(payload)
@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('powerStation', {
     delete: (id) => ipcRenderer.invoke('chats:delete', id),
     deleteAll: () => ipcRenderer.invoke('chats:deleteAll'),
     reveal: () => ipcRenderer.invoke('chats:reveal'),
+    search: (query) => ipcRenderer.invoke('chats:search', query),
+    export: (id) => ipcRenderer.invoke('chats:export', id),
   },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
@@ -68,6 +70,20 @@ contextBridge.exposeInMainWorld('powerStation', {
     status: () => ipcRenderer.invoke('ollama:status'),
     import: (name) => ipcRenderer.invoke('ollama:import', name),
   },
+  files: {
+    pickAndExtract: () => ipcRenderer.invoke('files:pickAndExtract'),
+    extract: (paths) => ipcRenderer.invoke('files:extract', paths),
+    pathForFile: (file) => webUtils.getPathForFile(file),
+  },
+  rag: {
+    index: (folder) => ipcRenderer.invoke('rag:index', folder),
+    info: (folderId) => ipcRenderer.invoke('rag:info', folderId),
+    onIndexProgress: (callback) => subscribe('rag:indexProgress', callback),
+  },
+  whatsNew: {
+    get: () => ipcRenderer.invoke('app:whatsNew'),
+    seen: () => ipcRenderer.invoke('app:whatsNewSeen'),
+  },
   chat: {
     send: (payload) => ipcRenderer.invoke('chat:send', payload),
     stop: (requestId) => ipcRenderer.invoke('chat:stop', requestId),
@@ -80,6 +96,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     onAdmission: (callback) => subscribe('chat:admission', callback),
     onToolCall: (callback) => subscribe('chat:toolCall', callback),
     onToolResult: (callback) => subscribe('chat:toolResult', callback),
+    onSources: (callback) => subscribe('chat:sources', callback),
   },
   agent: {
     respondPermission: (payload) => ipcRenderer.invoke('agent:permissionResponse', payload),

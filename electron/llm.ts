@@ -184,6 +184,11 @@ export async function runBenchmark(payload: BenchmarkRequest): Promise<Benchmark
   return call<BenchmarkResult>({ cmd: 'benchmark', payload })
 }
 
+/** Embed texts with a small local embedding model (loaded lazily in the worker). */
+export async function embedTexts(modelPath: string, texts: string[]): Promise<number[][]> {
+  return call<number[][]>({ cmd: 'embed', payload: { modelPath, texts } })
+}
+
 export function stopChat(requestId: string): boolean {
   if (!worker) return false
   send({ id: 0, cmd: 'stop', payload: { requestId } })

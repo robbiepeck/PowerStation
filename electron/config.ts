@@ -52,6 +52,8 @@ export type PersistedState = {
   onboarding: OnboardingState
   /** Measured on-device speed per model file (keyed by lowercase fileName). */
   benchmarks: Record<string, BenchmarkRecord>
+  /** App version last acknowledged by the user — drives the what's-new card. */
+  lastSeenVersion: string
 }
 
 const defaultUtilities: UtilitySettings = {
@@ -205,6 +207,7 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
     toolPermissions: sanitizeToolPermissions(parsed?.toolPermissions),
     onboarding: sanitizeOnboarding(parsed?.onboarding),
     benchmarks: sanitizeBenchmarks(parsed?.benchmarks),
+    lastSeenVersion: cleanString(parsed?.lastSeenVersion, 40),
   }
 }
 

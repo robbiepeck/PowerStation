@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { ipcMain, dialog, shell, type BrowserWindow } from 'electron'
+import { app, ipcMain, dialog, shell, type BrowserWindow } from 'electron'
 import * as models from './models.js'
 import * as llm from './llm.js'
 import * as mcp from './mcp.js'
@@ -7,6 +7,8 @@ import * as agent from './agent.js'
 import * as chats from './chats.js'
 import * as skills from './skills.js'
 import * as ollama from './ollama.js'
+import * as rag from './rag.js'
+import { extractFile, TEXT_EXTENSIONS } from './files.js'
 import { composeSystemPrompt } from './skillFormat.js'
 import { getDeviceHealthProfile } from './device.js'
 import {
@@ -288,6 +290,80 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('chats:delete', (_event, id: string) => chats.deleteChat(id))
   ipcMain.handle('chats:deleteAll', () => chats.deleteAllChats())
   ipcMain.handle('chats:reveal', () => chats.revealChatsDir())
+  ipcMain.handle('chats:search', (_event, query: string) => chats.searchChats(query))
+  ipcMain.handle('chats:export', async (_event, id: string) => {
+    const chat = await chats.getChat(id)
+    if (!chat) return null
+    const result = await dialog.showSaveDialog({
+      defaultPath: `${chat.title.replace(/[\\/:*?"<>|]/g, '-').slice(0, 60)}.md`,
+      filters: [{ name: 'Markdown', extensions: ['md'] }],
+    })
+    if (result.canceled || !result.filePath) return null
+    await chats.exportChatMarkdown(chat, result.filePath)
+    return result.filePath
+  })
+
+  // --- Attachments & folder knowledge ------------------------------------------
+  ipcMain.handle('files:pickAndExtract', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Documents & text', extensions: ['pdf', ...[...TEXT_EXTENSIONS].map((ext) => ext.slice(1))] },
+      ],
+    })
+    if (result.canceled || !result.filePaths.length) return []
+    return Promise.all(
+      result.filePaths.slice(0, 4).map(async (filePath) => {
+        try {
+          return { ok: true as const, file: await extractFile(filePath) }
+        } catch (error) {
+          return { ok: false as const, name: path.basename(filePath), error: error instanceof Error ? error.message : String(error) }
+        }
+      }),
+    )
+  })
+  ipcMain.handle('files:extract', async (_event, paths: string[]) => {
+    if (!Array.isArray(paths)) return []
+    return Promise.all(
+      paths.slice(0, 4).map(async (filePath) => {
+        try {
+          if (typeof filePath !== 'string') throw new Error('Bad path')
+          return { ok: true as const, file: await extractFile(filePath) }
+        } catch (error) {
+          return { ok: false as const, name: path.basename(String(filePath)), error: error instanceof Error ? error.message : String(error) }
+        }
+      }),
+    )
+  })
+  ipcMain.handle('rag:index', async (_event, folder: string) => {
+    if (typeof folder !== 'string') throw new Error('Bad folder')
+    return rag.ensureFolderIndex(folder, (progress) => send('rag:indexProgress', progress))
+  })
+  ipcMain.handle('rag:info', (_event, folderId: string) => rag.getFolderIndexInfo(folderId))
+
+  // --- What's new ---------------------------------------------------------------
+  ipcMain.handle('app:whatsNew', async () => {
+    const state = await getState()
+    const currentVersion = app.getVersion()
+    const previousVersion = state.lastSeenVersion || null
+    // First run: stamp silently so only real version changes show the card.
+    if (previousVersion === null) {
+      await mutate((current) => {
+        current.lastSeenVersion = currentVersion
+      })
+    }
+    return {
+      currentVersion,
+      previousVersion,
+      show: previousVersion !== null && previousVersion !== currentVersion,
+    }
+  })
+  ipcMain.handle('app:whatsNewSeen', async () => {
+    await mutate((state) => {
+      state.lastSeenVersion = app.getVersion()
+    })
+    return true
+  })
 
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
     if (!isTrustedExternalUrl(url)) {
@@ -497,7 +573,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     'chat:send',
     async (
       _event,
-      payload: { requestId: string; prompt: string; history?: Array<{ role: string; text: string }> },
+      payload: {
+        requestId: string
+        prompt: string
+        history?: Array<{ role: string; text: string }>
+        ragFolderId?: string
+        ragQuery?: string
+      },
     ) => {
     const { requestId, prompt } = payload
     // History arrives once when resuming a persisted chat; validate strictly.
@@ -561,10 +643,28 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           schemaTokens: agent.estimateToolSchemaTokens(toolDefinitions),
         })
 
+        // Chat-with-a-folder: retrieve the most relevant chunks for this
+        // question and prepend them as framed reference data.
+        let effectivePrompt = prompt
+        if (typeof payload.ragFolderId === 'string') {
+          try {
+            const retrieval = await rag.queryFolder(
+              payload.ragFolderId,
+              typeof payload.ragQuery === 'string' ? payload.ragQuery.slice(0, 4000) : prompt.slice(0, 4000),
+            )
+            if (retrieval) {
+              effectivePrompt = `${retrieval.block}\n\n${prompt}`
+              send('chat:sources', { requestId, sources: retrieval.sources })
+            }
+          } catch {
+            /* retrieval is best-effort; the question still goes through */
+          }
+        }
+
         const result = await llm.chat({
           requestId,
           modelPath,
-          prompt,
+          prompt: effectivePrompt,
           systemPrompt: await getEffectiveSystemPrompt(),
           contextTokens,
           temperature: state.settings.temperature,
@@ -583,6 +683,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           aborted: result.aborted,
           toolCallCount: result.toolCallCount,
           haltReason: result.haltReason,
+          contextUsed: result.contextUsed,
+          contextSize: result.contextSize,
         })
       } catch (error) {
         send('chat:error', { requestId, message: error instanceof Error ? error.message : String(error) })
