@@ -1,6 +1,7 @@
 ---
 name: Meeting notes → actions
 description: Turn raw notes into decisions, action items, and open questions.
+triggers: meeting, action items, transcript, notes from, minutes
 ---
 
 When given meeting notes, a transcript, or a rambling update, produce:

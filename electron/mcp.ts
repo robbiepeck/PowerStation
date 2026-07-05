@@ -161,6 +161,18 @@ export function findTool(key: string): McpToolInfo | null {
   return getConnectedTools().find((tool) => tool.key === key) ?? null
 }
 
+/**
+ * Best-effort base directory for a server's relative paths: the last argument
+ * of a filesystem-style server command. Used only to render diff previews.
+ */
+export function getServerBaseDir(serverId: string): string | null {
+  const connection = connections.get(serverId)
+  if (!connection) return null
+  const parts = splitCommand(connection.config.command)
+  const last = parts[parts.length - 1]
+  return last && (last.startsWith('/') || /^[A-Za-z]:[\\/]/.test(last)) ? last : null
+}
+
 export async function callTool(tool: McpToolInfo, args: unknown): Promise<{ ok: boolean; text: string }> {
   const connection = connections.get(tool.serverId)
   if (!connection) return { ok: false, text: `Server for ${tool.key} is not connected.` }

@@ -2,6 +2,20 @@
 
 The "See what's new" card in the app links here.
 
+## v0.6.0 — Agent trust
+
+- **Diff previews for file writes** — when a tool wants to write, edit or move a file, the
+  permission modal shows a real diff against the file's current content (+adds/−removes, new-file
+  detection, mismatch warnings), with raw arguments one click away. Approve what will actually
+  happen, not JSON.
+- **Relevance-triggered skills** — every skill is now Off, Auto or Always. Auto skills activate
+  only when a message matches their triggers (editable per skill), keeping small contexts lean;
+  each reply notes which skills applied. Changing the active skill set mid-chat no longer resets
+  the model's memory of the conversation.
+- **Artifacts pane** — HTML, SVG and Markdown outputs open in a side panel (sandboxed, no access
+  to the app) instead of scrolling past as code blocks; reopen any artifact from a chip under the
+  message.
+
 ## v0.5.0 — Documents & daily polish
 
 - **Attach files to chat** — drop or pick text, markdown, code and PDF files; contents go to the

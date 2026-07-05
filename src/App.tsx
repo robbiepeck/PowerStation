@@ -10,6 +10,7 @@ import {
   MessageSquareText,
   Plus,
   Power as PowerIcon,
+  PanelRightOpen,
   Paperclip,
   Pencil,
   RotateCcw,
@@ -26,6 +27,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
+import { artifactSrcDoc, extractArtifacts, type Artifact } from './artifacts'
 import { ModelsView, MonitorView, SettingsView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
@@ -600,6 +602,8 @@ function App() {
   const [composerSeed, setComposerSeed] = useState<{ text: string; key: number } | null>(null)
   const [whatsNew, setWhatsNew] = useState<WhatsNew | null>(null)
   const [chatQuery, setChatQuery] = useState('')
+  const [artifact, setArtifact] = useState<Artifact | null>(null)
+  const seenArtifactRef = useRef<string | null>(null)
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
@@ -647,6 +651,20 @@ function App() {
     return bridge.rag.onIndexProgress(setRagIndexing)
   }, [])
 
+  // Auto-open the artifact pane when a reply finishes with a renderable
+  // artifact (html/svg/markdown) — once per artifact, dismissible.
+  useEffect(() => {
+    const last = [...chat.messages].reverse().find((m) => m.role === 'assistant' && !m.streaming && m.content)
+    if (!last) return
+    const artifacts = extractArtifacts(last.id, last.content)
+    if (!artifacts.length) return
+    const newest = artifacts[artifacts.length - 1]
+    if (seenArtifactRef.current !== newest.id) {
+      seenArtifactRef.current = newest.id
+      setArtifact(newest)
+    }
+  }, [chat.messages])
+
   // Autosave the conversation (debounced) whenever a turn settles. Files are
   // plain JSON in the user-data folder; saving is a setting, on by default.
   // The ref keeps the save-callback reading the current chat id without making
@@ -682,6 +700,8 @@ function App() {
     setPendingAttachments([])
     setRagFolder(null)
     setComposerSeed(null)
+    setArtifact(null)
+    seenArtifactRef.current = null
   }, [chat])
 
   const handleLoadChat = useCallback(
@@ -693,6 +713,8 @@ function App() {
       }
       chat.loadChat(stored)
       setPendingAttachments([])
+      setArtifact(null)
+      seenArtifactRef.current = null
       setRagFolder(stored.ragFolder ? { ...stored.ragFolder } : null)
       if (stored.ragFolder) {
         void bridge.rag.info(stored.ragFolder.id).then((info) => {
@@ -993,6 +1015,7 @@ function App() {
       <main className="app-main">
         {visibleView === 'chat' && (
           <ChatView
+            artifact={artifact}
             attachments={pendingAttachments}
             chatId={chat.chatId}
             composerSeed={composerSeed}
@@ -1000,6 +1023,7 @@ function App() {
             messages={chat.messages}
             models={models}
             onAttachFolder={() => void handleAttachFolder()}
+            onCloseArtifact={() => setArtifact(null)}
             onDismissRuntimeEvent={runtimeEvents.dismiss}
             onDismissWhatsNew={() => {
               setWhatsNew(null)
@@ -1010,6 +1034,7 @@ function App() {
             onExport={() => void handleExportChat()}
             onManageModels={() => setActiveView('models')}
             onNewChat={handleNewChat}
+            onOpenArtifact={setArtifact}
             onOpenMonitor={() => setActiveView('monitor')}
             onPickFiles={() => void handlePickFiles()}
             onRegenerate={() => chat.regenerate(ragFolder?.id)}
@@ -1176,6 +1201,7 @@ function StatusPill({
 // --- Chat view --------------------------------------------------------------
 
 function ChatView({
+  artifact,
   attachments,
   chatId,
   composerSeed,
@@ -1183,6 +1209,7 @@ function ChatView({
   messages,
   models,
   onAttachFolder,
+  onCloseArtifact,
   onDismissRuntimeEvent,
   onDismissWhatsNew,
   onDropFiles,
@@ -1190,6 +1217,7 @@ function ChatView({
   onExport,
   onManageModels,
   onNewChat,
+  onOpenArtifact,
   onOpenMonitor,
   onPickFiles,
   onRegenerate,
@@ -1207,6 +1235,7 @@ function ChatView({
   streaming,
   whatsNew,
 }: {
+  artifact: Artifact | null
   attachments: StoredAttachment[]
   chatId: string | null
   composerSeed: { text: string; key: number } | null
@@ -1214,6 +1243,7 @@ function ChatView({
   messages: ChatTurn[]
   models: ModelInfo[]
   onAttachFolder: () => void
+  onCloseArtifact: () => void
   onDismissRuntimeEvent: () => void
   onDismissWhatsNew: () => void
   onDropFiles: (files: File[]) => void
@@ -1221,6 +1251,7 @@ function ChatView({
   onExport: () => void
   onManageModels: () => void
   onNewChat: () => void
+  onOpenArtifact: (artifact: Artifact) => void
   onOpenMonitor: () => void
   onPickFiles: () => void
   onRegenerate: () => void
@@ -1248,7 +1279,8 @@ function ChatView({
   const lastUserId = [...messages].reverse().find((m) => m.role === 'user')?.id
 
   return (
-    <div className="chat-view">
+    <div className={artifact ? 'chat-view with-artifact' : 'chat-view'}>
+      <div className="chat-column">
       <header className="chat-header">
         <ModelPicker
           models={models}
@@ -1344,6 +1376,7 @@ function ChatView({
                 isLastUser={message.id === lastUserId}
                 busy={streaming}
                 onEditLast={onEditLast}
+                onOpenArtifact={onOpenArtifact}
                 onRegenerate={onRegenerate}
               />
             ))}
@@ -1385,7 +1418,42 @@ function ChatView({
         seed={composerSeed}
         streaming={streaming}
       />
+      </div>
+      {artifact ? <ArtifactPane artifact={artifact} onClose={onCloseArtifact} /> : null}
     </div>
+  )
+}
+
+function ArtifactPane({ artifact, onClose }: { artifact: Artifact; onClose: () => void }) {
+  return (
+    <aside className="artifact-pane" aria-label={`Artifact: ${artifact.title}`}>
+      <header className="artifact-pane-head">
+        <strong>{artifact.title}</strong>
+        <span className="artifact-kind">{artifact.kind}</span>
+        <div className="artifact-pane-actions">
+          <CopyButton text={artifact.code} />
+          <button className="ghost-button" type="button" aria-label="Close artifact" onClick={onClose}>
+            <X size={15} />
+          </button>
+        </div>
+      </header>
+      <div className="artifact-pane-body">
+        {artifact.kind === 'markdown' ? (
+          <div className="artifact-markdown">
+            <Markdown source={artifact.code} />
+          </div>
+        ) : (
+          <iframe
+            className="artifact-frame"
+            title={artifact.title}
+            // Scripts may run, but the opaque origin means no access to the
+            // app, its bridge, or its storage.
+            sandbox="allow-scripts"
+            srcDoc={artifactSrcDoc(artifact)}
+          />
+        )}
+      </div>
+    </aside>
   )
 }
 
@@ -1465,6 +1533,7 @@ function MessageBubble({
   isLastUser,
   busy,
   onEditLast,
+  onOpenArtifact,
   onRegenerate,
 }: {
   message: ChatTurn
@@ -1473,6 +1542,7 @@ function MessageBubble({
   isLastUser: boolean
   busy: boolean
   onEditLast: () => void
+  onOpenArtifact: (artifact: Artifact) => void
   onRegenerate: () => void
 }) {
   if (message.role === 'user') {
@@ -1508,14 +1578,18 @@ function MessageBubble({
         {message.streaming ? <span className="caret-dot" /> : null}
       </div>
 
-      {message.admission && (message.admission.verdict === 'tight' || message.admission.schemaTokens > 0) ? (
+      {message.admission &&
+      (message.admission.verdict === 'tight' ||
+        message.admission.schemaTokens > 0 ||
+        message.admission.activeSkills?.length > 0) ? (
         <div className="admission-line" title={message.admission.summary}>
           {message.admission.verdict === 'tight'
-            ? `Context capped at ${message.admission.contextTokens.toLocaleString()} tokens to fit memory safely.`
+            ? `Context capped at ${message.admission.contextTokens.toLocaleString()} tokens to fit memory safely. `
             : null}
           {message.admission.schemaTokens > 0
-            ? ` ${message.admission.toolCount} tools connected (~${message.admission.schemaTokens.toLocaleString()} tokens of context).`
+            ? `${message.admission.toolCount} tools connected (~${message.admission.schemaTokens.toLocaleString()} tokens of context). `
             : null}
+          {message.admission.activeSkills?.length ? `Skills: ${message.admission.activeSkills.join(', ')}.` : null}
         </div>
       ) : null}
 
@@ -1559,6 +1633,24 @@ function MessageBubble({
         </div>
       ) : null}
 
+      {!message.streaming && !message.error && message.content
+        ? (() => {
+            const artifacts = extractArtifacts(message.id, message.content)
+            if (!artifacts.length) return null
+            return (
+              <div className="artifact-chips">
+                {artifacts.map((item) => (
+                  <button className="artifact-chip" key={item.id} type="button" onClick={() => onOpenArtifact(item)}>
+                    <PanelRightOpen size={13} />
+                    {item.title}
+                    <em>{item.kind}</em>
+                  </button>
+                ))}
+              </div>
+            )
+          })()
+        : null}
+
       {!message.streaming && !message.error && message.content ? (
         <div className="assistant-foot">
           <CopyButton text={message.content} />
@@ -1595,6 +1687,7 @@ function PermissionModal({
     }
   }, [request.args])
 
+  const preview = request.preview
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Tool permission request">
       <div className="permission-modal">
@@ -1607,7 +1700,45 @@ function PermissionModal({
             </p>
           </div>
         </div>
-        <pre className="permission-args">{argsPreview}</pre>
+
+        {preview?.kind === 'diff' ? (
+          <div className="permission-diff">
+            <div className="permission-diff-head">
+              <code>{preview.path}</code>
+              <span>
+                {preview.newFile ? <em className="diff-new">new file</em> : null}
+                <em className="diff-add">+{preview.summary.added}</em>
+                <em className="diff-del">−{preview.summary.removed}</em>
+              </span>
+            </div>
+            {preview.note ? <p className="permission-diff-note">{preview.note}</p> : null}
+            {preview.lines.length ? (
+              <pre className="permission-diff-body">
+                {preview.lines.map((line, index) => (
+                  <span className={`diff-line ${line.type}`} key={index}>
+                    {line.type === 'add' ? '+ ' : line.type === 'del' ? '− ' : line.type === 'skip' ? '' : '  '}
+                    {line.text}
+                    {'\n'}
+                  </span>
+                ))}
+              </pre>
+            ) : null}
+            <details className="permission-raw">
+              <summary>Raw arguments</summary>
+              <pre className="permission-args">{argsPreview}</pre>
+            </details>
+          </div>
+        ) : preview?.kind === 'move' ? (
+          <div className="permission-diff">
+            <div className="permission-diff-head">
+              <code>
+                {preview.from} → {preview.to}
+              </code>
+            </div>
+          </div>
+        ) : (
+          <pre className="permission-args">{argsPreview}</pre>
+        )}
         <p className="permission-note">
           Tools run on your machine with your permissions. Only allow calls you understand.
         </p>

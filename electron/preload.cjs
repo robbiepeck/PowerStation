@@ -58,7 +58,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     list: () => ipcRenderer.invoke('skills:list'),
     save: (payload) => ipcRenderer.invoke('skills:save', payload),
     delete: (slug) => ipcRenderer.invoke('skills:delete', slug),
-    setEnabled: (payload) => ipcRenderer.invoke('skills:setEnabled', payload),
+    setMode: (payload) => ipcRenderer.invoke('skills:setMode', payload),
     reveal: () => ipcRenderer.invoke('skills:reveal'),
   },
   connectors: {

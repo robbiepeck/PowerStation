@@ -1,6 +1,7 @@
 ---
 name: Concise answers
 description: Short, direct replies — no filler, no restating the question.
+triggers: concise, briefly, short answer, tldr
 ---
 
 Answer as briefly as the question allows.

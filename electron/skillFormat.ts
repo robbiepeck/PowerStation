@@ -13,7 +13,11 @@ export type ParsedSkill = {
   name: string
   description: string
   body: string
+  /** Words/phrases that auto-activate the skill when it is in 'auto' mode. */
+  triggers: string[]
 }
+
+export type SkillMode = 'off' | 'auto' | 'always'
 
 const MAX_NAME = 60
 const MAX_DESCRIPTION = 160
@@ -23,6 +27,7 @@ export function parseSkillFile(raw: string, fallbackName: string): ParsedSkill {
   const text = raw.replace(/\r\n/g, '\n')
   let name = fallbackName
   let description = ''
+  let triggers: string[] = []
   let body = text
 
   const match = text.match(/^---\n([\s\S]*?)\n---\n?/)
@@ -35,6 +40,13 @@ export function parseSkillFile(raw: string, fallbackName: string): ParsedSkill {
       const value = line.slice(sep + 1).trim()
       if (key === 'name' && value) name = value
       if (key === 'description' && value) description = value
+      if (key === 'triggers' && value) {
+        triggers = value
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t.length > 1)
+          .slice(0, 20)
+      }
     }
   }
 
@@ -42,13 +54,15 @@ export function parseSkillFile(raw: string, fallbackName: string): ParsedSkill {
     name: name.slice(0, MAX_NAME),
     description: description.slice(0, MAX_DESCRIPTION),
     body: body.trim().slice(0, MAX_BODY),
+    triggers,
   }
 }
 
 export function serializeSkillFile(skill: ParsedSkill): string {
   const name = skill.name.replace(/\n/g, ' ').slice(0, MAX_NAME)
   const description = skill.description.replace(/\n/g, ' ').slice(0, MAX_DESCRIPTION)
-  return `---\nname: ${name}\ndescription: ${description}\n---\n\n${skill.body.trim().slice(0, MAX_BODY)}\n`
+  const triggersLine = skill.triggers.length ? `\ntriggers: ${skill.triggers.join(', ')}` : ''
+  return `---\nname: ${name}\ndescription: ${description}${triggersLine}\n---\n\n${skill.body.trim().slice(0, MAX_BODY)}\n`
 }
 
 /** Same rough chars/4 heuristic the tool-schema meter uses. */
@@ -63,6 +77,22 @@ export function slugifySkillName(name: string): string {
     .replace(/^-+|-+$/g, '')
     .slice(0, 60)
   return slug || 'skill'
+}
+
+/**
+ * Does this auto-mode skill apply to the given message? Matches any trigger
+ * phrase; a skill with no explicit triggers falls back to the words of its
+ * own name (so "Code reviewer" activates on "review this code").
+ */
+export function skillMatchesMessage(skill: ParsedSkill, message: string): boolean {
+  const haystack = message.toLowerCase()
+  const triggers = skill.triggers.length
+    ? skill.triggers
+    : skill.name
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((word) => word.length > 3)
+  return triggers.some((trigger) => haystack.includes(trigger))
 }
 
 /**

@@ -25,7 +25,7 @@ token-metered, and injected into the system prompt while enabled (they work on e
 including chat-only ones). The **connector gallery** offers six curated, npm-verified MCP servers —
 local files (folder-picker scoped), memory, web reading, web search, sequential thinking, and a
 demo server — added with one click and remotely updatable via `catalog/connectors.json`. Completes
-original goal #2. Future upgrade path: relevance-triggered skill injection instead of always-on.
+original goal #2. The relevance-triggered upgrade shipped in v0.6 (Off/Auto/Always modes with per-skill triggers).
 
 ### 2. On-device speed micro-benchmark — *shipped v0.2*
 After a model is set up, run a short standard generation and record **measured tokens/sec on this

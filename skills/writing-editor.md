@@ -1,6 +1,7 @@
 ---
 name: Writing editor
 description: Tighten prose while keeping the author's voice.
+triggers: edit, rewrite, proofread, tone, tighten, improve this
 ---
 
 When given text to edit:

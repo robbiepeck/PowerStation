@@ -108,7 +108,7 @@ export type DownloadState = {
 
 const EMPTY_UTILITIES: UtilitySettings = {
   systemPrompt: '',
-  enabledSkills: [],
+  skillModes: {},
   mcpServers: [],
 }
 
@@ -1004,7 +1004,7 @@ export function UtilitiesView({
 
 // --- Skills -----------------------------------------------------------------------
 
-const EMPTY_SKILL_DRAFT = { name: '', description: '', body: '' }
+const EMPTY_SKILL_DRAFT = { name: '', description: '', body: '', triggers: '' }
 
 function SkillsPanel({ contextTokens }: { contextTokens: number }) {
   const [skills, setSkills] = useState<SkillInfo[] | null>(null)
@@ -1023,13 +1023,17 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
     void refresh()
   }, [refresh])
 
-  const toggle = (skill: SkillInfo) => {
-    void bridge.skills.setEnabled({ slug: skill.slug, enabled: !skill.enabled }).then(refresh)
+  const setMode = (skill: SkillInfo, mode: SkillInfo['mode']) => {
+    void bridge.skills.setMode({ slug: skill.slug, mode }).then(refresh)
   }
 
   const startEdit = (skill: SkillInfo | null) => {
     setEditing(skill ? skill.slug : 'new')
-    setDraft(skill ? { name: skill.name, description: skill.description, body: skill.body } : EMPTY_SKILL_DRAFT)
+    setDraft(
+      skill
+        ? { name: skill.name, description: skill.description, body: skill.body, triggers: skill.triggers.join(', ') }
+        : EMPTY_SKILL_DRAFT,
+    )
   }
 
   const saveDraft = async () => {
@@ -1051,7 +1055,7 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
     await refresh()
   }
 
-  const enabledTokens = (skills ?? []).filter((s) => s.enabled).reduce((sum, s) => sum + s.tokenEstimate, 0)
+  const enabledTokens = (skills ?? []).filter((s) => s.mode === 'always').reduce((sum, s) => sum + s.tokenEstimate, 0)
   const skillPct = contextTokens > 0 ? (enabledTokens / contextTokens) * 100 : 0
 
   return (
@@ -1070,17 +1074,18 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
         </div>
       </div>
       <p className="panel-hint">
-        Skills are reusable instructions — plain markdown files — added to the system prompt while enabled. They work
-        with every model, including chat-only ones.
+        Skills are reusable instructions — plain markdown files — added to the system prompt. <strong>Always</strong>{' '}
+        applies on every message; <strong>Auto</strong> activates only when a message matches the skill's triggers,
+        saving context on small models. They work with every model, including chat-only ones.
       </p>
 
       {enabledTokens > 0 ? (
         <div className={skillPct > 25 ? 'context-meter warn' : 'context-meter'}>
           <Gauge size={14} />
           <span>
-            Enabled skills use ~{enabledTokens.toLocaleString()} tokens of your {contextTokens.toLocaleString()}-token
+            Always-on skills use ~{enabledTokens.toLocaleString()} tokens of your {contextTokens.toLocaleString()}-token
             context ({formatNumber(skillPct, 0)}%)
-            {skillPct > 25 ? ' — long skills crowd out conversation on small models.' : ''}
+            {skillPct > 25 ? ' — consider switching some to Auto.' : ''}
           </span>
         </div>
       ) : null}
@@ -1092,14 +1097,26 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
           <p className="utility-empty">No skills yet — create one, or drop .md files into the skills folder.</p>
         ) : (
           skills.map((skill) => (
-            <div className={skill.enabled ? 'skill-card enabled' : 'skill-card'} key={skill.slug}>
+            <div className={skill.mode !== 'off' ? 'skill-card enabled' : 'skill-card'} key={skill.slug}>
               <div className="skill-card-row">
-                <label className="skill-toggle" title={skill.enabled ? 'Disable skill' : 'Enable skill'}>
-                  <input type="checkbox" checked={skill.enabled} onChange={() => toggle(skill)} />
-                </label>
+                <select
+                  className="skill-mode"
+                  aria-label={`Activation for ${skill.name}`}
+                  value={skill.mode}
+                  onChange={(event) => setMode(skill, event.target.value as SkillInfo['mode'])}
+                >
+                  <option value="off">Off</option>
+                  <option value="auto">Auto</option>
+                  <option value="always">Always</option>
+                </select>
                 <button className="skill-card-main" type="button" onClick={() => startEdit(skill)}>
                   <strong>{skill.name}</strong>
-                  <span>{skill.description || 'No description'}</span>
+                  <span>
+                    {skill.description || 'No description'}
+                    {skill.mode === 'auto'
+                      ? ` — triggers: ${skill.triggers.length ? skill.triggers.join(', ') : '(name words)'}`
+                      : ''}
+                  </span>
                 </button>
                 <div className="skill-card-side">
                   <Badge tone="neutral">~{skill.tokenEstimate} tok</Badge>
@@ -1159,6 +1176,12 @@ function SkillEditor({
           onChange={(event) => onChange({ ...draft, description: event.target.value })}
         />
       </div>
+      <input
+        aria-label="Skill triggers"
+        placeholder="Auto-mode triggers, comma-separated (e.g. review, refactor) — leave empty to match the name"
+        value={draft.triggers}
+        onChange={(event) => onChange({ ...draft, triggers: event.target.value })}
+      />
       <textarea
         aria-label="Skill instructions"
         placeholder="The instructions added to the system prompt while this skill is enabled…"

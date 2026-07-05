@@ -5,10 +5,12 @@ export type McpServerConfig = {
   enabled: boolean
 }
 
+export type SkillMode = 'off' | 'auto' | 'always'
+
 export type UtilitySettings = {
   systemPrompt: string
-  /** Slugs of enabled skills (markdown files in the skills folder). */
-  enabledSkills: string[]
+  /** Per-skill activation: absent = off, 'always' = every turn, 'auto' = when triggers match. */
+  skillModes: Record<string, 'auto' | 'always'>
   mcpServers: McpServerConfig[]
 }
 
@@ -17,7 +19,8 @@ export type SkillInfo = {
   name: string
   description: string
   body: string
-  enabled: boolean
+  triggers: string[]
+  mode: SkillMode
   tokenEstimate: number
   builtIn: boolean
 }
@@ -301,6 +304,19 @@ export type McpToolInfoResponse = {
 
 export type ToolPermission = 'allow' | 'ask' | 'deny'
 
+export type DiffLine = { type: 'same' | 'add' | 'del' | 'skip'; text: string }
+
+export type ToolPreview =
+  | {
+      kind: 'diff'
+      path: string
+      newFile: boolean
+      lines: DiffLine[]
+      summary: { added: number; removed: number }
+      note: string | null
+    }
+  | { kind: 'move'; from: string; to: string }
+
 export type PermissionRequest = {
   promptId: string
   requestId: string
@@ -308,6 +324,7 @@ export type PermissionRequest = {
   serverName: string
   toolName: string
   args: unknown
+  preview: ToolPreview | null
 }
 
 export type PermissionDecision = 'allow-once' | 'allow-always' | 'deny'
@@ -331,6 +348,8 @@ export type ChatAdmissionPayload = {
   summary: string
   toolCount: number
   schemaTokens: number
+  /** Names of skills applied to this turn (always-on + trigger-matched). */
+  activeSkills: string[]
 }
 
 export type ChatToolCallPayload = { requestId: string; toolKey: string; args: unknown }
@@ -435,9 +454,15 @@ export type PowerStationBridge = {
   }
   skills: {
     list: () => Promise<SkillInfo[]>
-    save: (payload: { slug?: string; name: string; description: string; body: string }) => Promise<SkillInfo | null>
+    save: (payload: {
+      slug?: string
+      name: string
+      description: string
+      body: string
+      triggers?: string
+    }) => Promise<SkillInfo | null>
     delete: (slug: string) => Promise<boolean>
-    setEnabled: (payload: { slug: string; enabled: boolean }) => Promise<boolean>
+    setMode: (payload: { slug: string; mode: SkillMode }) => Promise<boolean>
     reveal: () => Promise<boolean>
   }
   connectors: {

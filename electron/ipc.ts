@@ -88,11 +88,15 @@ async function getOffloadCeilingBytes(): Promise<number> {
   return Math.round(profile.totalRamBytes * OFFLOAD_RAM_FRACTION)
 }
 
-/** The user's base system prompt plus every enabled skill. */
-async function getEffectiveSystemPrompt(): Promise<string | undefined> {
+/**
+ * The user's base system prompt plus active skills: always-on ones, and — when
+ * a message is provided — auto skills whose triggers match it.
+ */
+async function getEffectiveSystemPrompt(message?: string): Promise<{ prompt: string | undefined; skillNames: string[] }> {
   const state = await getState()
-  const composed = composeSystemPrompt(state.settings.utilities.systemPrompt, await skills.getEnabledSkills())
-  return composed || undefined
+  const active = await skills.getActiveSkills(message)
+  const composed = composeSystemPrompt(state.settings.utilities.systemPrompt, active)
+  return { prompt: composed || undefined, skillNames: active.map((skill) => skill.name) }
 }
 
 /**
@@ -128,8 +132,9 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   const result = await llm.runBenchmark({
     modelPath,
     contextTokens,
-    // Same composed prompt as chat, so the warm session carries over.
-    systemPrompt: await getEffectiveSystemPrompt(),
+    // Same composed prompt as chat (always-on skills only), so the warm
+    // session carries over.
+    systemPrompt: (await getEffectiveSystemPrompt()).prompt,
   })
   const record: BenchmarkRecord = {
     tokensPerSec: Math.round(result.tokensPerSec * 10) / 10,
@@ -395,8 +400,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     skills.saveSkill(payload ?? { name: '', description: '', body: '' }),
   )
   ipcMain.handle('skills:delete', (_event, slug: string) => skills.deleteSkill(slug))
-  ipcMain.handle('skills:setEnabled', (_event, payload: { slug: string; enabled: boolean }) =>
-    skills.setSkillEnabled(payload?.slug, payload?.enabled === true),
+  ipcMain.handle('skills:setMode', (_event, payload: { slug: string; mode: 'off' | 'auto' | 'always' }) =>
+    skills.setSkillMode(payload?.slug, payload?.mode),
   )
   ipcMain.handle('skills:reveal', () => skills.revealSkillsDir())
 
@@ -634,6 +639,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         const toolDefinitions = tier === 'none' ? [] : agent.getAgentToolDefinitions()
         const maxToolCalls = tier === 'multi' ? 15 : 3
 
+        const effective = await getEffectiveSystemPrompt(typeof payload.ragQuery === 'string' ? payload.ragQuery : prompt)
         send('chat:admission', {
           requestId,
           contextTokens,
@@ -641,6 +647,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           summary: fit.summary,
           toolCount: toolDefinitions.length,
           schemaTokens: agent.estimateToolSchemaTokens(toolDefinitions),
+          activeSkills: effective.skillNames,
         })
 
         // Chat-with-a-folder: retrieve the most relevant chunks for this
@@ -665,7 +672,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           requestId,
           modelPath,
           prompt: effectivePrompt,
-          systemPrompt: await getEffectiveSystemPrompt(),
+          systemPrompt: effective.prompt,
           contextTokens,
           temperature: state.settings.temperature,
           maxTokens: state.settings.maxTokens,

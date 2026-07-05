@@ -109,14 +109,21 @@ async function ensureModelLoaded(request: ChatRequest): Promise<LoadedState> {
     const target = clampContextSize(request.contextTokens, loaded.model.trainContextSize)
     if (loaded.contextTokens >= target) {
       // Reuse the loaded model when only the system prompt changed — recreate
-      // the session (fresh history) on the SAME sequence; the context only has
-      // one and a disposed session does not return it to the pool.
+      // the session on the SAME sequence (the context only has one, and a
+      // disposed session does not return it to the pool), carrying the
+      // conversation over so auto-activated skills and prompt edits never
+      // wipe the model's memory of the chat.
       if (loaded.systemPrompt !== systemPrompt) {
+        const prior = loaded.session.getChatHistory().filter((item) => item.type !== 'system')
         loaded.session.dispose()
         loaded.session = new LlamaChatSession({
           contextSequence: loaded.sequence,
           systemPrompt: systemPrompt || undefined,
         })
+        if (prior.length) {
+          const items: ChatHistoryItem[] = systemPrompt ? [{ type: 'system', text: systemPrompt }] : []
+          loaded.session.setChatHistory([...items, ...prior])
+        }
         loaded.systemPrompt = systemPrompt
       }
       return loaded

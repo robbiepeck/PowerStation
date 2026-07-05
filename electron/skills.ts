@@ -11,13 +11,15 @@ import {
   estimateSkillTokens,
   parseSkillFile,
   serializeSkillFile,
+  skillMatchesMessage,
   slugifySkillName,
   type ParsedSkill,
+  type SkillMode,
 } from './skillFormat.js'
 
 export type SkillInfo = ParsedSkill & {
   slug: string
-  enabled: boolean
+  mode: SkillMode
   tokenEstimate: number
   builtIn: boolean
 }
@@ -86,7 +88,7 @@ export async function listSkills(): Promise<SkillInfo[]> {
     return []
   }
   const [state, builtIns] = await Promise.all([getState(), bundledSlugs()])
-  const enabled = new Set(state.settings.utilities.enabledSkills)
+  const modes = state.settings.utilities.skillModes
   const skills: SkillInfo[] = []
   for (const file of files.slice(0, MAX_SKILLS)) {
     if (!file.endsWith('.md')) continue
@@ -102,7 +104,7 @@ export async function listSkills(): Promise<SkillInfo[]> {
     skills.push({
       ...parsed,
       slug,
-      enabled: enabled.has(slug),
+      mode: modes[slug] ?? 'off',
       tokenEstimate: estimateSkillTokens(parsed.body),
       builtIn: builtIns.has(slug),
     })
@@ -115,11 +117,20 @@ export async function saveSkill(payload: {
   name: unknown
   description: unknown
   body: unknown
+  triggers?: unknown
 }): Promise<SkillInfo | null> {
   await ensureSeeded()
   const name = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : 'Untitled skill'
   const description = typeof payload.description === 'string' ? payload.description.trim() : ''
   const body = typeof payload.body === 'string' ? payload.body : ''
+  const triggers =
+    typeof payload.triggers === 'string'
+      ? payload.triggers
+          .split(',')
+          .map((t) => t.trim().toLowerCase())
+          .filter((t) => t.length > 1)
+          .slice(0, 20)
+      : []
   let slug = isValidSlug(payload.slug) ? payload.slug : slugifySkillName(name)
   // New skill with a colliding name: pick a free slug rather than overwrite.
   if (!isValidSlug(payload.slug)) {
@@ -128,13 +139,13 @@ export async function saveSkill(payload: {
     for (let n = 2; existing.has(candidate); n++) candidate = `${slug}-${n}`.slice(0, 60)
     slug = candidate
   }
-  const skill: ParsedSkill = { name, description, body }
+  const skill: ParsedSkill = { name, description, body, triggers }
   await fs.writeFile(path.join(skillsDir(), `${slug}.md`), serializeSkillFile(skill), 'utf8')
   const state = await getState()
   return {
     ...parseSkillFile(serializeSkillFile(skill), slug),
     slug,
-    enabled: state.settings.utilities.enabledSkills.includes(slug),
+    mode: state.settings.utilities.skillModes[slug] ?? 'off',
     tokenEstimate: estimateSkillTokens(body),
     builtIn: (await bundledSlugs()).has(slug),
   }
@@ -148,17 +159,17 @@ export async function deleteSkill(slug: unknown): Promise<boolean> {
     return false
   }
   await mutate((state) => {
-    state.settings.utilities.enabledSkills = state.settings.utilities.enabledSkills.filter((s) => s !== slug)
+    delete state.settings.utilities.skillModes[slug]
   })
   return true
 }
 
-export async function setSkillEnabled(slug: unknown, enabled: boolean): Promise<boolean> {
+export async function setSkillMode(slug: unknown, mode: SkillMode): Promise<boolean> {
   if (!isValidSlug(slug)) return false
+  if (mode !== 'off' && mode !== 'auto' && mode !== 'always') return false
   await mutate((state) => {
-    const list = state.settings.utilities.enabledSkills.filter((s) => s !== slug)
-    if (enabled) list.push(slug)
-    state.settings.utilities.enabledSkills = list.slice(0, MAX_SKILLS)
+    if (mode === 'off') delete state.settings.utilities.skillModes[slug]
+    else state.settings.utilities.skillModes[slug] = mode
   })
   return true
 }
@@ -169,8 +180,15 @@ export async function revealSkillsDir(): Promise<boolean> {
   return true
 }
 
-/** Bodies of all enabled skills, for system-prompt composition. */
-export async function getEnabledSkills(): Promise<ParsedSkill[]> {
+/**
+ * Skills active for a given message: always-on skills plus auto skills whose
+ * triggers match. Without a message (e.g. benchmarks), only always-on apply.
+ */
+export async function getActiveSkills(message?: string): Promise<SkillInfo[]> {
   const skills = await listSkills()
-  return skills.filter((s) => s.enabled && s.body)
+  return skills.filter((skill) => {
+    if (!skill.body || skill.mode === 'off') return false
+    if (skill.mode === 'always') return true
+    return message ? skillMatchesMessage(skill, message) : false
+  })
 }

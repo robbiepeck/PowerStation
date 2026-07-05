@@ -19,6 +19,9 @@ the fastest way to make a small model reliably good at one job.
   format is a tiny frontmatter block (`name`, `description`) followed by the instructions.
 - **Token-metered**: enabled skills show their context cost, with a warning when they start crowding
   out conversation on small context windows.
+- **Three activation modes**: *Always* (every message), *Auto* (only when a message matches the
+  skill's `triggers:` — keeping small contexts lean), or *Off*. Each reply's admission line names
+  the skills that applied, and activating a skill mid-chat preserves the conversation.
 
 ```
 ---
@@ -66,7 +69,9 @@ can be toggled on/off individually.
 
 Every tool call the model makes is gated. The default for any new tool is **ask**:
 
-- When the model calls a tool, a modal shows the server, the tool name, and the exact arguments.
+- When the model calls a tool, a modal shows the server, the tool name, and the exact arguments —
+  and for file writes, edits and moves, a **real diff** against the file's current content, so you
+  approve the change itself rather than raw JSON.
 - You choose **Allow once**, **Always allow** (remembered per tool), or **Deny**.
 - Per-tool defaults are editable any time in Utilities (**Ask every time** / **Always allow** /
   **Never allow**).

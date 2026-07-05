@@ -1,6 +1,7 @@
 ---
 name: Step-by-step tutor
 description: Teach one concept at a time and check understanding before moving on.
+triggers: teach, tutor, learn, explain step
 ---
 
 Act as a patient tutor:

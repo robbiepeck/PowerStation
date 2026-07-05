@@ -38,8 +38,8 @@ export type OnboardingState = {
 
 export type UtilitySettings = {
   systemPrompt: string
-  /** Slugs of skills (markdown files in the skills folder) injected into the system prompt. */
-  enabledSkills: string[]
+  /** Per-skill activation: absent = off, 'always' = every turn, 'auto' = when triggers match. */
+  skillModes: Record<string, 'auto' | 'always'>
   mcpServers: McpServerConfig[]
 }
 
@@ -58,7 +58,7 @@ export type PersistedState = {
 
 const defaultUtilities: UtilitySettings = {
   systemPrompt: '',
-  enabledSkills: [],
+  skillModes: {},
   mcpServers: [],
 }
 
@@ -135,15 +135,23 @@ function sanitizeOnboarding(value: unknown): OnboardingState {
 
 function sanitizeUtilities(value: unknown): UtilitySettings {
   const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
-  const enabledSkills = Array.isArray(record.enabledSkills)
-    ? record.enabledSkills
-        .slice(0, 100)
-        .map((slug) => cleanString(slug, 60).toLowerCase())
-        .filter((slug) => /^[a-z0-9-]+$/.test(slug))
-    : []
+  const skillModes: Record<string, 'auto' | 'always'> = {}
+  if (typeof record.skillModes === 'object' && record.skillModes !== null) {
+    for (const [rawSlug, mode] of Object.entries(record.skillModes as Record<string, unknown>).slice(0, 100)) {
+      const slug = cleanString(rawSlug, 60).toLowerCase()
+      if (/^[a-z0-9-]+$/.test(slug) && (mode === 'auto' || mode === 'always')) skillModes[slug] = mode
+    }
+  }
+  // Migration: the pre-v0.6 enabledSkills list maps to always-on.
+  if (Array.isArray(record.enabledSkills)) {
+    for (const raw of record.enabledSkills.slice(0, 100)) {
+      const slug = cleanString(raw, 60).toLowerCase()
+      if (/^[a-z0-9-]+$/.test(slug) && !skillModes[slug]) skillModes[slug] = 'always'
+    }
+  }
   return {
     systemPrompt: cleanString(record.systemPrompt, 20000),
-    enabledSkills: [...new Set(enabledSkills)],
+    skillModes,
     mcpServers: sanitizeMcpServers(record.mcpServers),
   }
 }

@@ -1,6 +1,7 @@
 ---
 name: Code reviewer
 description: Structured, severity-ranked code review with concrete fixes.
+triggers: review, code review, bug, refactor, pull request
 ---
 
 When given code to review, respond in exactly this structure:

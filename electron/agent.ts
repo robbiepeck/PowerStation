@@ -6,6 +6,7 @@
 
 import { getState, mutate, type ToolPermission } from './config.js'
 import * as mcp from './mcp.js'
+import { buildToolPreview, type ToolPreview } from './toolPreview.js'
 import type { ToolDefinition } from './llmProtocol.js'
 
 export type PermissionRequest = {
@@ -15,6 +16,8 @@ export type PermissionRequest = {
   serverName: string
   toolName: string
   args: unknown
+  /** Human-readable preview (e.g. a file diff) when the call shape is known. */
+  preview: ToolPreview | null
 }
 
 export type PermissionDecision = 'allow-once' | 'allow-always' | 'deny'
@@ -58,6 +61,9 @@ export function resolvePermission(promptId: string, decision: PermissionDecision
 async function askUser(requestId: string, tool: mcp.McpToolInfo, args: unknown): Promise<PermissionDecision> {
   const requester = permissionRequester
   if (!requester) return 'deny'
+  // Show what will actually happen, not just the arguments: for file writes
+  // and edits this is a real diff against the file's current content.
+  const preview = await buildToolPreview(tool, args)
   const promptId = `perm-${nextPromptId++}`
   return new Promise<PermissionDecision>((resolve) => {
     const timer = setTimeout(() => {
@@ -78,6 +84,7 @@ async function askUser(requestId: string, tool: mcp.McpToolInfo, args: unknown):
       serverName: tool.serverName,
       toolName: tool.name,
       args,
+      preview,
     })
   })
 }
