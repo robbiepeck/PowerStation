@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url'
 import { utilityProcess, type UtilityProcess } from 'electron'
 import { createModelDownloader } from 'node-llama-cpp'
 import type {
+  BenchmarkRequest,
+  BenchmarkResult,
   ChatRequest,
   ChatResult,
   ChatStatus,
@@ -176,6 +178,10 @@ export async function chat(
   } finally {
     chatCallbacks.delete(request.requestId)
   }
+}
+
+export async function runBenchmark(payload: BenchmarkRequest): Promise<BenchmarkResult> {
+  return call<BenchmarkResult>({ cmd: 'benchmark', payload })
 }
 
 export function stopChat(requestId: string): boolean {

@@ -14,6 +14,7 @@ import {
   ShieldQuestion,
   Sparkles,
   Square,
+  Trash2,
   Wrench,
   X,
 } from 'lucide-react'
@@ -25,9 +26,11 @@ import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
 import { CopyButton, formatNumber } from './ui'
 import type {
+  BenchmarkRecord,
   Catalog,
   CatalogModel,
   ChatStatusPayload,
+  ChatSummary,
   ChatTurn,
   DeviceInfo,
   FitReport,
@@ -37,6 +40,8 @@ import type {
   PermissionRequest,
   RuntimeEventPayload,
   Settings,
+  StoredChat,
+  StoredChatMessage,
   TelemetrySnapshot,
   ToolCallingTier,
   UpdateState,
@@ -281,10 +286,42 @@ function useUpdates() {
   return { installLatest, updateState }
 }
 
+function useChatHistory() {
+  const [summaries, setSummaries] = useState<ChatSummary[]>([])
+  const refresh = useCallback(async () => {
+    const list = await bridge.chats.list().catch(() => [])
+    setSummaries(list)
+  }, [])
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+  return { summaries, refresh }
+}
+
+function useBenchmarks() {
+  const [results, setResults] = useState<Record<string, BenchmarkRecord>>({})
+  const refresh = useCallback(async () => {
+    const map = await bridge.bench.results().catch(() => ({}))
+    setResults(map)
+  }, [])
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+  return { results, refresh }
+}
+
 function useChat() {
   const [messages, setMessages] = useState<ChatTurn[]>([])
   const [streaming, setStreaming] = useState(false)
+  const [chatId, setChatId] = useState<string | null>(null)
   const activeRef = useRef<string | null>(null)
+  // Set when a persisted chat is loaded; sent once with the next message so
+  // the worker replays the conversation into the model's context.
+  const replayRef = useRef<Array<{ role: 'user' | 'assistant'; text: string }> | null>(null)
 
   const patchAssistant = useCallback((requestId: string, patch: (turn: ChatTurn) => ChatTurn) => {
     setMessages((prev) =>
@@ -367,7 +404,9 @@ function useChat() {
       { id: `u-${requestId}`, role: 'user', content: trimmed },
       { id: `a-${requestId}`, role: 'assistant', content: '', requestId, streaming: true, status: 'Preparing…' },
     ])
-    void bridge.chat.send({ requestId, prompt: trimmed })
+    const history = replayRef.current ?? undefined
+    replayRef.current = null
+    void bridge.chat.send({ requestId, prompt: trimmed, history })
   }, [])
 
   const stop = useCallback(() => {
@@ -376,12 +415,41 @@ function useChat() {
 
   const reset = useCallback(() => {
     activeRef.current = null
+    replayRef.current = null
     setStreaming(false)
     setMessages([])
+    setChatId(null)
     void bridge.chat.reset()
   }, [])
 
-  return { messages, streaming, send, stop, reset }
+  const loadChat = useCallback((stored: StoredChat) => {
+    activeRef.current = null
+    setStreaming(false)
+    setChatId(stored.id)
+    replayRef.current = stored.messages.map((m) => ({ role: m.role, text: m.content }))
+    setMessages(
+      stored.messages.map((m, index) => ({
+        id: `s-${stored.id}-${index}`,
+        role: m.role,
+        content: m.content,
+        tokensPerSec: m.tokensPerSec,
+      })),
+    )
+    // Fresh worker session; the saved turns replay with the next message.
+    void bridge.chat.reset()
+  }, [])
+
+  return { messages, streaming, chatId, setChatId, send, stop, reset, loadChat }
+}
+
+function serializeChat(messages: ChatTurn[]): StoredChatMessage[] {
+  return messages
+    .filter((m) => m.content && !m.error && !m.streaming)
+    .map((m) => ({
+      role: m.role,
+      content: m.content,
+      ...(m.tokensPerSec ? { tokensPerSec: m.tokensPerSec } : {}),
+    }))
 }
 
 // --- App shell --------------------------------------------------------------
@@ -399,7 +467,12 @@ function App() {
   const runtimeEvents = useRuntimeEvents()
   const { installLatest, updateState } = useUpdates()
   const chat = useChat()
+  const chatHistory = useChatHistory()
+  const benchmarks = useBenchmarks()
+  const refreshBenchmarks = benchmarks.refresh
   const [download, setDownload] = useState<DownloadState>(null)
+  const [benchmarking, setBenchmarking] = useState(false)
+  const [benchBusyPath, setBenchBusyPath] = useState<string | null>(null)
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
@@ -417,23 +490,106 @@ function App() {
           : { id: payload.id, uri: '', totalSize: payload.totalSize, downloadedSize: payload.downloadedSize },
       )
     })
+    const offBenchmarking = bridge.models.onBenchmarking(() => setBenchmarking(true))
     const offDone = bridge.models.onDownloadDone((payload) => {
       setDownload(null)
+      setBenchmarking(false)
       void (async () => {
         await select(payload.filePath)
         resetChat()
         await refresh()
+        await refreshBenchmarks()
       })()
     })
     const offError = bridge.models.onDownloadError((payload) => {
+      setBenchmarking(false)
       setDownload((current) => (current ? { ...current, error: payload.message } : current))
     })
     return () => {
       offProgress()
+      offBenchmarking()
       offDone()
       offError()
     }
-  }, [refresh, resetChat, select])
+  }, [refresh, refreshBenchmarks, resetChat, select])
+
+  // Autosave the conversation (debounced) whenever a turn settles. Files are
+  // plain JSON in the user-data folder; saving is a setting, on by default.
+  // The ref keeps the save-callback reading the current chat id without making
+  // it an effect dependency (a fresh id must not re-trigger a save).
+  const chatIdRef = useRef(chat.chatId)
+  useEffect(() => {
+    chatIdRef.current = chat.chatId
+  }, [chat.chatId])
+  useEffect(() => {
+    if (chat.streaming || !settings?.saveChats) return
+    const serialized = serializeChat(chat.messages)
+    if (!serialized.length) return
+    const timer = window.setTimeout(() => {
+      void bridge.chats
+        .save({ id: chatIdRef.current ?? undefined, messages: serialized, modelPath: selectedPath ?? undefined })
+        .then((result) => {
+          if (result?.id && result.id !== chatIdRef.current) chat.setChatId(result.id)
+          void chatHistory.refresh()
+        })
+        .catch(() => undefined)
+    }, 600)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chat.messages, chat.streaming, settings?.saveChats, selectedPath])
+
+  const handleLoadChat = useCallback(
+    async (id: string) => {
+      const stored = await bridge.chats.get(id)
+      if (!stored) {
+        void chatHistory.refresh()
+        return
+      }
+      chat.loadChat(stored)
+      // Reselect the chat's model when it is still around, without wiping the
+      // just-loaded messages.
+      if (stored.modelPath && stored.modelPath !== selectedPath && models.some((m) => m.path === stored.modelPath)) {
+        await select(stored.modelPath)
+      }
+      setActiveView('chat')
+    },
+    [chat, chatHistory, models, select, selectedPath],
+  )
+
+  const handleDeleteChat = useCallback(
+    async (id: string) => {
+      await bridge.chats.delete(id)
+      if (chat.chatId === id) chat.reset()
+      void chatHistory.refresh()
+    },
+    [chat, chatHistory],
+  )
+
+  const handleDeleteAllChats = useCallback(async () => {
+    if (!window.confirm('Delete all saved chats from this machine? This cannot be undone.')) return
+    await bridge.chats.deleteAll()
+    chat.reset()
+    void chatHistory.refresh()
+  }, [chat, chatHistory])
+
+  const handleBenchmark = useCallback(
+    async (model: ModelInfo) => {
+      if (chat.messages.length > 0 && !window.confirm('Benchmarking clears the current chat context. Continue?')) {
+        return
+      }
+      setBenchBusyPath(model.path)
+      try {
+        await bridge.bench.run(model.path)
+        if (chat.messages.length > 0) chat.reset()
+        await Promise.all([refreshBenchmarks(), refresh()])
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : String(error))
+      } finally {
+        setBenchBusyPath(null)
+      }
+    },
+    [chat, refresh, refreshBenchmarks],
+  )
 
   const handleSelectModel = useCallback(
     async (path: string | null) => {
@@ -493,6 +649,7 @@ function App() {
   if (!onboarding.completed) {
     return (
       <OnboardingFlow
+        benchmarking={benchmarking}
         download={download}
         onDownload={handleDownload}
         onComplete={(payload) => {
@@ -542,6 +699,34 @@ function App() {
           New chat
         </button>
 
+        {chatHistory.summaries.length > 0 ? (
+          <div className="chat-list" aria-label="Recent chats">
+            <span className="chat-list-title">Recent</span>
+            <div className="chat-list-scroll">
+              {chatHistory.summaries.map((summary) => (
+                <div className={summary.id === chat.chatId ? 'chat-item active' : 'chat-item'} key={summary.id}>
+                  <button
+                    className="chat-item-main"
+                    type="button"
+                    title={summary.title}
+                    onClick={() => void handleLoadChat(summary.id)}
+                  >
+                    {summary.title}
+                  </button>
+                  <button
+                    className="chat-item-delete"
+                    type="button"
+                    aria-label={`Delete chat: ${summary.title}`}
+                    onClick={() => void handleDeleteChat(summary.id)}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <UpdateButton onUpdate={installLatest} state={updateState} />
 
         <div className="rail-status" title={snapshot?.model.loaded ? 'Model loaded' : 'No model loaded'}>
@@ -572,6 +757,9 @@ function App() {
         {visibleView === 'models' && (
           <div className="scroll-view">
             <ModelsView
+              benchBusyPath={benchBusyPath}
+              benchResults={benchmarks.results}
+              benchmarking={benchmarking}
               catalog={catalog}
               catalogRefreshing={catalogRefreshing}
               device={device}
@@ -579,6 +767,7 @@ function App() {
               fitReports={fitReports}
               models={models}
               onAddFolder={handleAddFolder}
+              onBenchmark={(model) => void handleBenchmark(model)}
               onDelete={handleDelete}
               onDownload={handleDownload}
               onOpenWebsite={handleOpenModelWebsite}
@@ -605,7 +794,14 @@ function App() {
         )}
         {visibleView === 'settings' && (
           <div className="scroll-view">
-            {settings ? <SettingsView onChange={updateSettings} settings={settings} /> : null}
+            {settings ? (
+              <SettingsView
+                onChange={updateSettings}
+                onDeleteAllChats={() => void handleDeleteAllChats()}
+                onRevealChats={() => void bridge.chats.reveal()}
+                settings={settings}
+              />
+            ) : null}
           </div>
         )}
       </main>

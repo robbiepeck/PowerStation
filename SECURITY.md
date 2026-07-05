@@ -16,7 +16,9 @@ disclosure.
 
 - **Inference is local.** Models run on-device via a bundled `node-llama-cpp` runtime. Prompts and
   responses are never sent anywhere.
-- **Chats stay in memory.** Nothing is written to disk unless you copy it out.
+- **Chats stay on your machine.** Conversations are saved as plain JSON files in the app's
+  user-data folder — never transmitted. Saving can be disabled in Settings, and files can be
+  revealed or deleted there at any time.
 - **Network is minimal and pinned.** The only outbound traffic is: model downloads and catalogue
   updates from `huggingface.co` / this GitHub repo (download URLs are validated and pinned to
   `huggingface.co`), and update checks against this repo's GitHub Releases. External-link opening is

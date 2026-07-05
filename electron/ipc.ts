@@ -4,12 +4,21 @@ import * as models from './models.js'
 import * as llm from './llm.js'
 import * as mcp from './mcp.js'
 import * as agent from './agent.js'
+import * as chats from './chats.js'
 import { getDeviceHealthProfile } from './device.js'
 import { getCatalog, refreshCatalog, type CatalogModel } from './catalog.js'
 import { recommendModels, type Intent } from './recommend.js'
 import { getHardwareProfile } from './hardware.js'
 import { admittedContextTokens, checkFit, OFFLOAD_RAM_FRACTION, USABLE_BUDGET_FRACTION } from './admission.js'
-import { getState, mutate, patchSettings, managedModelsDir, type Settings, type ToolPermission } from './config.js'
+import {
+  getState,
+  mutate,
+  patchSettings,
+  managedModelsDir,
+  type BenchmarkRecord,
+  type Settings,
+  type ToolPermission,
+} from './config.js'
 
 // Model downloads come from a free-text field, so constrain them to the schemes
 // the app actually supports (Hugging Face shorthand or a direct HTTPS GGUF URL)
@@ -66,6 +75,53 @@ async function getOffloadCeilingBytes(): Promise<number> {
   return Math.round(profile.totalRamBytes * OFFLOAD_RAM_FRACTION)
 }
 
+/**
+ * Measure real tokens/sec for a model on this machine and persist the result
+ * (keyed by lowercase fileName so catalog entries and local files match up).
+ * Runs the same admission check as chat — a model that won't fit isn't
+ * benchmarked, it's refused.
+ */
+async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
+  if (llm.getActiveRequestIds().length > 0) {
+    throw new Error('A generation is running — benchmark when the chat is idle.')
+  }
+  const state = await getState()
+  const [info, entry, budget, offloadCeilingBytes] = await Promise.all([
+    models.getModelInfo(modelPath),
+    findCatalogEntryForModel(modelPath),
+    getGpuBudgetBytes(),
+    getOffloadCeilingBytes(),
+  ])
+  if (!info) throw new Error('Model file not found.')
+  const fitRequest = {
+    weightsBytes: Math.max(info.sizeBytes, entry?.sizeBytes ?? 0),
+    geometry: info.geometry ?? entry?.geometry ?? null,
+    kvBytesPerToken: entry?.kvBytesPerToken ?? null,
+    contextTokens: state.settings.contextTokens,
+    budgetBytes: budget,
+    offloadCeilingBytes,
+  }
+  const fit = checkFit(fitRequest)
+  if (!fit.fits && fit.maxComfortableContext === null) throw new Error(fit.summary)
+  const contextTokens = admittedContextTokens(fitRequest)
+
+  const result = await llm.runBenchmark({
+    modelPath,
+    contextTokens,
+    systemPrompt: state.settings.utilities.systemPrompt || undefined,
+  })
+  const record: BenchmarkRecord = {
+    tokensPerSec: Math.round(result.tokensPerSec * 10) / 10,
+    outputTokens: result.outputTokens,
+    contextTokens,
+    measuredAt: Date.now(),
+  }
+  await mutate((current) => {
+    current.benchmarks[path.basename(modelPath).toLowerCase()] = record
+  })
+  return record
+}
+
 /** Reconnect/disconnect MCP servers so connections mirror the settings. */
 async function reconcileMcpServers(): Promise<void> {
   const state = await getState()
@@ -102,16 +158,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   void reconcileMcpServers()
 
   // --- Models ---------------------------------------------------------------
-  // Each model is enriched with its resolved tool-calling tier so the renderer
-  // never re-implements the capability heuristic.
+  // Each model is enriched with its resolved tool-calling tier and measured
+  // speed so the renderer never re-implements either.
   ipcMain.handle('models:list', async () => {
-    const [list, catalog] = await Promise.all([models.listModels(), getCatalog()])
+    const [list, catalog, state] = await Promise.all([models.listModels(), getCatalog(), getState()])
     return list.map((model) => ({
       ...model,
       toolCalling: resolveToolTier(
         model,
         catalog.models.find((entry) => entry.fileName.toLowerCase() === model.fileName.toLowerCase()) ?? null,
       ),
+      measuredTps: state.benchmarks[model.fileName.toLowerCase()]?.tokensPerSec ?? null,
     }))
   })
   ipcMain.handle('models:getSelected', async () => (await getState()).selectedModelPath)
@@ -164,6 +221,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           onProgress: ({ totalSize, downloadedSize }) => send('models:downloadProgress', { id, totalSize, downloadedSize }),
         })
         await models.importModelFile(filePath)
+        // Measure real speed while we're here: it doubles as pre-warming the
+        // model, so the user's first chat message starts instantly. Optional —
+        // a benchmark failure never blocks delivering the model.
+        try {
+          send('models:benchmarking', { id, filePath })
+          await runModelBenchmark(filePath)
+        } catch {
+          /* model still delivered without a measurement */
+        }
         send('models:downloadDone', { id, filePath })
       } catch (error) {
         send('models:downloadError', { id, message: error instanceof Error ? error.message : String(error) })
@@ -171,6 +237,27 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     })()
     return id
   })
+
+  // --- Benchmarks -------------------------------------------------------------
+  ipcMain.handle('bench:run', async (_event, modelPath: string) => {
+    if (typeof modelPath !== 'string' || !(await models.isKnownModelPath(modelPath))) {
+      throw new Error('Unknown model path.')
+    }
+    return runModelBenchmark(modelPath)
+  })
+  ipcMain.handle('bench:results', async () => (await getState()).benchmarks)
+
+  // --- Chat history -------------------------------------------------------------
+  ipcMain.handle('chats:list', () => chats.listChats())
+  ipcMain.handle('chats:get', (_event, id: string) => chats.getChat(id))
+  ipcMain.handle('chats:save', async (_event, payload: { id?: string; messages: unknown; modelPath?: string }) => {
+    const state = await getState()
+    if (!state.settings.saveChats) return null
+    return chats.saveChat(payload ?? { messages: [] })
+  })
+  ipcMain.handle('chats:delete', (_event, id: string) => chats.deleteChat(id))
+  ipcMain.handle('chats:deleteAll', () => chats.deleteAllChats())
+  ipcMain.handle('chats:reveal', () => chats.revealChatsDir())
 
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
     if (!isTrustedExternalUrl(url)) {
@@ -193,13 +280,21 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('catalog:refresh', () => refreshCatalog())
 
   ipcMain.handle('catalog:recommend', async (_event, intent: Intent) => {
-    const [catalog, profile, budget] = await Promise.all([getCatalog(), getHardwareProfile(), getGpuBudgetBytes()])
+    const [catalog, profile, budget, state] = await Promise.all([
+      getCatalog(),
+      getHardwareProfile(),
+      getGpuBudgetBytes(),
+      getState(),
+    ])
     return recommendModels({
       catalog: catalog.models,
       intent,
       totalRamBytes: profile.totalRamBytes,
       gpuBudgetBytes: budget,
       freeDiskBytes: profile.freeDiskBytes,
+      measuredTpsByFile: Object.fromEntries(
+        Object.entries(state.benchmarks).map(([file, record]) => [file, record.tokensPerSec]),
+      ),
     })
   })
 
@@ -302,8 +397,23 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
 
   // --- Chat -----------------------------------------------------------------
-  ipcMain.handle('chat:send', async (_event, payload: { requestId: string; prompt: string }) => {
+  ipcMain.handle(
+    'chat:send',
+    async (
+      _event,
+      payload: { requestId: string; prompt: string; history?: Array<{ role: string; text: string }> },
+    ) => {
     const { requestId, prompt } = payload
+    // History arrives once when resuming a persisted chat; validate strictly.
+    const history = Array.isArray(payload.history)
+      ? payload.history
+          .slice(-200)
+          .map((turn) => ({
+            role: turn?.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+            text: typeof turn?.text === 'string' ? turn.text.slice(0, 200_000) : '',
+          }))
+          .filter((turn) => turn.text)
+      : undefined
     const state = await getState()
     const modelPath = state.selectedModelPath
     if (!modelPath) {
@@ -365,6 +475,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           maxTokens: state.settings.maxTokens,
           tools: toolDefinitions.length ? toolDefinitions : undefined,
           maxToolCalls,
+          history: history?.length ? history : undefined,
           onToken: (token) => send('chat:token', { requestId, token }),
           onStatus: (status) => send('chat:status', { requestId, ...status }),
           onToolCall: (toolKey, args) => send('chat:toolCall', { requestId, toolKey, args }),

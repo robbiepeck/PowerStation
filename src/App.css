@@ -3037,3 +3037,103 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------------------------------------------------------------- v0.2 */
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.chat-list-title {
+  padding: 0 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.chat-list-scroll {
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding-right: 0.1rem;
+}
+
+.chat-item {
+  display: flex;
+  align-items: center;
+  border-radius: 8px;
+}
+
+.chat-item:hover {
+  background: var(--surface-muted);
+}
+
+.chat-item.active {
+  background: rgba(0, 132, 118, 0.1);
+}
+
+.chat-item-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0.42rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.8rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.chat-item.active .chat-item-main {
+  color: var(--teal);
+  font-weight: 600;
+}
+
+.chat-item-delete {
+  display: none;
+  align-items: center;
+  padding: 0.3rem 0.45rem;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.chat-item:hover .chat-item-delete {
+  display: inline-flex;
+}
+
+.chat-item-delete:hover {
+  color: var(--red);
+}
+
+.measured-tps {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.benchmarking-note {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  color: var(--teal);
+  font-weight: 600;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}

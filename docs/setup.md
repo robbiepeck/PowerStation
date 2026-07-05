@@ -93,9 +93,10 @@ Everything PowerStation writes stays on your machine, under the app's user-data 
 (`~/Library/Application Support/PowerStation/` on macOS, `%APPDATA%\PowerStation\` on Windows):
 
 - **Models** — the managed models folder (each model is revealable in Finder from the Models view).
-- **`powerstation-config.json`** — settings, tool permissions, onboarding state.
+- **`powerstation-config.json`** — settings, tool permissions, onboarding state, benchmark results.
 - **`catalog-cache.json`** — the last validated catalogue fetched from the repo.
-- **Chats** — held in memory only; nothing is persisted unless you copy it out.
+- **`chats/`** — saved conversations, one plain JSON file each. Revealable and deletable from
+  Settings; turn off "Save chats on this device" to stop new writes.
 
 Network traffic is limited to model downloads and catalogue updates from `huggingface.co` / this
 GitHub repo, plus update checks against GitHub Releases. See [Security](../SECURITY.md).

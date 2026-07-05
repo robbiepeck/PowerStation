@@ -26,6 +26,7 @@ run on your machine.
 
 - **[Contributing](../CONTRIBUTING.md)** — dev setup, conventions, and how to propose a model.
 - **[Roadmap](../ROADMAP.md)** — what's next.
+- **[Scope improvements](scope-improvements.md)** — the detailed backlog of deferred items and their status.
 - **[Security](../SECURITY.md)** · **[Threat model](../THREAT_MODEL.md)** — the local-first posture and
   the agent attack surface.
 

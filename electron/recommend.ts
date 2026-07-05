@@ -45,9 +45,11 @@ export function recommendModels(options: {
   totalRamBytes: number
   gpuBudgetBytes: number
   freeDiskBytes: number | null
+  /** Measured on-device speeds keyed by lowercase fileName, when available. */
+  measuredTpsByFile?: Record<string, number>
   limit?: number
 }): Recommendation[] {
-  const { catalog, intent, totalRamBytes, gpuBudgetBytes, freeDiskBytes } = options
+  const { catalog, intent, totalRamBytes, gpuBudgetBytes, freeDiskBytes, measuredTpsByFile } = options
   const ramGb = totalRamBytes / GIB
 
   const ranked: Recommendation[] = []
@@ -109,7 +111,10 @@ export function recommendModels(options: {
       reasons.push(`Fits, but tightly — PowerStation will cap its context at ${defaultContextTokens.toLocaleString()} tokens to stay safe.`)
     }
 
-    if (model.expectedTps) {
+    const measuredTps = measuredTpsByFile?.[model.fileName.toLowerCase()]
+    if (measuredTps) {
+      reasons.push(`Measured on your machine: ${measuredTps} tok/s.`)
+    } else if (model.expectedTps) {
       reasons.push(`Expected speed on your machine class: ~${model.expectedTps}.`)
     }
     if (model.activeParamsB) {

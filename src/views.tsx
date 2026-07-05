@@ -24,6 +24,7 @@ import {
 } from 'lucide-react'
 import { getDesktop } from './desktop'
 import type {
+  BenchmarkRecord,
   Catalog,
   CatalogModel,
   DeviceInfo,
@@ -42,6 +43,7 @@ import {
   MetricTile,
   PanelHeader,
   RangeControl,
+  ToggleControl,
   clamp,
   formatBytes,
   formatNumber,
@@ -126,6 +128,7 @@ function TierBadge({ tier }: { tier: ToolCallingTier }) {
 }
 
 export function CatalogGrid({
+  benchResults,
   catalog,
   download,
   fitReports,
@@ -133,6 +136,7 @@ export function CatalogGrid({
   onOpenWebsite,
   selectedModel,
 }: {
+  benchResults?: Record<string, BenchmarkRecord>
   catalog: Catalog | null
   download: DownloadState
   fitReports: Record<string, FitReport | null>
@@ -179,7 +183,13 @@ export function CatalogGrid({
               <span>{model.quant}</span>
               <span>{formatBytes(model.sizeBytes)}</span>
               <span>{model.minRamGb}GB+ RAM</span>
-              {model.expectedTps ? <span>{model.expectedTps}</span> : null}
+              {benchResults?.[model.fileName.toLowerCase()] ? (
+                <span className="measured-tps" title="Measured with a standard benchmark on this machine">
+                  ⚡ {formatNumber(benchResults[model.fileName.toLowerCase()].tokensPerSec, 1)} tok/s measured
+                </span>
+              ) : model.expectedTps ? (
+                <span>{model.expectedTps}</span>
+              ) : null}
               <span>{model.license}</span>
             </div>
 
@@ -458,6 +468,9 @@ export function MonitorView({
 // --- Models ---------------------------------------------------------------------
 
 export function ModelsView({
+  benchBusyPath,
+  benchResults,
+  benchmarking,
   catalog,
   catalogRefreshing,
   device,
@@ -465,6 +478,7 @@ export function ModelsView({
   fitReports,
   models,
   onAddFolder,
+  onBenchmark,
   onDelete,
   onDownload,
   onOpenWebsite,
@@ -475,6 +489,9 @@ export function ModelsView({
   onSelect,
   selectedPath,
 }: {
+  benchBusyPath: string | null
+  benchResults: Record<string, BenchmarkRecord>
+  benchmarking: boolean
   catalog: Catalog | null
   catalogRefreshing: boolean
   device: DeviceInfo | null
@@ -482,6 +499,7 @@ export function ModelsView({
   fitReports: Record<string, FitReport | null>
   models: ModelInfo[]
   onAddFolder: () => void
+  onBenchmark: (model: ModelInfo) => void
   onDelete: (model: ModelInfo) => void
   onDownload: (uri: string) => void
   onOpenWebsite: (url: string) => void
@@ -526,6 +544,7 @@ export function ModelsView({
           </p>
         </div>
         <CatalogGrid
+          benchResults={benchResults}
           catalog={catalog}
           download={download}
           fitReports={fitReports}
@@ -583,6 +602,9 @@ export function ModelsView({
               <span style={{ width: `${clamp(downloadPct, 2, 100)}%` }} />
             </div>
           )}
+          {benchmarking && !download.error ? (
+            <p className="benchmarking-note">Measuring speed on your machine — chat is ready the moment this finishes.</p>
+          ) : null}
         </div>
       ) : null}
 
@@ -615,8 +637,20 @@ export function ModelsView({
                   {model.quantization ? <Badge tone="neutral">{model.quantization}</Badge> : null}
                   {model.contextLength ? <Badge tone="neutral">{formatNumber(model.contextLength)} ctx</Badge> : null}
                   <Badge tone="neutral">{formatBytes(model.sizeBytes)}</Badge>
+                  {model.measuredTps ? (
+                    <Badge tone="real">{formatNumber(model.measuredTps, 1)} tok/s measured</Badge>
+                  ) : null}
                 </div>
                 <div className="model-row-actions">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    title="Measure real tokens/sec for this model on this machine"
+                    disabled={benchBusyPath !== null}
+                    onClick={() => onBenchmark(model)}
+                  >
+                    {benchBusyPath === model.path ? 'Benchmarking…' : 'Benchmark'}
+                  </button>
                   <button className="ghost-button" type="button" title="Reveal in file manager" onClick={() => onReveal(model)}>
                     Reveal
                   </button>
@@ -1028,7 +1062,17 @@ function UtilityItemList({
 
 // --- Settings ---------------------------------------------------------------------
 
-export function SettingsView({ onChange, settings }: { onChange: (patch: Partial<Settings>) => void; settings: Settings }) {
+export function SettingsView({
+  onChange,
+  onDeleteAllChats,
+  onRevealChats,
+  settings,
+}: {
+  onChange: (patch: Partial<Settings>) => void
+  onDeleteAllChats: () => void
+  onRevealChats: () => void
+  settings: Settings
+}) {
   return (
     <div className="settings-view">
       <PanelHeader eyebrow="Settings" title="Runtime & generation" />
@@ -1069,6 +1113,27 @@ export function SettingsView({ onChange, settings }: { onChange: (patch: Partial
         </section>
 
         <section className="settings-section">
+          <h3>Chat history</h3>
+          <ToggleControl
+            label="Save chats on this device"
+            checked={settings.saveChats}
+            onChange={(value) => onChange({ saveChats: value })}
+          />
+          <p className="policy-note subtle">
+            Saved chats are plain JSON files in PowerStation's data folder — nothing leaves this machine. Turning
+            saving off stops new writes; existing files stay until you delete them.
+          </p>
+          <div className="settings-actions">
+            <button className="secondary-button compact" type="button" onClick={onRevealChats}>
+              Show chat files
+            </button>
+            <button className="ghost-button danger" type="button" onClick={onDeleteAllChats}>
+              Delete all chats
+            </button>
+          </div>
+        </section>
+
+        <section className="settings-section">
           <h3>Memory safety</h3>
           <p className="policy-note subtle">
             Memory management is automatic. Before any model loads, PowerStation computes its real footprint
@@ -1087,7 +1152,7 @@ export function SettingsView({ onChange, settings }: { onChange: (patch: Partial
         <ShieldCheck size={16} />
         <span>
           All inference runs locally on this device. Prompts and responses never leave your machine. Models live in
-          PowerStation's local models folder; chats stay in memory unless you copy them out.
+          PowerStation's local models folder; saved chats are plain files you can open, reveal, or delete above.
         </span>
       </div>
     </div>

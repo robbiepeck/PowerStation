@@ -3,8 +3,8 @@
 // app — the host (llm.ts) turns that into a recovery card in the UI.
 // All node-llama-cpp state lives here; the main process talks over parentPort.
 
-import { getLlama, LlamaChatSession, defineChatSessionFunction } from 'node-llama-cpp'
-import type { ChatRequest, ChatResult, WorkerMessage, WorkerRequest } from './llmProtocol.js'
+import { getLlama, LlamaChatSession, defineChatSessionFunction, type ChatHistoryItem } from 'node-llama-cpp'
+import type { BenchmarkRequest, BenchmarkResult, ChatRequest, ChatResult, WorkerMessage, WorkerRequest } from './llmProtocol.js'
 
 type LlamaInstance = Awaited<ReturnType<typeof getLlama>>
 type LoadedModel = Awaited<ReturnType<LlamaInstance['loadModel']>>
@@ -251,6 +251,18 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
   abortControllers.set(request.requestId, controller)
   try {
     const active = await ensureModelLoaded(request)
+    // Resuming a persisted chat: replay the saved turns into the session so
+    // the model actually remembers the conversation (the renderer sends this
+    // once, on the first message after loading a chat).
+    if (request.history?.length) {
+      const items: ChatHistoryItem[] = []
+      if (request.systemPrompt) items.push({ type: 'system', text: request.systemPrompt })
+      for (const turn of request.history) {
+        if (turn.role === 'user') items.push({ type: 'user', text: turn.text })
+        else items.push({ type: 'model', response: [turn.text] })
+      }
+      active.session.setChatHistory(items)
+    }
     post({ event: 'chat:status', requestId: request.requestId, status: { phase: 'generating' } })
     const guard = new ToolGuard(request.maxToolCalls ?? 15, () => controller.abort())
     const functions = buildSessionFunctions(request, guard)
@@ -290,12 +302,63 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
   }
 }
 
+// A fixed prompt and token budget so every machine measures the same work.
+const BENCH_PROMPT = 'In one short paragraph, explain why the sky appears blue. Then list three interesting facts about light.'
+const BENCH_MAX_TOKENS = 128
+const BENCH_TIMEOUT_MS = 90_000
+
+async function benchmark(request: BenchmarkRequest): Promise<BenchmarkResult> {
+  if (activeGenerations.size > 0) throw new Error('A generation is already running — try again when it finishes.')
+  const active = await ensureModelLoaded({
+    requestId: 'benchmark',
+    modelPath: request.modelPath,
+    prompt: '',
+    systemPrompt: request.systemPrompt,
+    contextTokens: request.contextTokens,
+    temperature: 0,
+    maxTokens: BENCH_MAX_TOKENS,
+  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), BENCH_TIMEOUT_MS)
+  const start = Date.now()
+  // Count every generated token, including thought segments — reasoning models
+  // (e.g. Gemma 4) can spend the whole budget thinking, and decode speed is
+  // decode speed regardless of which segment the tokens land in.
+  let outputTokens = 0
+  const generation = active.session.prompt(BENCH_PROMPT, {
+    temperature: 0,
+    maxTokens: BENCH_MAX_TOKENS,
+    signal: controller.signal,
+    stopOnAbortSignal: true,
+    onResponseChunk: (chunk: { tokens?: unknown[] }) => {
+      outputTokens += chunk.tokens?.length ?? 0
+    },
+  } as Parameters<LlamaChatSession['prompt']>[1])
+  activeGenerations.add(generation)
+  try {
+    await generation
+  } finally {
+    activeGenerations.delete(generation)
+    clearTimeout(timer)
+    // The benchmark must leave no trace in the conversation.
+    active.session.resetChatHistory()
+  }
+  const elapsedMs = Date.now() - start
+  if (outputTokens <= 0) throw new Error('The model loaded but produced no measurable output.')
+  const tokensPerSec = elapsedMs > 0 ? (outputTokens / elapsedMs) * 1000 : 0
+  lastTokensPerSec = tokensPerSec
+  publishState()
+  return { tokensPerSec, outputTokens, elapsedMs }
+}
+
 async function handleRequest(request: WorkerRequest): Promise<unknown> {
   switch (request.cmd) {
     case 'deviceInfo':
       return getDeviceInfo()
     case 'chat':
       return chat(request.payload)
+    case 'benchmark':
+      return benchmark(request.payload)
     case 'stop': {
       const controller = abortControllers.get(request.payload.requestId)
       if (controller) controller.abort()

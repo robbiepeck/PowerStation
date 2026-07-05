@@ -44,4 +44,7 @@ model landscape and with what users hit first.
 - **Storage-cleanup / device-repair features** — these belonged to an earlier, broader concept and
   were cut to keep the product focused on local AI.
 
+The detailed backlog with per-item status lives in
+[docs/scope-improvements.md](docs/scope-improvements.md).
+
 Have a request? Open an issue — see [Contributing](CONTRIBUTING.md).

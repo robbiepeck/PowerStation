@@ -67,9 +67,11 @@ A tampered download could deliver a bad model or catalogue.
   Hugging Face and the npm/dependency chain, as with any app.
 
 ### Data at rest
-Config, permissions and downloaded models live in the app's user-data directory.
-- **Mitigations:** everything stays local; chats are memory-only. **Residual risk:** anyone with
-  access to your user account can read the user-data directory — standard OS-level trust applies.
+Config, permissions, downloaded models and saved chats live in the app's user-data directory.
+- **Mitigations:** everything stays local; chats are plain, inspectable JSON files with an in-app
+  off switch and delete-all. **Residual risk:** anyone with access to your user account can read
+  the user-data directory (including chat contents) — standard OS-level trust applies. Files are
+  not encrypted at rest beyond OS disk encryption (e.g. FileVault/BitLocker).
 
 ## Out of scope
 

@@ -38,6 +38,8 @@ export type ModelInfo = {
   templateSupportsTools: boolean | null
   /** Capability tier resolved by the main process (catalog or template heuristic). */
   toolCalling: ToolCallingTier
+  /** Measured tokens/sec on this machine, when a benchmark has run. */
+  measuredTps: number | null
 }
 
 export type Settings = {
@@ -48,7 +50,37 @@ export type Settings = {
   lowPowerBias: boolean
   temperature: number
   maxTokens: number
+  saveChats: boolean
   utilities: UtilitySettings
+}
+
+export type BenchmarkRecord = {
+  tokensPerSec: number
+  outputTokens: number
+  contextTokens: number
+  measuredAt: number
+}
+
+export type StoredChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+  tokensPerSec?: number
+}
+
+export type StoredChat = {
+  id: string
+  title: string
+  createdAt: number
+  updatedAt: number
+  modelPath: string | null
+  messages: StoredChatMessage[]
+}
+
+export type ChatSummary = {
+  id: string
+  title: string
+  updatedAt: number
+  messageCount: number
 }
 
 export type MemoryPressureLevel = 'normal' | 'warn' | 'critical'
@@ -290,9 +322,26 @@ export type PowerStationBridge = {
     onDownloadProgress: (callback: (payload: DownloadProgress) => void) => Unsubscribe
     onDownloadDone: (callback: (payload: DownloadDone) => void) => Unsubscribe
     onDownloadError: (callback: (payload: DownloadError) => void) => Unsubscribe
+    onBenchmarking: (callback: (payload: { id: string; filePath: string }) => void) => Unsubscribe
+  }
+  bench: {
+    run: (modelPath: string) => Promise<BenchmarkRecord>
+    results: () => Promise<Record<string, BenchmarkRecord>>
+  }
+  chats: {
+    list: () => Promise<ChatSummary[]>
+    get: (id: string) => Promise<StoredChat | null>
+    save: (payload: { id?: string; messages: StoredChatMessage[]; modelPath?: string }) => Promise<{ id: string } | null>
+    delete: (id: string) => Promise<boolean>
+    deleteAll: () => Promise<number>
+    reveal: () => Promise<boolean>
   }
   chat: {
-    send: (payload: { requestId: string; prompt: string }) => Promise<{ requestId: string; ok: boolean }>
+    send: (payload: {
+      requestId: string
+      prompt: string
+      history?: Array<{ role: 'user' | 'assistant'; text: string }>
+    }) => Promise<{ requestId: string; ok: boolean }>
     stop: (requestId: string) => Promise<boolean>
     reset: () => Promise<void>
     unload: () => Promise<void>

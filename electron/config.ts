@@ -10,7 +10,15 @@ export type Settings = {
   lowPowerBias: boolean
   temperature: number
   maxTokens: number
+  saveChats: boolean
   utilities: UtilitySettings
+}
+
+export type BenchmarkRecord = {
+  tokensPerSec: number
+  outputTokens: number
+  contextTokens: number
+  measuredAt: number
 }
 
 export type UtilityItem = {
@@ -47,6 +55,8 @@ export type PersistedState = {
   settings: Settings
   toolPermissions: Record<string, ToolPermission>
   onboarding: OnboardingState
+  /** Measured on-device speed per model file (keyed by lowercase fileName). */
+  benchmarks: Record<string, BenchmarkRecord>
 }
 
 const defaultUtilities: UtilitySettings = {
@@ -64,6 +74,7 @@ const defaultSettings: Settings = {
   lowPowerBias: false,
   temperature: 0.7,
   maxTokens: 1024,
+  saveChats: true,
   utilities: defaultUtilities,
 }
 
@@ -164,8 +175,27 @@ function sanitizeSettings(patch: Partial<Settings> | null | undefined, base: Set
     lowPowerBias: boolOr(s.lowPowerBias, defaultSettings.lowPowerBias),
     temperature: clampNumber(s.temperature, 0, 2, defaultSettings.temperature),
     maxTokens: clampNumber(s.maxTokens, 0, 4096, defaultSettings.maxTokens),
+    saveChats: boolOr(s.saveChats, defaultSettings.saveChats),
     utilities: sanitizeUtilities(utilities),
   }
+}
+
+function sanitizeBenchmarks(value: unknown): Record<string, BenchmarkRecord> {
+  if (typeof value !== 'object' || value === null) return {}
+  const out: Record<string, BenchmarkRecord> = {}
+  for (const [key, record] of Object.entries(value as Record<string, unknown>).slice(0, 300)) {
+    const cleanKey = cleanString(key, 200).toLowerCase()
+    const r = typeof record === 'object' && record !== null ? (record as Record<string, unknown>) : null
+    const tokensPerSec = typeof r?.tokensPerSec === 'number' && Number.isFinite(r.tokensPerSec) ? r.tokensPerSec : null
+    if (!cleanKey || tokensPerSec === null || tokensPerSec <= 0) continue
+    out[cleanKey] = {
+      tokensPerSec,
+      outputTokens: clampNumber(r?.outputTokens, 0, 100000, 0),
+      contextTokens: clampNumber(r?.contextTokens, 0, 1048576, 0),
+      measuredAt: clampNumber(r?.measuredAt, 0, Number.MAX_SAFE_INTEGER, 0),
+    }
+  }
+  return out
 }
 
 function configPath() {
@@ -189,6 +219,7 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
     settings: sanitizeSettings(parsed?.settings ?? null, defaultSettings),
     toolPermissions: sanitizeToolPermissions(parsed?.toolPermissions),
     onboarding: sanitizeOnboarding(parsed?.onboarding),
+    benchmarks: sanitizeBenchmarks(parsed?.benchmarks),
   }
 }
 

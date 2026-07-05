@@ -93,11 +93,13 @@ const PRIORITY_OPTIONS: Array<{ id: Priority; label: string; body: string; icon:
 ]
 
 export function OnboardingFlow({
+  benchmarking = false,
   download,
   onDownload,
   onComplete,
   onSkipToModels,
 }: {
+  benchmarking?: boolean
   download: DownloadState
   onDownload: (uri: string) => void
   onComplete: (payload: { useCase: string; priority: string }) => void
@@ -405,7 +407,7 @@ export function OnboardingFlow({
                     {isDownloading ? (
                       <div className="ob-rec-progress">
                         <div className="download-progress-head">
-                          <span>Downloading…</span>
+                          <span>{benchmarking ? 'Measuring speed on your machine…' : 'Downloading…'}</span>
                           <strong>
                             {formatBytes(download?.downloadedSize ?? 0)} / {formatBytes(download?.totalSize ?? 0)}
                           </strong>
@@ -414,7 +416,9 @@ export function OnboardingFlow({
                           <span style={{ width: `${clamp(pct, 2, 100)}%` }} />
                         </div>
                         <p className="ob-rec-progress-note">
-                          When it finishes, PowerStation loads the model and you can start chatting immediately.
+                          {benchmarking
+                            ? 'Running a short standard generation so every speed number you see is measured, not guessed. Chat is ready the moment this finishes.'
+                            : 'When it finishes, PowerStation measures its real speed and drops you straight into chat.'}
                         </p>
                       </div>
                     ) : (

@@ -38,6 +38,19 @@ contextBridge.exposeInMainWorld('powerStation', {
     onDownloadProgress: (callback) => subscribe('models:downloadProgress', callback),
     onDownloadDone: (callback) => subscribe('models:downloadDone', callback),
     onDownloadError: (callback) => subscribe('models:downloadError', callback),
+    onBenchmarking: (callback) => subscribe('models:benchmarking', callback),
+  },
+  bench: {
+    run: (modelPath) => ipcRenderer.invoke('bench:run', modelPath),
+    results: () => ipcRenderer.invoke('bench:results'),
+  },
+  chats: {
+    list: () => ipcRenderer.invoke('chats:list'),
+    get: (id) => ipcRenderer.invoke('chats:get', id),
+    save: (payload) => ipcRenderer.invoke('chats:save', payload),
+    delete: (id) => ipcRenderer.invoke('chats:delete', id),
+    deleteAll: () => ipcRenderer.invoke('chats:deleteAll'),
+    reveal: () => ipcRenderer.invoke('chats:reveal'),
   },
   chat: {
     send: (payload) => ipcRenderer.invoke('chat:send', payload),

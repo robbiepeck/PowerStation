@@ -111,8 +111,9 @@ guidance. You can also import any `.gguf` file or folder you already have.
 ## Where your data lives
 
 - **Models** — PowerStation's managed models folder inside the app's user-data directory.
-- **Settings, permissions, catalog cache** — JSON files in the same user-data directory.
-- **Chats** — in memory only; nothing is written unless you copy it out.
+- **Settings, permissions, catalog cache, benchmarks** — JSON files in the same user-data directory.
+- **Chats** — saved locally as plain JSON files (one per conversation) so they survive restarts;
+  revealable and deletable from Settings, and saving can be turned off entirely.
 - **Network** — model downloads and catalogue updates from `huggingface.co` / this GitHub
   repo, and update checks against GitHub Releases. Nothing else.
 

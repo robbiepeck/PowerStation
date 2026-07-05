@@ -27,6 +27,23 @@ export type ChatRequest = {
   tools?: ToolDefinition[]
   /** Hard cap on tool calls in a single turn (loop guard). */
   maxToolCalls?: number
+  /**
+   * Prior conversation to replay into the session before prompting — sent once
+   * when resuming a persisted chat, so the model actually remembers it.
+   */
+  history?: Array<{ role: 'user' | 'assistant'; text: string }>
+}
+
+export type BenchmarkRequest = {
+  modelPath: string
+  contextTokens: number
+  systemPrompt?: string
+}
+
+export type BenchmarkResult = {
+  tokensPerSec: number
+  outputTokens: number
+  elapsedMs: number
 }
 
 export type ChatResult = {
@@ -49,6 +66,7 @@ export type ToolDefinition = {
 export type WorkerRequest =
   | { id: number; cmd: 'deviceInfo' }
   | { id: number; cmd: 'chat'; payload: ChatRequest }
+  | { id: number; cmd: 'benchmark'; payload: BenchmarkRequest }
   | { id: number; cmd: 'stop'; payload: { requestId: string } }
   | { id: number; cmd: 'reset' }
   | { id: number; cmd: 'unload' }
