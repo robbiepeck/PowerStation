@@ -2,6 +2,16 @@
 
 The "See what's new" card in the app links here.
 
+## v0.9.0 — Accountability
+
+- **Tool audit log** — the shield button in any chat with tool activity opens a full record:
+  every call, the diff that was previewed, your allow/deny decision (including auto-allowed and
+  blocked), whether it ran, and how long it took. Persists with the chat, appears in Markdown
+  exports, and exports as JSON. Diff previews show what *will* happen; the log proves what *did*.
+- **Knowledge folder manager** — Settings lists every indexed folder with its size and a
+  freshness badge ("folder changed" when contents drifted since indexing), plus one-click
+  re-index and delete. The chat's folder chip also flags stale indexes.
+
 ## v0.8.0 — Skills gallery
 
 - **Skills gallery** — Utilities → Skills → *Browse gallery*: eight curated skills (email drafter,

@@ -80,6 +80,11 @@ Every tool call the model makes is gated. The default for any new tool is **ask*
 - Per-tool defaults are editable any time in Utilities (**Ask every time** / **Always allow** /
   **Never allow**).
 
+Every call is also recorded in the per-chat **audit log** (the shield button in the chat header):
+the preview shown, the decision made — allowed once, always, auto-allowed, denied, or blocked —
+the outcome, and the duration. The log persists with the chat and exports as JSON or in the
+Markdown chat export.
+
 Denied calls return a message telling the model not to retry — so a refusal doesn't spiral into a
 loop. If a prompt sits unanswered too long it auto-denies and the modal is dismissed, so a late click
 can never appear to grant something that was already refused.

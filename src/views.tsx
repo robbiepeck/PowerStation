@@ -45,6 +45,8 @@ import type {
   McpToolInfoResponse,
   ModelInfo,
   OllamaStatus,
+  IndexProgress,
+  RagIndexListing,
   Recommendation,
   Settings,
   SkillCatalog,
@@ -1533,6 +1535,100 @@ function ConnectorGallery({
   )
 }
 
+// --- Knowledge folders (RAG index manager) --------------------------------------
+
+function KnowledgeFoldersSection() {
+  const [indexes, setIndexes] = useState<RagIndexListing[] | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [progress, setProgress] = useState<IndexProgress | null>(null)
+
+  const refresh = useCallback(async () => {
+    const list = await bridge.rag.list().catch(() => [])
+    setIndexes(list)
+  }, [])
+
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+    return bridge.rag.onIndexProgress(setProgress)
+  }, [refresh])
+
+  const reindex = async (id: string) => {
+    setBusyId(id)
+    try {
+      await bridge.rag.reindex(id)
+      await refresh()
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusyId(null)
+      setProgress(null)
+    }
+  }
+
+  const remove = async (listing: RagIndexListing) => {
+    if (!window.confirm(`Delete the index for "${listing.name}"? The folder itself is untouched.`)) return
+    await bridge.rag.delete(listing.folderId)
+    await refresh()
+  }
+
+  if (indexes !== null && indexes.length === 0) return null
+
+  return (
+    <section className="settings-section">
+      <h3>Knowledge folders</h3>
+      <p className="policy-note subtle">
+        Folders you've attached to chats, indexed for retrieval. Indexes are plain JSON files in
+        PowerStation's data folder; deleting one never touches the folder itself.
+      </p>
+      {indexes === null ? (
+        <p className="utility-empty">Loading…</p>
+      ) : (
+        <div className="rag-index-list">
+          {indexes.map((listing) => (
+            <div className="rag-index-row" key={listing.folderId}>
+              <div className="rag-index-main">
+                <strong>{listing.name}</strong>
+                <span title={listing.folder}>
+                  {listing.fileCount} files · {listing.chunkCount} chunks · {formatBytes(listing.sizeBytes)} · indexed{' '}
+                  {new Date(listing.builtAt).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="rag-index-side">
+                {listing.missing ? (
+                  <Badge tone="danger">folder missing</Badge>
+                ) : listing.stale ? (
+                  <Badge tone="estimated">folder changed</Badge>
+                ) : (
+                  <Badge tone="real">up to date</Badge>
+                )}
+                {!listing.missing ? (
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    disabled={busyId !== null}
+                    onClick={() => void reindex(listing.folderId)}
+                  >
+                    {busyId === listing.folderId
+                      ? progress?.phase === 'embedding'
+                        ? `Indexing ${progress.done}/${progress.total}`
+                        : 'Re-indexing…'
+                      : 'Re-index'}
+                  </button>
+                ) : null}
+                <button className="ghost-button danger" type="button" onClick={() => void remove(listing)}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 // --- Settings ---------------------------------------------------------------------
 
 export function SettingsView({
@@ -1614,6 +1710,8 @@ export function SettingsView({
             </button>
           </div>
         </section>
+
+        <KnowledgeFoldersSection />
 
         <section className="settings-section">
           <h3>Memory safety</h3>

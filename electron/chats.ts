@@ -14,12 +14,24 @@ export type StoredAttachment = {
   text: string
 }
 
+export type StoredToolCall = {
+  toolKey: string
+  argsJson: string
+  ok: boolean | null
+  summary: string
+  decision: string | null
+  preview: unknown
+  durationMs: number
+  timestamp: number
+}
+
 export type StoredChatMessage = {
   role: 'user' | 'assistant'
   content: string
   tokensPerSec?: number
   attachments?: StoredAttachment[]
   sources?: string[]
+  toolCalls?: StoredToolCall[]
 }
 
 export type StoredChat = {
@@ -88,6 +100,31 @@ function sanitizeAttachments(value: unknown): StoredAttachment[] | undefined {
   return attachments.length ? attachments : undefined
 }
 
+const DECISIONS = new Set(['allowed', 'allowed-always', 'auto-allowed', 'denied', 'blocked'])
+
+function sanitizeToolCalls(value: unknown): StoredToolCall[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const calls = value
+    .slice(0, 30)
+    .map((item) => {
+      const record = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
+      const toolKey = typeof record?.toolKey === 'string' ? record.toolKey.slice(0, 200) : ''
+      if (!toolKey) return null
+      return {
+        toolKey,
+        argsJson: typeof record?.argsJson === 'string' ? record.argsJson.slice(0, 2000) : '{}',
+        ok: typeof record?.ok === 'boolean' ? record.ok : null,
+        summary: typeof record?.summary === 'string' ? record.summary.slice(0, 400) : '',
+        decision: typeof record?.decision === 'string' && DECISIONS.has(record.decision) ? record.decision : null,
+        preview: (record?.preview ?? null) as unknown,
+        durationMs: typeof record?.durationMs === 'number' && Number.isFinite(record.durationMs) ? record.durationMs : 0,
+        timestamp: typeof record?.timestamp === 'number' && Number.isFinite(record.timestamp) ? record.timestamp : 0,
+      }
+    })
+    .filter((c): c is StoredToolCall => c !== null)
+  return calls.length ? calls : undefined
+}
+
 function sanitizeMessages(value: unknown): StoredChatMessage[] {
   if (!Array.isArray(value)) return []
   return value
@@ -104,12 +141,14 @@ function sanitizeMessages(value: unknown): StoredChatMessage[] {
       const sources = Array.isArray(record?.sources)
         ? record.sources.filter((s): s is string => typeof s === 'string').slice(0, 12)
         : undefined
+      const toolCalls = sanitizeToolCalls(record?.toolCalls)
       return {
         role,
         content,
         ...(tokensPerSec !== undefined ? { tokensPerSec } : {}),
         ...(attachments ? { attachments } : {}),
         ...(sources?.length ? { sources } : {}),
+        ...(toolCalls?.length ? { toolCalls } : {}),
       }
     })
     .filter((m): m is StoredChatMessage => m !== null)
@@ -249,8 +288,25 @@ export async function exportChatMarkdown(chat: StoredChat, filePath: string): Pr
     }
     lines.push('', message.content, '')
     if (message.sources?.length) lines.push(`> Sources: ${message.sources.join(', ')}`, '')
+    if (message.toolCalls?.length) {
+      lines.push('> Tool activity:')
+      for (const call of message.toolCalls) {
+        const state = call.ok === null ? 'not run' : call.ok ? 'ok' : 'failed'
+        lines.push(`> - \`${call.toolKey}\` — ${call.decision ?? 'unknown'} · ${state}${call.durationMs ? ` · ${call.durationMs}ms` : ''}`)
+      }
+      lines.push('')
+    }
   }
   await fs.writeFile(filePath, lines.join('\n'), 'utf8')
+}
+
+/** Flatten a chat's tool activity for the exportable audit log. */
+export function collectAuditLog(chat: StoredChat): Array<StoredToolCall & { messageIndex: number }> {
+  const records: Array<StoredToolCall & { messageIndex: number }> = []
+  chat.messages.forEach((message, messageIndex) => {
+    for (const call of message.toolCalls ?? []) records.push({ ...call, messageIndex })
+  })
+  return records
 }
 
 export async function revealChatsDir(): Promise<boolean> {

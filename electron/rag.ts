@@ -191,7 +191,73 @@ export async function queryFolder(
   return { block: buildRetrievalBlock(top), sources: sourceFiles(top) }
 }
 
-export async function getFolderIndexInfo(folderId: string): Promise<FolderIndexInfo | null> {
+export type RagIndexListing = FolderIndexInfo & {
+  sizeBytes: number
+  stale: boolean
+  missing: boolean
+}
+
+async function assessIndex(index: StoredIndex): Promise<RagIndexListing> {
+  let sizeBytes = 0
+  try {
+    sizeBytes = (await fs.stat(path.join(ragDir(), `${index.folderId}.json`))).size
+  } catch {
+    /* listing best-effort */
+  }
+  const folderStat = await fs.stat(index.folder).catch(() => null)
+  if (!folderStat?.isDirectory()) {
+    return { ...toInfo(index), sizeBytes, stale: false, missing: true }
+  }
+  const files = await collectFiles(index.folder)
+  let newestMtimeMs = 0
+  for (const file of files) {
+    const stat = await fs.stat(file).catch(() => null)
+    if (stat && stat.mtimeMs > newestMtimeMs) newestMtimeMs = stat.mtimeMs
+  }
+  const stale = files.length !== index.fileCount || newestMtimeMs !== index.newestMtimeMs
+  return { ...toInfo(index), sizeBytes, stale, missing: false }
+}
+
+export async function getFolderIndexInfo(folderId: string): Promise<RagIndexListing | null> {
+  if (typeof folderId !== 'string' || !/^[a-f0-9]{16}$/.test(folderId)) return null
   const index = await readIndex(folderId)
-  return index ? toInfo(index) : null
+  return index ? assessIndex(index) : null
+}
+
+export async function listFolderIndexes(): Promise<RagIndexListing[]> {
+  let files: string[]
+  try {
+    files = await fs.readdir(ragDir())
+  } catch {
+    return []
+  }
+  const listings: RagIndexListing[] = []
+  for (const file of files) {
+    if (!file.endsWith('.json')) continue
+    const index = await readIndex(file.slice(0, -5))
+    if (index) listings.push(await assessIndex(index))
+  }
+  return listings.sort((a, b) => b.builtAt - a.builtAt)
+}
+
+export async function deleteFolderIndex(folderId: unknown): Promise<boolean> {
+  if (typeof folderId !== 'string' || !/^[a-f0-9]{16}$/.test(folderId)) return false
+  try {
+    await fs.rm(path.join(ragDir(), `${folderId}.json`))
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Force a rebuild regardless of the freshness check. */
+export async function reindexFolder(
+  folderId: string,
+  onProgress?: (p: IndexProgress) => void,
+): Promise<FolderIndexInfo> {
+  const index = await readIndex(folderId)
+  if (!index) throw new Error('Index not found.')
+  const folder = index.folder
+  await deleteFolderIndex(folderId)
+  return ensureFolderIndex(folder, onProgress)
 }

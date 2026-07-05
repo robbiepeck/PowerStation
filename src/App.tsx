@@ -17,6 +17,7 @@ import {
   Search as SearchIcon,
   Send,
   Settings as SettingsIcon,
+  ShieldCheck,
   ShieldQuestion,
   Sparkles,
   Square,
@@ -81,7 +82,7 @@ const STARTER_PROMPTS: Array<{ label: string; prompt: string }> = [
   { label: '💬 Fix my tone', prompt: 'Rewrite this more politely: "Send me the file now."' },
 ]
 
-type RagFolderState = { id: string; name: string; fileCount?: number }
+type RagFolderState = { id: string; name: string; fileCount?: number; stale?: boolean }
 
 // Attachment contents are woven into the model-facing prompt with explicit
 // data framing; the UI only ever shows the chips. The same framing is used
@@ -411,12 +412,12 @@ function useChat() {
         toolCalls: [...(turn.toolCalls ?? []), { toolKey, args, ok: null, summary: null }],
       }))
     })
-    const offToolResult = bridge.chat.onToolResult(({ requestId, toolKey, ok, summary }) => {
+    const offToolResult = bridge.chat.onToolResult(({ requestId, toolKey, ok, summary, decision, preview, durationMs, timestamp }) => {
       patchAssistant(requestId, (turn) => {
         const calls = [...(turn.toolCalls ?? [])]
         for (let i = calls.length - 1; i >= 0; i--) {
           if (calls[i].toolKey === toolKey && calls[i].ok === null) {
-            calls[i] = { ...calls[i], ok, summary }
+            calls[i] = { ...calls[i], ok, summary, decision, preview, durationMs, timestamp }
             break
           }
         }
@@ -529,6 +530,16 @@ function useChat() {
         tokensPerSec: m.tokensPerSec,
         attachments: m.attachments,
         sources: m.sources,
+        toolCalls: m.toolCalls?.map((call) => ({
+          toolKey: call.toolKey,
+          args: call.argsJson,
+          ok: call.ok,
+          summary: call.summary,
+          decision: call.decision ?? undefined,
+          preview: call.preview,
+          durationMs: call.durationMs,
+          timestamp: call.timestamp,
+        })),
       })),
     )
     // Fresh worker session; the saved turns replay with the next message.
@@ -587,7 +598,29 @@ function serializeChat(messages: ChatTurn[]): StoredChatMessage[] {
       ...(m.tokensPerSec ? { tokensPerSec: m.tokensPerSec } : {}),
       ...(m.attachments?.length ? { attachments: m.attachments } : {}),
       ...(m.sources?.length ? { sources: m.sources } : {}),
+      ...(m.toolCalls?.length
+        ? {
+            toolCalls: m.toolCalls.map((call) => ({
+              toolKey: call.toolKey,
+              argsJson: safeJson(call.args, 2000),
+              ok: call.ok,
+              summary: call.summary ?? '',
+              decision: call.decision ?? null,
+              preview: call.preview ?? null,
+              durationMs: call.durationMs ?? 0,
+              timestamp: call.timestamp ?? 0,
+            })),
+          }
+        : {}),
     }))
+}
+
+function safeJson(value: unknown, cap: number): string {
+  try {
+    return (JSON.stringify(value) ?? '{}').slice(0, cap)
+  } catch {
+    return String(value).slice(0, cap)
+  }
 }
 
 // --- App shell --------------------------------------------------------------
@@ -619,6 +652,7 @@ function App() {
   const [whatsNew, setWhatsNew] = useState<WhatsNew | null>(null)
   const [chatQuery, setChatQuery] = useState('')
   const [artifact, setArtifact] = useState<Artifact | null>(null)
+  const [showAudit, setShowAudit] = useState(false)
   const seenArtifactRef = useRef<string | null>(null)
   const resetChat = chat.reset
 
@@ -734,7 +768,7 @@ function App() {
       setRagFolder(stored.ragFolder ? { ...stored.ragFolder } : null)
       if (stored.ragFolder) {
         void bridge.rag.info(stored.ragFolder.id).then((info) => {
-          if (info) setRagFolder({ id: info.folderId, name: info.name, fileCount: info.fileCount })
+          if (info) setRagFolder({ id: info.folderId, name: info.name, fileCount: info.fileCount, stale: info.stale })
         })
       }
       // Reselect the chat's model when it is still around, without wiping the
@@ -1048,6 +1082,7 @@ function App() {
             onDropFiles={(files) => void handleDropFiles(files)}
             onEditLast={handleEditLast}
             onExport={() => void handleExportChat()}
+            onOpenAudit={() => setShowAudit(true)}
             onManageModels={() => setActiveView('models')}
             onNewChat={handleNewChat}
             onOpenArtifact={setArtifact}
@@ -1128,6 +1163,14 @@ function App() {
 
       {permissionPrompt.request ? (
         <PermissionModal request={permissionPrompt.request} onRespond={permissionPrompt.respond} />
+      ) : null}
+      {showAudit ? (
+        <AuditModal
+          chatId={chat.chatId}
+          messages={chat.messages}
+          onClose={() => setShowAudit(false)}
+          onExport={() => chat.chatId && void bridge.chats.exportAudit(chat.chatId)}
+        />
       ) : null}
     </div>
   )
@@ -1234,6 +1277,7 @@ function ChatView({
   onManageModels,
   onNewChat,
   onOpenArtifact,
+  onOpenAudit,
   onOpenMonitor,
   onPickFiles,
   onRegenerate,
@@ -1268,6 +1312,7 @@ function ChatView({
   onManageModels: () => void
   onNewChat: () => void
   onOpenArtifact: (artifact: Artifact) => void
+  onOpenAudit: () => void
   onOpenMonitor: () => void
   onPickFiles: () => void
   onRegenerate: () => void
@@ -1293,6 +1338,7 @@ function ChatView({
   const hasModels = models.length > 0
   const lastAssistantId = [...messages].reverse().find((m) => m.role === 'assistant' && !m.streaming && !m.error)?.id
   const lastUserId = [...messages].reverse().find((m) => m.role === 'user')?.id
+  const hasToolActivity = messages.some((m) => m.toolCalls?.length)
 
   return (
     <div className={artifact ? 'chat-view with-artifact' : 'chat-view'}>
@@ -1315,6 +1361,11 @@ function ChatView({
               </span>
               {(contextUsage.used / 1000).toFixed(1)}k / {(contextUsage.total / 1000).toFixed(0)}k
             </div>
+          ) : null}
+          {hasToolActivity ? (
+            <button className="ghost-button" type="button" title="Tool audit log — every call, decision, and diff" onClick={onOpenAudit}>
+              <ShieldCheck size={14} />
+            </button>
           ) : null}
           {chatId ? (
             <button className="ghost-button" type="button" title="Export this chat as Markdown" onClick={onExport}>
@@ -1699,6 +1750,94 @@ function MessageBubble({
   )
 }
 
+// --- Audit modal -----------------------------------------------------------------
+
+const DECISION_LABEL: Record<string, { text: string; tone: 'ok' | 'warn' | 'bad' }> = {
+  allowed: { text: 'allowed once', tone: 'ok' },
+  'allowed-always': { text: 'allowed always', tone: 'ok' },
+  'auto-allowed': { text: 'auto-allowed', tone: 'warn' },
+  denied: { text: 'denied', tone: 'bad' },
+  blocked: { text: 'blocked by settings', tone: 'bad' },
+}
+
+function AuditModal({
+  chatId,
+  messages,
+  onClose,
+  onExport,
+}: {
+  chatId: string | null
+  messages: ChatTurn[]
+  onClose: () => void
+  onExport: () => void
+}) {
+  const records = messages.flatMap((m) => m.toolCalls ?? [])
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Tool audit log">
+      <div className="permission-modal audit-modal">
+        <div className="permission-head">
+          <ShieldQuestion size={20} />
+          <div>
+            <h3>Tool audit log</h3>
+            <p>
+              Every tool call in this chat — what was previewed, what you decided, and what actually ran.
+            </p>
+          </div>
+        </div>
+        <div className="audit-list">
+          {records.length === 0 ? (
+            <p className="utility-empty">No tool calls in this chat.</p>
+          ) : (
+            records.map((call, index) => {
+              const decision = call.decision ? DECISION_LABEL[call.decision] : null
+              return (
+                <details className="audit-row" key={index}>
+                  <summary>
+                    <span className="audit-time">
+                      {call.timestamp ? new Date(call.timestamp).toLocaleTimeString() : '—'}
+                    </span>
+                    <code>{call.toolKey}</code>
+                    {decision ? <em className={`audit-decision ${decision.tone}`}>{decision.text}</em> : null}
+                    <span className={call.ok === null ? 'audit-state' : call.ok ? 'audit-state ok' : 'audit-state bad'}>
+                      {call.ok === null ? 'not run' : call.ok ? 'ok' : 'failed'}
+                    </span>
+                    {call.durationMs ? <span className="audit-ms">{call.durationMs}ms</span> : null}
+                  </summary>
+                  <div className="audit-detail">
+                    {call.preview && call.preview.kind === 'diff' && call.preview.lines.length ? (
+                      <pre className="permission-diff-body">
+                        {call.preview.lines.map((line, i) => (
+                          <span className={`diff-line ${line.type}`} key={i}>
+                            {line.type === 'add' ? '+ ' : line.type === 'del' ? '− ' : line.type === 'skip' ? '' : '  '}
+                            {line.text}
+                            {'\n'}
+                          </span>
+                        ))}
+                      </pre>
+                    ) : null}
+                    <pre className="permission-args">
+                      {typeof call.args === 'string' ? call.args : JSON.stringify(call.args, null, 2)?.slice(0, 1200)}
+                    </pre>
+                    {call.summary ? <p className="audit-summary">{call.summary}</p> : null}
+                  </div>
+                </details>
+              )
+            })
+          )}
+        </div>
+        <div className="permission-actions">
+          <button className="secondary-button" type="button" disabled={!chatId} title={chatId ? undefined : 'Available once the chat has been saved'} onClick={onExport}>
+            Export JSON
+          </button>
+          <button className="primary-button" type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Permission modal ----------------------------------------------------------
 
 function PermissionModal({
@@ -1871,9 +2010,17 @@ function Composer({
       {attachments.length > 0 || ragFolder || indexingLabel ? (
         <div className="attachment-chips">
           {ragFolder ? (
-            <span className="attachment-chip folder" title={`Knowledge folder: ${ragFolder.fileCount ?? '?'} files indexed — retrieved automatically per question`}>
+            <span
+              className="attachment-chip folder"
+              title={
+                ragFolder.stale
+                  ? 'The folder changed since it was indexed — re-index from Settings → Knowledge folders, or re-attach it.'
+                  : `Knowledge folder: ${ragFolder.fileCount ?? '?'} files indexed — retrieved automatically per question`
+              }
+            >
               <FolderSearch size={12} /> {ragFolder.name}
               {ragFolder.fileCount ? ` · ${ragFolder.fileCount} files` : ''}
+              {ragFolder.stale ? <em className="chip-stale"> · changed</em> : null}
               <button type="button" aria-label="Detach folder" onClick={onRemoveRagFolder}>
                 <X size={11} />
               </button>

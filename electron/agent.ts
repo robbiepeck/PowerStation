@@ -22,11 +22,18 @@ export type PermissionRequest = {
 
 export type PermissionDecision = 'allow-once' | 'allow-always' | 'deny'
 
+export type ToolDecision = 'allowed' | 'allowed-always' | 'auto-allowed' | 'denied' | 'blocked'
+
 export type ToolResultEvent = {
   requestId: string
   toolKey: string
   ok: boolean
   summary: string
+  /** Audit fields: how the call was authorized, what it previewed, how long it ran. */
+  decision: ToolDecision
+  preview: ToolPreview | null
+  durationMs: number
+  timestamp: number
 }
 
 const PERMISSION_TIMEOUT_MS = 2 * 60 * 1000
@@ -58,12 +65,14 @@ export function resolvePermission(promptId: string, decision: PermissionDecision
   return true
 }
 
-async function askUser(requestId: string, tool: mcp.McpToolInfo, args: unknown): Promise<PermissionDecision> {
+async function askUser(
+  requestId: string,
+  tool: mcp.McpToolInfo,
+  args: unknown,
+  preview: ToolPreview | null,
+): Promise<PermissionDecision> {
   const requester = permissionRequester
   if (!requester) return 'deny'
-  // Show what will actually happen, not just the arguments: for file writes
-  // and edits this is a real diff against the file's current content.
-  const preview = await buildToolPreview(tool, args)
   const promptId = `perm-${nextPromptId++}`
   return new Promise<PermissionDecision>((resolve) => {
     const timer = setTimeout(() => {
@@ -127,31 +136,49 @@ export async function executeToolCall(toolKey: string, args: unknown, requestId:
   const tool = mcp.findTool(toolKey)
   if (!tool) return `Tool ${toolKey} is not available.`
 
+  const started = Date.now()
+  // Preview is computed for every call — the permission modal shows it, and
+  // the audit trail keeps it even for auto-allowed calls.
+  const preview = await buildToolPreview(tool, args)
+
+  let decision: ToolDecision
   let permission = await getToolPermission(toolKey)
   if (permission === 'ask') {
-    const decision = await askUser(requestId, tool, args)
-    if (decision === 'allow-always') {
+    const answer = await askUser(requestId, tool, args, preview)
+    if (answer === 'allow-always') {
       await setToolPermission(toolKey, 'allow')
       permission = 'allow'
-    } else if (decision === 'allow-once') {
+      decision = 'allowed-always'
+    } else if (answer === 'allow-once') {
       permission = 'allow'
+      decision = 'allowed'
     } else {
       permission = 'deny'
+      decision = 'denied'
     }
+  } else {
+    decision = permission === 'allow' ? 'auto-allowed' : 'blocked'
   }
 
+  const report = (ok: boolean, summary: string) =>
+    toolResultReporter?.({
+      requestId,
+      toolKey,
+      ok,
+      summary,
+      decision,
+      preview,
+      durationMs: Date.now() - started,
+      timestamp: started,
+    })
+
   if (permission === 'deny') {
-    toolResultReporter?.({ requestId, toolKey, ok: false, summary: 'Denied by user' })
+    report(false, decision === 'blocked' ? 'Blocked by your permission settings' : 'Denied by user')
     return 'The user declined this tool call. Do not retry it; continue without it or ask the user what to do.'
   }
 
   const result = await mcp.callTool(tool, args)
-  toolResultReporter?.({
-    requestId,
-    toolKey,
-    ok: result.ok,
-    summary: result.text.slice(0, 300),
-  })
+  report(result.ok, result.text.slice(0, 300))
   if (!result.ok) return `Tool error: ${result.text}`
   // Frame tool output as data, not instructions — small local models are
   // especially prone to following injected directives from tool results.

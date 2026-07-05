@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     reveal: () => ipcRenderer.invoke('chats:reveal'),
     search: (query) => ipcRenderer.invoke('chats:search', query),
     export: (id) => ipcRenderer.invoke('chats:export', id),
+    exportAudit: (id) => ipcRenderer.invoke('chats:exportAudit', id),
   },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
@@ -80,6 +81,9 @@ contextBridge.exposeInMainWorld('powerStation', {
   rag: {
     index: (folder) => ipcRenderer.invoke('rag:index', folder),
     info: (folderId) => ipcRenderer.invoke('rag:info', folderId),
+    list: () => ipcRenderer.invoke('rag:list'),
+    delete: (folderId) => ipcRenderer.invoke('rag:delete', folderId),
+    reindex: (folderId) => ipcRenderer.invoke('rag:reindex', folderId),
     onIndexProgress: (callback) => subscribe('rag:indexProgress', callback),
   },
   whatsNew: {

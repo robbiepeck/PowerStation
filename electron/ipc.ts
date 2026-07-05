@@ -299,6 +299,22 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('chats:deleteAll', () => chats.deleteAllChats())
   ipcMain.handle('chats:reveal', () => chats.revealChatsDir())
   ipcMain.handle('chats:search', (_event, query: string) => chats.searchChats(query))
+  ipcMain.handle('chats:exportAudit', async (_event, id: string) => {
+    const chat = await chats.getChat(id)
+    if (!chat) return null
+    const records = chats.collectAuditLog(chat)
+    const result = await dialog.showSaveDialog({
+      defaultPath: `${chat.title.replace(/[\\/:*?"<>|]/g, '-').slice(0, 50)}-audit.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePath) return null
+    await fs.writeFile(
+      result.filePath,
+      JSON.stringify({ chat: chat.title, exportedAt: new Date().toISOString(), toolCalls: records }, null, 2),
+      'utf8',
+    )
+    return result.filePath
+  })
   ipcMain.handle('chats:export', async (_event, id: string) => {
     const chat = await chats.getChat(id)
     if (!chat) return null
@@ -348,6 +364,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return rag.ensureFolderIndex(folder, (progress) => send('rag:indexProgress', progress))
   })
   ipcMain.handle('rag:info', (_event, folderId: string) => rag.getFolderIndexInfo(folderId))
+  ipcMain.handle('rag:list', () => rag.listFolderIndexes())
+  ipcMain.handle('rag:delete', (_event, folderId: string) => rag.deleteFolderIndex(folderId))
+  ipcMain.handle('rag:reindex', (_event, folderId: string) => {
+    if (typeof folderId !== 'string') throw new Error('Bad folder id')
+    return rag.reindexFolder(folderId, (progress) => send('rag:indexProgress', progress))
+  })
 
   // --- What's new ---------------------------------------------------------------
   ipcMain.handle('app:whatsNew', async () => {

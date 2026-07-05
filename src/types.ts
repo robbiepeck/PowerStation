@@ -128,14 +128,24 @@ export type StoredAttachment = {
   text: string
 }
 
+export type StoredToolCall = {
+  toolKey: string
+  argsJson: string
+  ok: boolean | null
+  summary: string
+  decision: ToolDecision | null
+  preview: ToolPreview | null
+  durationMs: number
+  timestamp: number
+}
+
 export type StoredChatMessage = {
   role: 'user' | 'assistant'
   content: string
   tokensPerSec?: number
   attachments?: StoredAttachment[]
   sources?: string[]
-  /** Inline notice (e.g. auto-compaction) rendered as a slim chip, not a bubble. */
-  notice?: { summary: string; beforeTokens: number; afterTokensEstimate: number }
+  toolCalls?: StoredToolCall[]
 }
 
 export type StoredChat = {
@@ -177,6 +187,14 @@ export type FolderIndexInfo = {
 }
 
 export type IndexProgress = { phase: 'scanning' | 'embedding-model' | 'embedding'; done: number; total: number }
+
+export type RagIndexListing = FolderIndexInfo & {
+  sizeBytes: number
+  /** Folder contents changed since the index was built. */
+  stale: boolean
+  /** Folder no longer exists on disk. */
+  missing: boolean
+}
 
 export type WhatsNew = { currentVersion: string; previousVersion: string | null; show: boolean }
 
@@ -373,7 +391,16 @@ export type ChatAdmissionPayload = {
 }
 
 export type ChatToolCallPayload = { requestId: string; toolKey: string; args: unknown }
-export type ChatToolResultPayload = { requestId: string; toolKey: string; ok: boolean; summary: string }
+export type ChatToolResultPayload = {
+  requestId: string
+  toolKey: string
+  ok: boolean
+  summary: string
+  decision: ToolDecision
+  preview: ToolPreview | null
+  durationMs: number
+  timestamp: number
+}
 
 export type ChatDonePayload = {
   requestId: string
@@ -457,6 +484,7 @@ export type PowerStationBridge = {
     reveal: () => Promise<boolean>
     search: (query: string) => Promise<ChatSummary[]>
     export: (id: string) => Promise<string | null>
+    exportAudit: (id: string) => Promise<string | null>
   }
   files: {
     pickAndExtract: () => Promise<ExtractResult[]>
@@ -465,7 +493,10 @@ export type PowerStationBridge = {
   }
   rag: {
     index: (folder: string) => Promise<FolderIndexInfo>
-    info: (folderId: string) => Promise<FolderIndexInfo | null>
+    info: (folderId: string) => Promise<RagIndexListing | null>
+    list: () => Promise<RagIndexListing[]>
+    delete: (folderId: string) => Promise<boolean>
+    reindex: (folderId: string) => Promise<FolderIndexInfo>
     onIndexProgress: (callback: (payload: IndexProgress) => void) => Unsubscribe
   }
   whatsNew: {
@@ -550,11 +581,17 @@ export type PowerStationBridge = {
 
 export type MessageRole = 'user' | 'assistant'
 
+export type ToolDecision = 'allowed' | 'allowed-always' | 'auto-allowed' | 'denied' | 'blocked'
+
 export type ToolCallRecord = {
   toolKey: string
   args: unknown
   ok: boolean | null
   summary: string | null
+  decision?: ToolDecision
+  preview?: ToolPreview | null
+  durationMs?: number
+  timestamp?: number
 }
 
 export type ChatTurn = {
