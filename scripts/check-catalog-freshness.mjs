@@ -101,8 +101,29 @@ async function checkConnectors() {
   }
 }
 
+async function checkSkills() {
+  // Skill bodies are self-contained (no URLs/packages) — validate structure so
+  // a malformed skills.json on main can't silently empty the in-app gallery.
+  const catalog = JSON.parse(await readFile(path.join(root, 'catalog', 'skills.json'), 'utf8'))
+  if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.skills) || catalog.skills.length === 0) {
+    failures.push('**skills.json** invalid: schemaVersion must be 1 with a non-empty skills array')
+    return
+  }
+  const seen = new Set()
+  for (const skill of catalog.skills) {
+    const label = skill?.id ?? '(missing id)'
+    if (!/^[a-z0-9-]{1,60}$/.test(skill?.id ?? '')) failures.push(`**skills.json** entry has bad id: ${label}`)
+    else if (seen.has(skill.id)) failures.push(`**skills.json** duplicate id: ${label}`)
+    else seen.add(skill.id)
+    if (typeof skill?.name !== 'string' || !skill.name.trim()) failures.push(`**${label}** missing name`)
+    if (typeof skill?.body !== 'string' || skill.body.length < 40) failures.push(`**${label}** body missing or too short`)
+    else passes.push(`skill ${label}: valid (~${Math.ceil(skill.body.length / 4)} tok)`)
+  }
+}
+
 await checkModels()
 await checkConnectors()
+await checkSkills()
 
 const lines = [
   '## Catalogue freshness report',

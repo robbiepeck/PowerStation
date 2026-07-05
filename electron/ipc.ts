@@ -16,6 +16,8 @@ import {
   refreshCatalog,
   getConnectorCatalog,
   refreshConnectorCatalog,
+  getSkillCatalog,
+  refreshSkillCatalog,
   type CatalogModel,
   type ConnectorEntry,
 } from './catalog.js'
@@ -390,8 +392,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('catalog:get', () => getCatalog())
   ipcMain.handle('catalog:refresh', () => {
-    // One button refreshes both curated datasets.
+    // One button refreshes all curated datasets.
     void refreshConnectorCatalog()
+    void refreshSkillCatalog()
     return refreshCatalog()
   })
 
@@ -405,6 +408,21 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     skills.setSkillMode(payload?.slug, payload?.mode),
   )
   ipcMain.handle('skills:reveal', () => skills.revealSkillsDir())
+  ipcMain.handle('skills:gallery', () => getSkillCatalog())
+  ipcMain.handle('skills:install', async (_event, id: string) => {
+    // Resolve the entry server-side from the validated catalog — the renderer
+    // names an id, it never supplies skill content.
+    const gallery = await getSkillCatalog()
+    const entry = gallery.skills.find((skill) => skill.id === id)
+    if (!entry) throw new Error('Unknown gallery skill.')
+    return skills.saveSkill({
+      slug: entry.id,
+      name: entry.name,
+      description: entry.description,
+      body: entry.body,
+      triggers: entry.triggers,
+    })
+  })
 
   // --- Connector gallery -------------------------------------------------------
   ipcMain.handle('connectors:get', () => getConnectorCatalog())

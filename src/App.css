@@ -3944,3 +3944,62 @@
   text-align: center;
   cursor: default;
 }
+
+/* ---------------------------------------------------------------- v0.8: skills gallery */
+
+.skill-gallery {
+  margin-bottom: 0.8rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px dashed rgba(0, 132, 118, 0.4);
+  border-radius: 12px;
+  background: rgba(0, 132, 118, 0.04);
+}
+
+.skill-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 0.6rem;
+}
+
+.skill-gallery-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.skill-gallery-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.skill-gallery-head strong {
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.skill-gallery-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text);
+  flex: 1;
+}
+
+.skill-gallery-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-gallery-card .secondary-button,
+.skill-gallery-card .badge.real {
+  align-self: flex-start;
+}

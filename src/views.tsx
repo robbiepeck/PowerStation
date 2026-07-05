@@ -23,6 +23,7 @@ import {
   RefreshCw,
   Search as SearchIcon,
   ShieldCheck,
+  Sparkle,
   Wand2,
   Thermometer,
   Trash2,
@@ -46,6 +47,7 @@ import type {
   OllamaStatus,
   Recommendation,
   Settings,
+  SkillCatalog,
   SkillInfo,
   TelemetrySnapshot,
   ToolCallingTier,
@@ -1153,6 +1155,9 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
   const [editing, setEditing] = useState<string | 'new' | null>(null)
   const [draft, setDraft] = useState(EMPTY_SKILL_DRAFT)
   const [saving, setSaving] = useState(false)
+  const [gallery, setGallery] = useState<SkillCatalog | null>(null)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [installing, setInstalling] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     const list = await bridge.skills.list().catch(() => [])
@@ -1197,6 +1202,23 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
     await refresh()
   }
 
+  const openGallery = () => {
+    setGalleryOpen((open) => !open)
+    if (!gallery) void bridge.skills.gallery().then(setGallery).catch(() => undefined)
+  }
+
+  const install = async (id: string) => {
+    setInstalling(id)
+    try {
+      await bridge.skills.install(id)
+      await refresh()
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setInstalling(null)
+    }
+  }
+
   const enabledTokens = (skills ?? []).filter((s) => s.mode === 'always').reduce((sum, s) => sum + s.tokenEstimate, 0)
   const skillPct = contextTokens > 0 ? (enabledTokens / contextTokens) * 100 : 0
 
@@ -1208,6 +1230,10 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
         <div className="panel-head-actions">
           <button className="ghost-button" type="button" onClick={() => void bridge.skills.reveal()}>
             Show files
+          </button>
+          <button className="secondary-button compact" type="button" onClick={openGallery}>
+            <Sparkle size={14} />
+            {galleryOpen ? 'Close gallery' : 'Browse gallery'}
           </button>
           <button className="secondary-button compact" type="button" onClick={() => startEdit(null)}>
             <Plus size={14} />
@@ -1229,6 +1255,51 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
             context ({formatNumber(skillPct, 0)}%)
             {skillPct > 25 ? ' — consider switching some to Auto.' : ''}
           </span>
+        </div>
+      ) : null}
+
+      {galleryOpen ? (
+        <div className="skill-gallery">
+          {gallery === null ? (
+            <p className="utility-empty">Loading gallery…</p>
+          ) : (
+            <>
+              <p className="panel-hint">
+                Curated skills, updated with the catalogue — installing copies a markdown file into your skills
+                folder, yours to edit or delete.
+              </p>
+              <div className="skill-gallery-grid">
+                {gallery.skills.map((entry) => {
+                  const installed = (skills ?? []).some((skill) => skill.slug === entry.id)
+                  return (
+                    <article className="skill-gallery-card" key={entry.id}>
+                      <div className="skill-gallery-head">
+                        <strong>{entry.name}</strong>
+                        <Badge tone="neutral">{entry.category}</Badge>
+                      </div>
+                      <p>{entry.description}</p>
+                      <span className="skill-gallery-meta">
+                        ~{Math.ceil(entry.body.length / 4)} tok
+                        {entry.triggers ? ` · triggers: ${entry.triggers.split(',').slice(0, 3).join(',')}` : ''}
+                      </span>
+                      {installed ? (
+                        <Badge tone="real">installed ✓</Badge>
+                      ) : (
+                        <button
+                          className="secondary-button compact"
+                          type="button"
+                          disabled={installing !== null}
+                          onClick={() => void install(entry.id)}
+                        >
+                          {installing === entry.id ? 'Installing…' : 'Install'}
+                        </button>
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
       ) : null}
 

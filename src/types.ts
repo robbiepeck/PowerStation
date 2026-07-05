@@ -45,6 +45,22 @@ export type ConnectorCatalog = {
   connectors: ConnectorEntry[]
 }
 
+export type SkillGalleryEntry = {
+  id: string
+  name: string
+  description: string
+  category: string
+  triggers: string
+  body: string
+}
+
+export type SkillCatalog = {
+  schemaVersion: number
+  updatedAt: string
+  source: 'bundled' | 'cached' | 'remote'
+  skills: SkillGalleryEntry[]
+}
+
 export type OllamaModel = {
   name: string
   blobPath: string
@@ -468,6 +484,8 @@ export type PowerStationBridge = {
     delete: (slug: string) => Promise<boolean>
     setMode: (payload: { slug: string; mode: SkillMode }) => Promise<boolean>
     reveal: () => Promise<boolean>
+    gallery: () => Promise<SkillCatalog>
+    install: (id: string) => Promise<SkillInfo | null>
   }
   connectors: {
     get: () => Promise<ConnectorCatalog>

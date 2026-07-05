@@ -2,6 +2,14 @@
 
 The "See what's new" card in the app links here.
 
+## v0.8.0 — Skills gallery
+
+- **Skills gallery** — Utilities → Skills → *Browse gallery*: eight curated skills (email drafter,
+  commit messages, plain-English translator, devil's advocate, Socratic brainstormer, regex helper,
+  standup formatter, SQL helper) install with one click as ordinary markdown files — yours to edit,
+  retrigger, or delete. The gallery is remotely updatable via `catalog/skills.json`, validated in
+  CI like the model and connector catalogues.
+
 ## v0.7.0 — Long conversations
 
 - **Auto-compaction** — when a chat nears the context limit, the model summarizes its older turns

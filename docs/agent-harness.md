@@ -22,6 +22,10 @@ the fastest way to make a small model reliably good at one job.
 - **Three activation modes**: *Always* (every message), *Auto* (only when a message matches the
   skill's `triggers:` — keeping small contexts lean), or *Off*. Each reply's admission line names
   the skills that applied, and activating a skill mid-chat preserves the conversation.
+- **A gallery of curated skills** (Utilities → Skills → *Browse gallery*) installs with one click:
+  each entry becomes an ordinary markdown file in your skills folder. The gallery lives in
+  [`catalog/skills.json`](../catalog/skills.json) — remotely updatable and CI-validated, same as
+  the model and connector catalogues.
 
 ```
 ---

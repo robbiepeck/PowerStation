@@ -311,3 +311,103 @@ export async function refreshConnectorCatalog(): Promise<ConnectorCatalog> {
     return base
   }
 }
+
+// --- Skills gallery ------------------------------------------------------------
+// Curated skills, one click to install as a local markdown file. Same
+// remote/cache/bundled lifecycle; bodies are plain instructions, never code.
+
+export type SkillGalleryEntry = {
+  id: string
+  name: string
+  description: string
+  category: string
+  /** Comma-separated trigger phrases, same format as skill frontmatter. */
+  triggers: string
+  body: string
+}
+
+export type SkillCatalog = {
+  schemaVersion: number
+  updatedAt: string
+  source: 'bundled' | 'cached' | 'remote'
+  skills: SkillGalleryEntry[]
+}
+
+const REMOTE_SKILLS_URL = 'https://raw.githubusercontent.com/robbiepeck/PowerStation/main/catalog/skills.json'
+const SKILL_ID_RE = /^[a-z0-9-]{1,60}$/
+
+function cachedSkillsPath(): string {
+  return path.join(app.getPath('userData'), 'skills-cache.json')
+}
+
+function bundledSkillsCatalogPath(): string {
+  return path.join(app.getAppPath(), 'catalog', 'skills.json')
+}
+
+function sanitizeSkillEntry(value: unknown): SkillGalleryEntry | null {
+  if (typeof value !== 'object' || value === null) return null
+  const record = value as Record<string, unknown>
+  const id = cleanString(record.id, 60).toLowerCase()
+  const name = cleanString(record.name, 60)
+  const body = cleanString(record.body, 24_000)
+  if (!SKILL_ID_RE.test(id) || !name || !body) return null
+  return {
+    id,
+    name,
+    description: cleanString(record.description, 160),
+    category: cleanString(record.category, 30) || 'general',
+    triggers: cleanString(record.triggers, 400),
+    body,
+  }
+}
+
+function sanitizeSkillCatalog(raw: unknown, source: SkillCatalog['source']): SkillCatalog | null {
+  if (typeof raw !== 'object' || raw === null) return null
+  const record = raw as Record<string, unknown>
+  if (cleanNumber(record.schemaVersion) !== 1) return null
+  const skills = Array.isArray(record.skills)
+    ? record.skills.map(sanitizeSkillEntry).filter((entry): entry is SkillGalleryEntry => entry !== null)
+    : []
+  if (!skills.length) return null
+  return { schemaVersion: 1, updatedAt: cleanString(record.updatedAt, 40), source, skills }
+}
+
+let currentSkillCatalog: SkillCatalog | null = null
+
+async function readSkillCatalogFile(filePath: string, source: SkillCatalog['source']): Promise<SkillCatalog | null> {
+  try {
+    return sanitizeSkillCatalog(JSON.parse(await fs.readFile(filePath, 'utf8')), source)
+  } catch {
+    return null
+  }
+}
+
+export async function getSkillCatalog(): Promise<SkillCatalog> {
+  if (currentSkillCatalog) return currentSkillCatalog
+  const cached = await readSkillCatalogFile(cachedSkillsPath(), 'cached')
+  const bundled = await readSkillCatalogFile(bundledSkillsCatalogPath(), 'bundled')
+  if (cached && bundled) {
+    currentSkillCatalog = cached.updatedAt >= bundled.updatedAt ? cached : bundled
+  } else {
+    currentSkillCatalog = cached ?? bundled
+  }
+  if (!currentSkillCatalog) {
+    currentSkillCatalog = { schemaVersion: 1, updatedAt: '', source: 'bundled', skills: [] }
+  }
+  return currentSkillCatalog
+}
+
+export async function refreshSkillCatalog(): Promise<SkillCatalog> {
+  const base = await getSkillCatalog()
+  try {
+    const response = await fetch(REMOTE_SKILLS_URL, { signal: AbortSignal.timeout(15000) })
+    if (!response.ok) throw new Error(`Skill catalog fetch failed (${response.status})`)
+    const parsed = sanitizeSkillCatalog(await response.json(), 'remote')
+    if (!parsed) throw new Error('Remote skill catalog failed validation')
+    await fs.writeFile(cachedSkillsPath(), JSON.stringify({ ...parsed, source: undefined }, null, 1), 'utf8')
+    currentSkillCatalog = parsed
+    return parsed
+  } catch {
+    return base
+  }
+}

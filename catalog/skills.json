@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-07-06",
+  "skills": [
+    {
+      "id": "email-drafter",
+      "name": "Email drafter",
+      "description": "Turn bullet points into a ready-to-send professional email.",
+      "category": "writing",
+      "triggers": "email, draft a reply, write to, follow up with",
+      "body": "When asked to write or reply to an email:\n\n1. Ask for the recipient and goal only if they are genuinely unclear — otherwise just draft.\n2. Produce: a subject line, then the email body.\n3. Keep it short: 3–7 sentences unless asked for more. One ask per email.\n4. Match the register the user's notes imply (formal for externals, relaxed for teammates). No corporate filler like \"I hope this email finds you well\".\n5. End with a clear next step or question, then a simple sign-off.\n\nIf replying to a pasted email, quote nothing back — just answer the points that need answering, in their order."
+    },
+    {
+      "id": "commit-messages",
+      "name": "Commit message writer",
+      "description": "Conventional, reviewable commit messages from a diff or description.",
+      "category": "coding",
+      "triggers": "commit message, commit msg, changelog entry",
+      "body": "When given a diff, change description, or list of edits, write a commit message:\n\n- Line 1: `type(scope): imperative summary` under 65 characters. Types: feat, fix, refactor, docs, test, chore, perf.\n- Blank line, then a short body ONLY when the change needs explanation: what changed and why, not how. Wrap at ~72 characters.\n- Never invent ticket numbers, co-authors, or details not present in the input.\n- If the input contains several unrelated changes, say so and propose one message per logical change instead of one blended message."
+    },
+    {
+      "id": "plain-english",
+      "name": "Plain-English translator",
+      "description": "Rewrite jargon, legalese, or technical text so anyone can understand it.",
+      "category": "writing",
+      "triggers": "plain english, in simple terms, what does this mean, translate this jargon, legalese",
+      "body": "When given dense, technical, or legal text to explain:\n\n1. Rewrite it in plain English at a general-newspaper reading level. Short sentences. Everyday words.\n2. Keep every fact, number, obligation, and deadline — simplifying must not change the meaning.\n3. After the rewrite, add a section: **What this means for you** — 2–3 bullet points naming concrete consequences or actions.\n4. Flag anything genuinely ambiguous in the original as \"unclear in the original\" rather than guessing.\n\nNever add advice that is not supported by the text."
+    },
+    {
+      "id": "devils-advocate",
+      "name": "Devil's advocate",
+      "description": "Stress-test an idea by arguing the strongest case against it.",
+      "category": "thinking",
+      "triggers": "devil's advocate, poke holes, stress test, what could go wrong, counterargument",
+      "body": "When the user shares a plan, idea, or belief and wants it challenged:\n\n1. **Steelman first** — restate their position in one sentence, at its strongest.\n2. **Best three objections** — the strongest arguments against, each with the concrete failure it predicts. Rank by severity, not by how easy they are to state.\n3. **Weakest link** — name the single assumption that, if wrong, sinks the whole thing.\n4. **What would change my mind** — the evidence that would settle each objection.\n\nBe adversarial about the idea, never about the person. No hedging padding — commit to the strongest counter-case."
+    },
+    {
+      "id": "socratic-brainstormer",
+      "name": "Socratic brainstormer",
+      "description": "Sharpen half-formed ideas with pointed questions before any answers.",
+      "category": "thinking",
+      "triggers": "brainstorm, help me think, not sure what, kicking around an idea",
+      "body": "When the user is exploring an idea rather than asking for a direct answer:\n\n- Reply first with the ONE question whose answer would most reshape the idea. Not a list — one question.\n- After they answer, either ask the next single most useful question or, once the shape is clear, switch modes: summarize the sharpened idea in their words and offer 2–3 concrete directions.\n- Ask about goals, constraints, and who it is for before asking about implementation.\n- Never open with options or advice while the goal is still fuzzy."
+    },
+    {
+      "id": "regex-helper",
+      "name": "Regex helper",
+      "description": "Write and explain regular expressions with worked test cases.",
+      "category": "coding",
+      "triggers": "regex, regular expression, pattern to match",
+      "body": "When asked to write a regular expression:\n\n1. Give the pattern in a code block, with the flavor stated (JavaScript, PCRE, Python).\n2. Explain it piece by piece — one line per token group, plain words.\n3. Show a mini test table: 3 strings that match and 2 that don't, with a one-word reason each.\n4. Name the edge cases the pattern deliberately does NOT handle.\n\nWhen asked to explain an existing regex, do steps 2–4 only. Prefer simple, readable patterns over clever ones; say so when a real parser would be safer than a regex."
+    },
+    {
+      "id": "standup-formatter",
+      "name": "Standup formatter",
+      "description": "Turn a rambling work update into a crisp yesterday / today / blockers standup.",
+      "category": "work",
+      "triggers": "standup, stand-up, status update, weekly update",
+      "body": "When given a work update in any form, reformat it as:\n\n**Yesterday** — done items only, one line each, past tense, starting with a verb.\n**Today** — planned items, one line each.\n**Blockers** — anything blocking, with who/what is needed to unblock. Write \"None\" if none are mentioned.\n\nRules: use only information in the input — never invent progress. Keep every line under ~12 words. Drop pleasantries and meta-commentary. If something is ambiguous between done and planned, put it in Today with \"(carry-over)\"."
+    },
+    {
+      "id": "sql-helper",
+      "name": "SQL helper",
+      "description": "Write, explain, and sanity-check SQL with safety rails.",
+      "category": "coding",
+      "triggers": "sql, query the, select from, database query",
+      "body": "When asked for SQL:\n\n1. Ask for the schema only if the tables/columns involved are genuinely unknown — otherwise state your assumed schema in a comment at the top of the query.\n2. Give the query in a code block, formatted with one clause per line. Standard SQL unless a dialect is named.\n3. Below it, explain what each clause does in one short line each.\n4. Safety rails: for UPDATE or DELETE, always include a matching SELECT to run first and say \"run this first to see what will be affected\". Never write unbounded DELETEs without a WHERE clause.\n5. Mention the index that would make the query fast if one obvious column stands out."
+    }
+  ]
+}
