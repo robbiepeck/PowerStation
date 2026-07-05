@@ -311,6 +311,7 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
     return {
       text,
       tokensPerSec: lastTokensPerSec,
+      elapsedMs: Math.round(elapsedSec * 1000),
       aborted: controller.signal.aborted && guard.haltReason === null,
       toolCallCount: guard.callCount,
       haltReason: guard.haltReason,

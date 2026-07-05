@@ -48,6 +48,8 @@ contextBridge.exposeInMainWorld('powerStation', {
     list: () => ipcRenderer.invoke('chats:list'),
     get: (id) => ipcRenderer.invoke('chats:get', id),
     save: (payload) => ipcRenderer.invoke('chats:save', payload),
+    rename: (id, title) => ipcRenderer.invoke('chats:rename', id, title),
+    pin: (id, pinned) => ipcRenderer.invoke('chats:pin', id, pinned),
     delete: (id) => ipcRenderer.invoke('chats:delete', id),
     deleteAll: () => ipcRenderer.invoke('chats:deleteAll'),
     reveal: () => ipcRenderer.invoke('chats:reveal'),
@@ -72,6 +74,10 @@ contextBridge.exposeInMainWorld('powerStation', {
   ollama: {
     status: () => ipcRenderer.invoke('ollama:status'),
     import: (name) => ipcRenderer.invoke('ollama:import', name),
+  },
+  lmstudio: {
+    status: () => ipcRenderer.invoke('lmstudio:status'),
+    import: (path) => ipcRenderer.invoke('lmstudio:import', path),
   },
   files: {
     pickAndExtract: () => ipcRenderer.invoke('files:pickAndExtract'),

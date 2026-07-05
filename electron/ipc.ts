@@ -7,6 +7,7 @@ import * as agent from './agent.js'
 import * as chats from './chats.js'
 import * as skills from './skills.js'
 import * as ollama from './ollama.js'
+import * as lmstudio from './lmstudio.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
 import { composeSystemPrompt } from './skillFormat.js'
@@ -278,6 +279,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return model.blobPath
   })
 
+  // --- LM Studio ----------------------------------------------------------------
+  ipcMain.handle('lmstudio:status', () => lmstudio.getLmStudioStatus())
+  ipcMain.handle('lmstudio:import', async (_event, filePath: string) => {
+    // Same rule as Ollama: resolve server-side from our own directory walk —
+    // the renderer's string must match a file we listed, never a free path.
+    const model = await lmstudio.resolveLmStudioModel(filePath)
+    if (!model) throw new Error('That model was not found in LM Studio.')
+    await models.importModelFile(model.path)
+    return model.path
+  })
+
   // --- Benchmarks -------------------------------------------------------------
   ipcMain.handle('bench:run', async (_event, modelPath: string) => {
     if (typeof modelPath !== 'string' || !(await models.isKnownModelPath(modelPath))) {
@@ -295,6 +307,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     if (!state.settings.saveChats) return null
     return chats.saveChat(payload ?? { messages: [] })
   })
+  ipcMain.handle('chats:rename', (_event, id: string, title: string) => chats.renameChat(id, title))
+  ipcMain.handle('chats:pin', (_event, id: string, pinned: boolean) => chats.setChatPinned(id, pinned))
   ipcMain.handle('chats:delete', (_event, id: string) => chats.deleteChat(id))
   ipcMain.handle('chats:deleteAll', () => chats.deleteAllChats())
   ipcMain.handle('chats:reveal', () => chats.revealChatsDir())
@@ -593,7 +607,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('agent:permissionResponse', (_event, payload: { promptId: string; decision: string }) => {
     if (!payload || typeof payload.promptId !== 'string') return false
-    const decision = ['allow-once', 'allow-always', 'deny'].includes(payload.decision)
+    const decision = ['allow-once', 'allow-turn', 'allow-always', 'deny'].includes(payload.decision)
       ? (payload.decision as agent.PermissionDecision)
       : 'deny'
     return agent.resolvePermission(payload.promptId, decision)
@@ -730,6 +744,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           requestId,
           text: result.text,
           tokensPerSec: result.tokensPerSec,
+          elapsedMs: result.elapsedMs,
           aborted: result.aborted,
           toolCallCount: result.toolCallCount,
           haltReason: result.haltReason,
@@ -738,6 +753,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         })
       } catch (error) {
         send('chat:error', { requestId, message: error instanceof Error ? error.message : String(error) })
+      } finally {
+        agent.endTurn(requestId)
       }
     })()
     return { requestId, ok: true }

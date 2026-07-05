@@ -61,6 +61,26 @@ store; one click registers the underlying GGUF blob as an imported model — no 
 extra disk. Inference runs in PowerStation's own runtime with the same admission checks; Ollama is
 never a dependency. (Chatting *through* the Ollama daemon remains out of scope.)
 
+### 12. LM Studio import — *shipped v0.10*
+The Ollama pattern applied to the other big model manager: PowerStation walks
+`~/.lmstudio/models` (and the pre-0.3 cache location), lists the GGUFs it finds, and one click
+registers a file in place — no re-download, no extra disk, same admission checks. Split GGUF
+series are priced as the whole set, which is what actually loads.
+
+### 13. Chat pin & rename — *shipped v0.10*
+Pin chats to the top of the sidebar; rename inline. A renamed title is locked (saves stop
+re-deriving it from the first message); clearing the name unlocks it again.
+
+### 14. Turn-scoped tool approval — *shipped v0.10*
+"Allow rest of turn" in the permission dialog: one approval covers the model's remaining
+ask-gated calls in the current reply. Reduces prompt fatigue on multi-step tasks without touching
+standing permissions — the grant expires with the turn and every call is still audit-logged.
+
+### 15. Battery & energy awareness — *shipped v0.10*
+Battery state in the monitor and telemetry; a status-pill nudge below 25% on battery (lighter
+models draw less power); an estimated per-chat watt-hours figure in the chat header, labelled as
+the ballpark it is (the power reading is itself an estimate).
+
 ### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
 Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face
 (schema + data + weekly CI verification shipped, plus an honest "vision-capable model" badge) —

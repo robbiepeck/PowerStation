@@ -13,6 +13,7 @@ import {
   PanelRightOpen,
   Paperclip,
   Pencil,
+  Pin,
   RotateCcw,
   Search as SearchIcon,
   Send,
@@ -46,6 +47,8 @@ import type {
   ModelInfo,
   OllamaStatus,
   OnboardingState,
+  LmStudioStatus,
+  PermissionDecision,
   PermissionRequest,
   RuntimeEventPayload,
   Settings,
@@ -279,7 +282,7 @@ function usePermissionPrompt() {
       offExpired()
     }
   }, [])
-  const respond = useCallback((promptId: string, decision: 'allow-once' | 'allow-always' | 'deny') => {
+  const respond = useCallback((promptId: string, decision: PermissionDecision) => {
     void bridge.agent.respondPermission({ promptId, decision })
     setRequest(queue.current.shift() ?? null)
   }, [])
@@ -369,11 +372,28 @@ function useOllama() {
   return { status, refresh }
 }
 
-function useChat() {
+function useLmStudio() {
+  const [status, setStatus] = useState<LmStudioStatus | null>(null)
+  const refresh = useCallback(async () => {
+    const result = await bridge.lmstudio.status().catch(() => null)
+    setStatus(result)
+  }, [])
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+  return { status, refresh }
+}
+
+function useChat(getWatts: () => number) {
   const [messages, setMessages] = useState<ChatTurn[]>([])
   const [streaming, setStreaming] = useState(false)
   const [chatId, setChatId] = useState<string | null>(null)
   const [contextUsage, setContextUsage] = useState<{ used: number; total: number } | null>(null)
+  // Estimated watt-hours spent generating in this session's chat — power draw
+  // is itself an estimate, so this is a labelled ballpark, not a meter.
+  const [energyWh, setEnergyWh] = useState(0)
   const activeRef = useRef<string | null>(null)
   // Committed-messages mirror so click handlers (regenerate/edit) can read the
   // conversation synchronously without relying on setState updater timing.
@@ -442,7 +462,7 @@ function useChat() {
         return [...prev.slice(0, index), notice, ...prev.slice(index)]
       })
     })
-    const offDone = bridge.chat.onDone(({ requestId, tokensPerSec, aborted, haltReason, contextUsed, contextSize }) => {
+    const offDone = bridge.chat.onDone(({ requestId, tokensPerSec, elapsedMs, aborted, haltReason, contextUsed, contextSize }) => {
       if (activeRef.current !== requestId) return
       patchAssistant(requestId, (turn) => ({
         ...turn,
@@ -453,6 +473,8 @@ function useChat() {
         haltReason,
       }))
       if (contextSize > 0) setContextUsage({ used: contextUsed, total: contextSize })
+      const watts = getWatts()
+      if (elapsedMs > 0 && watts > 0) setEnergyWh((prev) => prev + (watts * elapsedMs) / 3.6e6)
       setStreaming(false)
       activeRef.current = null
     })
@@ -474,7 +496,7 @@ function useChat() {
       offDone()
       offError()
     }
-  }, [patchAssistant])
+  }, [getWatts, patchAssistant])
 
   const send = useCallback(
     (text: string, options?: { attachments?: StoredAttachment[]; ragFolderId?: string }) => {
@@ -513,6 +535,7 @@ function useChat() {
     setMessages([])
     setChatId(null)
     setContextUsage(null)
+    setEnergyWh(0)
     void bridge.chat.reset()
   }, [])
 
@@ -521,6 +544,7 @@ function useChat() {
     setStreaming(false)
     setChatId(stored.id)
     setContextUsage(null)
+    setEnergyWh(0)
     replayRef.current = stored.messages.map((m) => ({ role: m.role, text: replayText(m) }))
     setMessages(
       stored.messages.map((m, index) => ({
@@ -586,7 +610,7 @@ function useChat() {
     return lastUser ? { text: lastUser.content, attachments: lastUser.attachments } : null
   }, [rewindLastExchange])
 
-  return { messages, streaming, chatId, setChatId, contextUsage, send, stop, reset, loadChat, regenerate, editLast }
+  return { messages, streaming, chatId, setChatId, contextUsage, energyWh, send, stop, reset, loadChat, regenerate, editLast }
 }
 
 function serializeChat(messages: ChatTurn[]): StoredChatMessage[] {
@@ -637,11 +661,19 @@ function App() {
   const permissionPrompt = usePermissionPrompt()
   const runtimeEvents = useRuntimeEvents()
   const { installLatest, updateState } = useUpdates()
-  const chat = useChat()
+  // Latest power estimate, readable synchronously when a generation finishes.
+  const wattsRef = useRef(0)
+  useEffect(() => {
+    wattsRef.current = snapshot?.power.watts ?? 0
+  }, [snapshot])
+  const getWatts = useCallback(() => wattsRef.current, [])
+  const chat = useChat(getWatts)
   const chatHistory = useChatHistory()
   const benchmarks = useBenchmarks()
   const refreshBenchmarks = benchmarks.refresh
   const ollama = useOllama()
+  const lmstudio = useLmStudio()
+  const [renamingChat, setRenamingChat] = useState<{ id: string; value: string } | null>(null)
   const [download, setDownload] = useState<DownloadState>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchBusyPath, setBenchBusyPath] = useState<string | null>(null)
@@ -808,6 +840,40 @@ function App() {
     },
     [refresh],
   )
+
+  const handleImportLmStudio = useCallback(
+    async (path: string) => {
+      try {
+        await bridge.lmstudio.import(path)
+        await refresh()
+      } catch (error) {
+        window.alert(error instanceof Error ? error.message : String(error))
+      }
+    },
+    [refresh],
+  )
+
+  // Re-fetch the sidebar respecting any active search filter.
+  const refreshChatList = useCallback(() => {
+    if (chatQuery.trim()) void chatHistory.search(chatQuery)
+    else void chatHistory.refresh()
+  }, [chatHistory, chatQuery])
+
+  const handleTogglePin = useCallback(
+    async (summary: ChatSummary) => {
+      await bridge.chats.pin(summary.id, !summary.pinned).catch(() => false)
+      refreshChatList()
+    },
+    [refreshChatList],
+  )
+
+  const handleCommitRename = useCallback(async () => {
+    const pending = renamingChat
+    setRenamingChat(null)
+    if (!pending) return
+    await bridge.chats.rename(pending.id, pending.value).catch(() => false)
+    refreshChatList()
+  }, [refreshChatList, renamingChat])
 
   const handleSend = useCallback(
     (text: string) => {
@@ -1031,14 +1097,48 @@ function App() {
               ) : null}
               {chatHistory.summaries.map((summary) => (
                 <div className={summary.id === chat.chatId ? 'chat-item active' : 'chat-item'} key={summary.id}>
+                  {renamingChat?.id === summary.id ? (
+                    <input
+                      className="chat-item-rename"
+                      aria-label="Rename chat"
+                      autoFocus
+                      value={renamingChat.value}
+                      onChange={(event) => setRenamingChat({ id: summary.id, value: event.target.value })}
+                      onBlur={() => void handleCommitRename()}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') void handleCommitRename()
+                        if (event.key === 'Escape') setRenamingChat(null)
+                      }}
+                    />
+                  ) : (
+                    <button
+                      className="chat-item-main"
+                      type="button"
+                      title={summary.snippet ?? summary.title}
+                      onClick={() => void handleLoadChat(summary.id)}
+                    >
+                      {summary.pinned ? <Pin className="chat-item-pin-mark" size={11} /> : null}
+                      {summary.title}
+                      {summary.snippet ? <small className="chat-item-snippet">{summary.snippet}</small> : null}
+                    </button>
+                  )}
                   <button
-                    className="chat-item-main"
+                    className={summary.pinned ? 'chat-item-action pinned' : 'chat-item-action'}
                     type="button"
-                    title={summary.snippet ?? summary.title}
-                    onClick={() => void handleLoadChat(summary.id)}
+                    aria-label={summary.pinned ? `Unpin chat: ${summary.title}` : `Pin chat: ${summary.title}`}
+                    title={summary.pinned ? 'Unpin' : 'Pin to top'}
+                    onClick={() => void handleTogglePin(summary)}
                   >
-                    {summary.title}
-                    {summary.snippet ? <small className="chat-item-snippet">{summary.snippet}</small> : null}
+                    <Pin size={12} />
+                  </button>
+                  <button
+                    className="chat-item-action"
+                    type="button"
+                    aria-label={`Rename chat: ${summary.title}`}
+                    title="Rename"
+                    onClick={() => setRenamingChat({ id: summary.id, value: summary.title })}
+                  >
+                    <Pencil size={12} />
                   </button>
                   <button
                     className="chat-item-delete"
@@ -1070,6 +1170,7 @@ function App() {
             chatId={chat.chatId}
             composerSeed={composerSeed}
             contextUsage={chat.contextUsage}
+            energyWh={chat.energyWh}
             messages={chat.messages}
             models={models}
             onAttachFolder={() => void handleAttachFolder()}
@@ -1119,9 +1220,11 @@ function App() {
               download={download}
               fitReports={fitReports}
               models={models}
+              lmstudio={lmstudio.status}
               ollama={ollama.status}
               onAddFolder={handleAddFolder}
               onBenchmark={(model) => void handleBenchmark(model)}
+              onImportLmStudio={(path) => void handleImportLmStudio(path)}
               onImportOllama={(name) => void handleImportOllama(name)}
               onDelete={handleDelete}
               onDownload={handleDownload}
@@ -1235,13 +1338,21 @@ function StatusPill({
 
   const pressure = snapshot.pressure.level
   const ramPct = snapshot.ram.totalGb ? (snapshot.ram.usedGb / snapshot.ram.totalGb) * 100 : 0
-  const tone = pressure === 'critical' ? 'critical' : pressure === 'warn' || ramPct > 88 ? 'warn' : 'ok'
+  const memoryTight = pressure === 'warn' || ramPct > 88
+  const batteryLow =
+    snapshot.battery.present &&
+    !snapshot.battery.charging &&
+    snapshot.battery.percent != null &&
+    snapshot.battery.percent <= 25
+  const tone = pressure === 'critical' ? 'critical' : memoryTight || batteryLow ? 'warn' : 'ok'
   const label =
     tone === 'critical'
       ? 'Memory critical'
-      : tone === 'warn'
+      : memoryTight
         ? 'Memory getting tight'
-        : streaming && snapshot.tokensPerSec > 0
+        : batteryLow
+          ? `Battery ${snapshot.battery.percent}% — lighter models draw less`
+          : streaming && snapshot.tokensPerSec > 0
           ? `Running smoothly · ${formatNumber(snapshot.tokensPerSec, 1)} tok/s`
           : snapshot.model.loaded
             ? snapshot.tokensPerSec > 0
@@ -1265,6 +1376,7 @@ function ChatView({
   chatId,
   composerSeed,
   contextUsage,
+  energyWh,
   messages,
   models,
   onAttachFolder,
@@ -1300,6 +1412,7 @@ function ChatView({
   chatId: string | null
   composerSeed: { text: string; key: number } | null
   contextUsage: { used: number; total: number } | null
+  energyWh: number
   messages: ChatTurn[]
   models: ModelInfo[]
   onAttachFolder: () => void
@@ -1361,6 +1474,16 @@ function ChatView({
               </span>
               {(contextUsage.used / 1000).toFixed(1)}k / {(contextUsage.total / 1000).toFixed(0)}k
             </div>
+          ) : null}
+          {energyWh >= 0.01 ? (
+            <span
+              className="energy-chip"
+              title={`Estimated energy this chat has spent generating: ~${energyWh.toFixed(2)} Wh. Power draw is itself an estimate, so treat this as a ballpark.${
+                snapshot?.battery.present && !snapshot.battery.charging ? ' You are on battery — smaller models draw less.' : ''
+              }`}
+            >
+              ~{energyWh >= 10 ? energyWh.toFixed(0) : energyWh.toFixed(2)} Wh
+            </span>
           ) : null}
           {hasToolActivity ? (
             <button className="ghost-button" type="button" title="Tool audit log — every call, decision, and diff" onClick={onOpenAudit}>
@@ -1755,6 +1878,7 @@ function MessageBubble({
 const DECISION_LABEL: Record<string, { text: string; tone: 'ok' | 'warn' | 'bad' }> = {
   allowed: { text: 'allowed once', tone: 'ok' },
   'allowed-always': { text: 'allowed always', tone: 'ok' },
+  'allowed-turn': { text: 'allowed for the turn', tone: 'ok' },
   'auto-allowed': { text: 'auto-allowed', tone: 'warn' },
   denied: { text: 'denied', tone: 'bad' },
   blocked: { text: 'blocked by settings', tone: 'bad' },
@@ -1845,7 +1969,7 @@ function PermissionModal({
   onRespond,
 }: {
   request: PermissionRequest
-  onRespond: (promptId: string, decision: 'allow-once' | 'allow-always' | 'deny') => void
+  onRespond: (promptId: string, decision: PermissionDecision) => void
 }) {
   const argsPreview = useMemo(() => {
     try {
@@ -1918,6 +2042,14 @@ function PermissionModal({
           <div className="permission-allow">
             <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, 'allow-always')}>
               Always allow
+            </button>
+            <button
+              className="secondary-button"
+              type="button"
+              title="Allow this call and any further calls the model makes before this reply finishes. Every call still lands in the audit log."
+              onClick={() => onRespond(request.promptId, 'allow-turn')}
+            >
+              Allow rest of turn
             </button>
             <button className="primary-button" type="button" onClick={() => onRespond(request.promptId, 'allow-once')}>
               Allow once

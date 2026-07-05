@@ -44,6 +44,7 @@ import type {
   McpServerStatus,
   McpToolInfoResponse,
   ModelInfo,
+  LmStudioStatus,
   OllamaStatus,
   IndexProgress,
   RagIndexListing,
@@ -351,6 +352,16 @@ export function MonitorView({
     },
     { label: 'Power', value: `${formatNumber(snapshot.power.watts, 1)} W`, detail: 'package estimate', real: !snapshot.power.estimated },
     {
+      label: 'Battery',
+      value: snapshot.battery.present && snapshot.battery.percent != null ? `${snapshot.battery.percent}%` : 'n/a',
+      detail: snapshot.battery.present
+        ? snapshot.battery.charging
+          ? 'on power'
+          : 'on battery — smaller models draw less'
+        : 'no battery',
+      real: snapshot.battery.real,
+    },
+    {
       label: 'Thermal',
       value: snapshot.thermal.celsius != null ? `${formatNumber(snapshot.thermal.celsius)}°C` : `${formatNumber(snapshot.thermal.headroomPct)}% headroom`,
       detail: snapshot.thermal.real ? 'sensor' : 'estimated',
@@ -633,12 +644,14 @@ export function ModelsView({
   device,
   download,
   fitReports,
+  lmstudio,
   models,
   ollama,
   onAddFolder,
   onBenchmark,
   onDelete,
   onDownload,
+  onImportLmStudio,
   onImportOllama,
   onOpenWebsite,
   onImportFile,
@@ -656,12 +669,14 @@ export function ModelsView({
   device: DeviceInfo | null
   download: DownloadState
   fitReports: Record<string, FitReport | null>
+  lmstudio: LmStudioStatus | null
   models: ModelInfo[]
   ollama: OllamaStatus | null
   onAddFolder: () => void
   onBenchmark: (model: ModelInfo) => void
   onDelete: (model: ModelInfo) => void
   onDownload: (uri: string) => void
+  onImportLmStudio: (path: string) => void
   onImportOllama: (name: string) => void
   onOpenWebsite: (url: string) => void
   onImportFile: () => void
@@ -748,6 +763,44 @@ export function ModelsView({
                     <Badge tone="real">imported ✓</Badge>
                   ) : (
                     <button className="secondary-button compact" type="button" onClick={() => onImportOllama(model.name)}>
+                      <FileDown size={14} />
+                      Use in PowerStation
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {lmstudio?.detected && lmstudio.models.length > 0 ? (
+        <section className="ollama-card">
+          <div className="ollama-card-head">
+            <span className="connector-icon">
+              <Database size={16} />
+            </span>
+            <div>
+              <h3>Found in LM Studio</h3>
+              <p>
+                Use models you already downloaded with LM Studio — no re-download, no extra disk. They run in
+                PowerStation's own runtime with the same admission checks as any other model.
+              </p>
+            </div>
+          </div>
+          <div className="ollama-model-list">
+            {lmstudio.models.map((model) => {
+              const imported = models.some((m) => m.path === model.path)
+              return (
+                <div className="ollama-model-row" key={model.path}>
+                  <div className="ollama-model-main">
+                    <strong>{model.name}</strong>
+                    <span>{[model.fileName, formatBytes(model.sizeBytes)].filter(Boolean).join(' · ')}</span>
+                  </div>
+                  {imported ? (
+                    <Badge tone="real">imported ✓</Badge>
+                  ) : (
+                    <button className="secondary-button compact" type="button" onClick={() => onImportLmStudio(model.path)}>
                       <FileDown size={14} />
                       Use in PowerStation
                     </button>

@@ -76,6 +76,18 @@ export type OllamaStatus = {
   models: OllamaModel[]
 }
 
+export type LmStudioModel = {
+  name: string
+  fileName: string
+  path: string
+  sizeBytes: number
+}
+
+export type LmStudioStatus = {
+  detected: boolean
+  models: LmStudioModel[]
+}
+
 export type KvGeometry = {
   nLayers: number
   nKvHeads: number
@@ -161,6 +173,7 @@ export type StoredChat = {
 export type ChatSummary = {
   id: string
   title: string
+  pinned: boolean
   updatedAt: number
   messageCount: number
   snippet?: string
@@ -208,6 +221,7 @@ export type TelemetrySnapshot = {
   vram: { usedGb: number | null; totalGb: number | null; real: boolean }
   storage: { usedGb: number; totalGb: number; freeGb: number; mount: string | null; real: boolean }
   power: { watts: number; estimated: boolean }
+  battery: { present: boolean; charging: boolean; percent: number | null; real: boolean }
   thermal: { celsius: number | null; headroomPct: number; real: boolean }
   pressure: { level: MemoryPressureLevel | null; real: boolean }
   tokensPerSec: number
@@ -366,7 +380,7 @@ export type PermissionRequest = {
   preview: ToolPreview | null
 }
 
-export type PermissionDecision = 'allow-once' | 'allow-always' | 'deny'
+export type PermissionDecision = 'allow-once' | 'allow-turn' | 'allow-always' | 'deny'
 
 export type RuntimeEventPayload = {
   type: 'crashed' | 'autopaused'
@@ -407,6 +421,8 @@ export type ChatDonePayload = {
   requestId: string
   text: string
   tokensPerSec: number
+  /** Wall-clock generation time in the worker — the basis of the energy estimate. */
+  elapsedMs: number
   aborted: boolean
   toolCallCount: number
   haltReason: 'repeated-call' | 'call-budget' | null
@@ -480,6 +496,8 @@ export type PowerStationBridge = {
       modelPath?: string
       ragFolder?: { id: string; name: string } | null
     }) => Promise<{ id: string } | null>
+    rename: (id: string, title: string) => Promise<boolean>
+    pin: (id: string, pinned: boolean) => Promise<boolean>
     delete: (id: string) => Promise<boolean>
     deleteAll: () => Promise<number>
     reveal: () => Promise<boolean>
@@ -523,6 +541,10 @@ export type PowerStationBridge = {
     get: () => Promise<ConnectorCatalog>
     add: (payload: { connectorId: string; folder?: string }) => Promise<McpServerConfig[]>
     pickFolder: () => Promise<string | null>
+  }
+  lmstudio: {
+    status: () => Promise<LmStudioStatus>
+    import: (path: string) => Promise<string>
   }
   ollama: {
     status: () => Promise<OllamaStatus>
@@ -582,7 +604,7 @@ export type PowerStationBridge = {
 
 export type MessageRole = 'user' | 'assistant'
 
-export type ToolDecision = 'allowed' | 'allowed-always' | 'auto-allowed' | 'denied' | 'blocked'
+export type ToolDecision = 'allowed' | 'allowed-always' | 'allowed-turn' | 'auto-allowed' | 'denied' | 'blocked'
 
 export type ToolCallRecord = {
   toolKey: string

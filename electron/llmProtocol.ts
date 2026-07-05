@@ -53,6 +53,8 @@ export type BenchmarkResult = {
 export type ChatResult = {
   text: string
   tokensPerSec: number
+  /** Wall-clock generation time, including any tool calls made mid-turn. */
+  elapsedMs: number
   aborted: boolean
   toolCallCount: number
   /** Set when the turn was halted by a loop guard. */

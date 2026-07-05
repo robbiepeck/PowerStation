@@ -37,6 +37,9 @@ export type StoredChatMessage = {
 export type StoredChat = {
   id: string
   title: string
+  /** True once the user renamed the chat — saves stop re-deriving the title. */
+  titleLocked: boolean
+  pinned: boolean
   createdAt: number
   updatedAt: number
   modelPath: string | null
@@ -47,6 +50,7 @@ export type StoredChat = {
 export type ChatSummary = {
   id: string
   title: string
+  pinned: boolean
   updatedAt: number
   messageCount: number
   snippet?: string
@@ -100,7 +104,7 @@ function sanitizeAttachments(value: unknown): StoredAttachment[] | undefined {
   return attachments.length ? attachments : undefined
 }
 
-const DECISIONS = new Set(['allowed', 'allowed-always', 'auto-allowed', 'denied', 'blocked'])
+const DECISIONS = new Set(['allowed', 'allowed-always', 'allowed-turn', 'auto-allowed', 'denied', 'blocked'])
 
 function sanitizeToolCalls(value: unknown): StoredToolCall[] | undefined {
   if (!Array.isArray(value)) return undefined
@@ -162,6 +166,8 @@ function sanitizeChat(raw: unknown, id: string): StoredChat | null {
   return {
     id,
     title: typeof record.title === 'string' && record.title.trim() ? record.title.slice(0, 80) : deriveTitle(messages),
+    titleLocked: record.titleLocked === true,
+    pinned: record.pinned === true,
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : Date.now(),
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : Date.now(),
     modelPath: typeof record.modelPath === 'string' ? record.modelPath : null,
@@ -199,9 +205,9 @@ export async function listChats(): Promise<ChatSummary[]> {
     .filter(isValidId)
   const chats = (await Promise.all(ids.map(readChat))).filter((c): c is StoredChat => c !== null)
   return chats
-    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
     .slice(0, MAX_CHATS)
-    .map((c) => ({ id: c.id, title: c.title, updatedAt: c.updatedAt, messageCount: c.messages.length }))
+    .map((c) => ({ id: c.id, title: c.title, pinned: c.pinned, updatedAt: c.updatedAt, messageCount: c.messages.length }))
 }
 
 export async function getChat(id: unknown): Promise<StoredChat | null> {
@@ -221,16 +227,49 @@ export async function saveChat(payload: {
   const existing = await readChat(id)
   const chat: StoredChat = {
     id,
-    title: deriveTitle(messages),
+    title: existing?.titleLocked ? existing.title : deriveTitle(messages),
+    titleLocked: existing?.titleLocked ?? false,
+    pinned: existing?.pinned ?? false,
     createdAt: existing?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     modelPath: typeof payload.modelPath === 'string' ? payload.modelPath : existing?.modelPath ?? null,
     ragFolder: payload.ragFolder === undefined ? existing?.ragFolder ?? null : sanitizeRagFolder(payload.ragFolder),
     messages,
   }
-  await fs.mkdir(chatsDir(), { recursive: true })
-  await fs.writeFile(chatFile(id), JSON.stringify(chat, null, 1), 'utf8')
+  await writeChat(chat)
   return { id }
+}
+
+async function writeChat(chat: StoredChat): Promise<void> {
+  await fs.mkdir(chatsDir(), { recursive: true })
+  await fs.writeFile(chatFile(chat.id), JSON.stringify(chat, null, 1), 'utf8')
+}
+
+/** Rename keeps updatedAt untouched so the list does not reorder under the user. */
+export async function renameChat(id: unknown, title: unknown): Promise<boolean> {
+  if (!isValidId(id) || typeof title !== 'string') return false
+  const chat = await readChat(id)
+  if (!chat) return false
+  const trimmed = title.trim().replace(/\s+/g, ' ').slice(0, 80)
+  if (trimmed) {
+    chat.title = trimmed
+    chat.titleLocked = true
+  } else {
+    // Clearing the name hands the title back to auto-derivation.
+    chat.title = deriveTitle(chat.messages)
+    chat.titleLocked = false
+  }
+  await writeChat(chat)
+  return true
+}
+
+export async function setChatPinned(id: unknown, pinned: unknown): Promise<boolean> {
+  if (!isValidId(id)) return false
+  const chat = await readChat(id)
+  if (!chat) return false
+  chat.pinned = pinned === true
+  await writeChat(chat)
+  return true
 }
 
 export async function deleteChat(id: unknown): Promise<boolean> {

@@ -12,6 +12,7 @@ export type TelemetrySnapshot = {
   vram: { usedGb: number | null; totalGb: number | null; real: boolean }
   storage: { usedGb: number; totalGb: number; freeGb: number; mount: string | null; real: boolean }
   power: { watts: number; estimated: boolean }
+  battery: { present: boolean; charging: boolean; percent: number | null; real: boolean }
   thermal: { celsius: number | null; headroomPct: number; real: boolean }
   /** OS memory pressure (macOS kernel signal, no privileges needed). */
   pressure: { level: MemoryPressureLevel | null; real: boolean }
@@ -75,13 +76,14 @@ async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
 
 async function sample(): Promise<TelemetrySnapshot> {
   const info = await loadStaticInfo()
-  const [load, mem, temp, device, storage, pressureLevel] = await Promise.all([
+  const [load, mem, temp, device, storage, pressureLevel, battery] = await Promise.all([
     si.currentLoad().catch(() => null),
     si.mem().catch(() => null),
     si.cpuTemperature().catch(() => null),
     deviceInfoIfRunning(),
     getPrimaryStorage().catch(() => null),
     getMemoryPressureLevel().catch(() => null),
+    si.battery().catch(() => null),
   ])
 
   const cpuLoad = clamp(load?.currentLoad ?? 0, 0, 100)
@@ -121,6 +123,16 @@ async function sample(): Promise<TelemetrySnapshot> {
       ? { ...storage, real: true }
       : { usedGb: 0, totalGb: 0, freeGb: 0, mount: null, real: false },
     power: { watts: powerWatts, estimated: true },
+    battery: battery?.hasBattery
+      ? {
+          present: true,
+          // acConnected covers the "plugged in, already full" state where
+          // isCharging goes false but the machine is not draining.
+          charging: Boolean(battery.isCharging || battery.acConnected),
+          percent: typeof battery.percent === 'number' ? clamp(round(battery.percent), 0, 100) : null,
+          real: true,
+        }
+      : { present: false, charging: false, percent: null, real: battery != null },
     thermal: { celsius: tempC != null ? round(tempC, 1) : null, headroomPct: round(headroomPct), real: tempC != null },
     pressure: { level: pressureLevel, real: pressureLevel != null },
     tokensPerSec: round(getLastTokensPerSec(), 1),

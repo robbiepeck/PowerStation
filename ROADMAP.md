@@ -14,6 +14,10 @@ model landscape and with what users hit first.
 - MIT licence; local-first data posture.
 - **Windows x64 support (beta)** — platform-aware hardware detection and memory pressure, a
   CPU-offload fit tier for discrete-GPU machines, and a CI-built NSIS installer + portable exe.
+- **Ollama & LM Studio import** — one click registers models you already have on disk, no
+  re-download; inference stays in PowerStation's own runtime with the same admission checks.
+- **Turn-scoped tool approval** — "Allow rest of turn" in the permission dialog; battery-aware
+  status pill and a per-chat energy estimate.
 
 ## Next
 

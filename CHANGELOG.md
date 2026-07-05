@@ -2,6 +2,23 @@
 
 The "See what's new" card in the app links here.
 
+## v0.10.0 — Daily driver
+
+- **LM Studio import** — models you already downloaded with LM Studio appear in the Models view
+  and register with one click: no re-download, no extra disk, same admission checks. Works exactly
+  like the Ollama import (split GGUFs are priced as the whole series).
+- **Pin & rename chats** — pin conversations to the top of the sidebar; rename them inline
+  (pencil on hover, Enter to save, Esc to cancel). Renamed titles stick — they stop auto-deriving
+  from the first message; clearing the name hands the title back.
+- **"Allow rest of turn"** — a new option in the tool permission dialog: approve the current call
+  and any further calls the model makes before this reply finishes, without weakening standing
+  permissions. The grant dies with the turn, and every call still lands in the audit log as
+  *allowed for the turn*.
+- **Battery & energy awareness** — the monitor shows battery state; the status pill warns below
+  25% on battery (lighter models draw less power); and the chat header shows an estimated
+  watt-hours figure for the session's generation — labelled a ballpark, because the power reading
+  itself is an estimate.
+
 ## v0.9.0 — Accountability
 
 - **Tool audit log** — the shield button in any chat with tool activity opens a full record:

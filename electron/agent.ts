@@ -20,9 +20,9 @@ export type PermissionRequest = {
   preview: ToolPreview | null
 }
 
-export type PermissionDecision = 'allow-once' | 'allow-always' | 'deny'
+export type PermissionDecision = 'allow-once' | 'allow-turn' | 'allow-always' | 'deny'
 
-export type ToolDecision = 'allowed' | 'allowed-always' | 'auto-allowed' | 'denied' | 'blocked'
+export type ToolDecision = 'allowed' | 'allowed-always' | 'allowed-turn' | 'auto-allowed' | 'denied' | 'blocked'
 
 export type ToolResultEvent = {
   requestId: string
@@ -37,6 +37,11 @@ export type ToolResultEvent = {
 }
 
 const PERMISSION_TIMEOUT_MS = 2 * 60 * 1000
+
+// Turns where the user answered "allow for the rest of this turn": later
+// ask-gated calls in the same model turn proceed without another prompt.
+// Cleared by endTurn when the chat request settles.
+const turnAllowedRequests = new Set<string>()
 
 let permissionRequester: ((request: PermissionRequest) => void) | null = null
 let permissionExpiredNotifier: ((promptId: string) => void) | null = null
@@ -55,6 +60,11 @@ export function setPermissionExpiredNotifier(fn: typeof permissionExpiredNotifie
 
 export function setToolResultReporter(fn: typeof toolResultReporter): void {
   toolResultReporter = fn
+}
+
+/** Called when a chat request settles — a turn-scoped allow must never outlive its turn. */
+export function endTurn(requestId: string): void {
+  turnAllowedRequests.delete(requestId)
 }
 
 export function resolvePermission(promptId: string, decision: PermissionDecision): boolean {
@@ -143,12 +153,19 @@ export async function executeToolCall(toolKey: string, args: unknown, requestId:
 
   let decision: ToolDecision
   let permission = await getToolPermission(toolKey)
-  if (permission === 'ask') {
+  if (permission === 'ask' && turnAllowedRequests.has(requestId)) {
+    permission = 'allow'
+    decision = 'allowed-turn'
+  } else if (permission === 'ask') {
     const answer = await askUser(requestId, tool, args, preview)
     if (answer === 'allow-always') {
       await setToolPermission(toolKey, 'allow')
       permission = 'allow'
       decision = 'allowed-always'
+    } else if (answer === 'allow-turn') {
+      turnAllowedRequests.add(requestId)
+      permission = 'allow'
+      decision = 'allowed-turn'
     } else if (answer === 'allow-once') {
       permission = 'allow'
       decision = 'allowed'

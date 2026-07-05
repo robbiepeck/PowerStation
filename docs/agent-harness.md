@@ -76,13 +76,18 @@ Every tool call the model makes is gated. The default for any new tool is **ask*
 - When the model calls a tool, a modal shows the server, the tool name, and the exact arguments —
   and for file writes, edits and moves, a **real diff** against the file's current content, so you
   approve the change itself rather than raw JSON.
-- You choose **Allow once**, **Always allow** (remembered per tool), or **Deny**.
+- You choose **Allow once**, **Allow rest of turn**, **Always allow** (remembered per tool), or
+  **Deny**.
+- **Allow rest of turn** covers this call *and any further ask-gated calls the model makes before
+  the current reply finishes* — one approval for a multi-step task instead of five prompts. The
+  grant is scoped to that single turn and expires with it; it never changes a tool's standing
+  permission.
 - Per-tool defaults are editable any time in Utilities (**Ask every time** / **Always allow** /
   **Never allow**).
 
 Every call is also recorded in the per-chat **audit log** (the shield button in the chat header):
-the preview shown, the decision made — allowed once, always, auto-allowed, denied, or blocked —
-the outcome, and the duration. The log persists with the chat and exports as JSON or in the
+the preview shown, the decision made — allowed once, for the turn, always, auto-allowed, denied,
+or blocked — the outcome, and the duration. The log persists with the chat and exports as JSON or in the
 Markdown chat export.
 
 Denied calls return a message telling the model not to retry — so a refusal doesn't spiral into a
