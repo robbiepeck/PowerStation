@@ -73,6 +73,16 @@ Config, permissions, downloaded models and saved chats live in the app's user-da
   the user-data directory (including chat contents) — standard OS-level trust applies. Files are
   not encrypted at rest beyond OS disk encryption (e.g. FileVault/BitLocker).
 
+### Repair tab (filesystem surface)
+The Repair tab reads sizes from a curated set of well-known directories and deletes only
+app-created data.
+- **Mitigations:** scan and reveal targets are resolved in the main process from a fixed allowlist
+  of ids — the renderer never supplies a path; scans are read-only `stat` walks (no shell, no
+  elevation, symlinks not followed, entry-capped); every delete must pass a `realpath`-based
+  containment guard proving the target is inside the app's data directory, unit-tested against
+  `..` traversal and symlink-escape attacks; all removals are logged to `repair-log.json`.
+  **Residual risk:** none identified beyond the app's existing write access to its own data folder.
+
 ## Out of scope
 
 - A fully compromised host OS or user account.

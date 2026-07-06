@@ -210,6 +210,53 @@ export type BackupSummary = {
   settingsApplied: boolean
 }
 
+export type StorageLocation = {
+  id: string
+  label: string
+  path: string
+  exists: boolean
+  sizeBytes: number
+  fileCount: number
+  approximate: boolean
+  note: string
+  action: 'reveal-only'
+}
+
+export type DuplicateGroup = {
+  key: string
+  copies: Array<{ app: string; name: string; path: string; sizeBytes: number }>
+  wastedBytes: number
+}
+
+export type StorageReport = {
+  disk: { totalGb: number; freeGb: number; usedGb: number } | null
+  locations: StorageLocation[]
+  duplicates: DuplicateGroup[]
+  scannedAt: number
+}
+
+export type Reclaimable = {
+  id: string
+  label: string
+  detail: string
+  sizeBytes: number
+  consequence: string
+}
+
+export type IntegrityResult = {
+  path: string
+  name: string
+  status: 'ok' | 'missing' | 'not-gguf' | 'size-mismatch' | 'unreadable'
+  detail: string
+}
+
+export type RepairLogEntry = {
+  id: string
+  label: string
+  sizeBytes: number
+  timestamp: number
+}
+
 export type ExtractedFile = {
   name: string
   path: string
@@ -549,6 +596,14 @@ export type PowerStationBridge = {
   backup: {
     export: (payload?: { filePath?: string }) => Promise<(BackupSummary & { filePath: string }) | null>
     restore: (payload?: { filePath?: string }) => Promise<BackupSummary | null>
+  }
+  repair: {
+    report: () => Promise<StorageReport>
+    reclaimables: () => Promise<Reclaimable[]>
+    clean: (id: string) => Promise<{ removed: boolean; freedBytes: number }>
+    reveal: (id: string) => Promise<boolean>
+    integrity: () => Promise<IntegrityResult[]>
+    log: () => Promise<RepairLogEntry[]>
   }
   files: {
     pickAndExtract: () => Promise<ExtractResult[]>

@@ -10,6 +10,7 @@ import * as ollama from './ollama.js'
 import * as lmstudio from './lmstudio.js'
 import * as projects from './projects.js'
 import * as backup from './backup.js'
+import * as repair from './repair.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
 import { composeSystemPrompt } from './skillFormat.js'
@@ -384,6 +385,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return project
   })
   ipcMain.handle('projects:reveal', () => projects.revealProjectsDir())
+
+  // --- Repair (diagnose, don't operate) --------------------------------------------
+  ipcMain.handle('repair:report', () => repair.getStorageReport())
+  ipcMain.handle('repair:reclaimables', () => repair.getReclaimables())
+  ipcMain.handle('repair:clean', (_event, id: string) => repair.cleanReclaimable(id))
+  ipcMain.handle('repair:reveal', (_event, id: string) => repair.revealLocation(id))
+  ipcMain.handle('repair:integrity', () => repair.checkModelIntegrity())
+  ipcMain.handle('repair:log', () => repair.getRepairLog())
 
   // --- Backup & restore -----------------------------------------------------------
   ipcMain.handle('backup:export', async (_event, payload?: { filePath?: string }) => {

@@ -7,6 +7,7 @@ import {
   FolderSearch,
   ChevronDown,
   Download,
+  LifeBuoy,
   LoaderCircle,
   MessageSquareText,
   Plus,
@@ -31,7 +32,7 @@ import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
 import { artifactSrcDoc, extractArtifacts, type Artifact } from './artifacts'
-import { ModelsView, MonitorView, SettingsView, UtilitiesView } from './views'
+import { ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
 import { CopyButton, formatNumber } from './ui'
@@ -68,7 +69,7 @@ import type {
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'settings'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'settings' | 'repair'
 
 const bridge = getDesktop()
 
@@ -78,6 +79,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'models', label: 'Models', icon: BrainCircuit },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
+  { id: 'repair', label: 'Repair', icon: LifeBuoy },
 ]
 
 // First-run demo moment: prompts curated to be squarely within small-model
@@ -1399,6 +1401,7 @@ function App() {
           />
         )}
         {visibleView === 'monitor' && <MonitorView device={device} series={series} snapshot={snapshot} />}
+        {visibleView === 'repair' && <RepairView />}
         {visibleView === 'models' && (
           <div className="scroll-view">
             <ModelsView

@@ -50,8 +50,11 @@ model landscape and with what users hit first.
 
 - **Cloud fallback** — PowerStation is strictly local. Tasks that exceed local capability end with an
   honest limit, not a silent hop to a hosted model.
-- **Storage-cleanup / device-repair features** — these belonged to an earlier, broader concept and
-  were cut to keep the product focused on local AI.
+- **General "Mac cleaner" / device-repair features** — the broad concept stays out. What shipped
+  instead (v0.12) is a deliberately narrow **Repair tab**: read-only storage diagnostics focused on
+  AI files, reveal-don't-delete for anything PowerStation didn't create, and cleanup strictly of the
+  app's own data — see [docs/repair.md](docs/repair.md) for the contract. System-file surgery,
+  plist/permission "fixes", and speed-up claims remain permanently out of scope.
 
 The detailed backlog with per-item status lives in
 [docs/scope-improvements.md](docs/scope-improvements.md).

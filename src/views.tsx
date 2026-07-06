@@ -44,12 +44,16 @@ import type {
   McpServerStatus,
   McpToolInfoResponse,
   ModelInfo,
+  IntegrityResult,
   LmStudioStatus,
   OllamaStatus,
   IndexProgress,
   RagIndexListing,
+  Reclaimable,
   Recommendation,
+  RepairLogEntry,
   Settings,
+  StorageReport,
   SkillCatalog,
   SkillInfo,
   TelemetrySnapshot,
@@ -1821,6 +1825,260 @@ export function SettingsView({
           PowerStation's local models folder; saved chats are plain files you can open, reveal, or delete above.
         </span>
       </div>
+    </div>
+  )
+}
+
+// --- Repair view --------------------------------------------------------------
+//
+// The whole tab obeys one contract, stated in the banner and enforced in the
+// main process: nothing outside PowerStation's own data folder is ever
+// deleted or edited. External locations are measured and *revealed*; the
+// user acts in Finder, where deletes go to the recoverable Trash.
+
+export function RepairView() {
+  const [report, setReport] = useState<StorageReport | null>(null)
+  const [reclaimables, setReclaimables] = useState<Reclaimable[] | null>(null)
+  const [integrity, setIntegrity] = useState<IntegrityResult[] | null>(null)
+  const [repairLog, setRepairLog] = useState<RepairLogEntry[]>([])
+  const [scanning, setScanning] = useState(false)
+
+  const refresh = useCallback(async () => {
+    setScanning(true)
+    try {
+      const [nextReport, nextReclaimables, nextIntegrity, nextLog] = await Promise.all([
+        bridge.repair.report(),
+        bridge.repair.reclaimables(),
+        bridge.repair.integrity(),
+        bridge.repair.log(),
+      ])
+      setReport(nextReport)
+      setReclaimables(nextReclaimables)
+      setIntegrity(nextIntegrity)
+      setRepairLog(nextLog)
+    } catch {
+      /* individual sections stay in their loading state */
+    } finally {
+      setScanning(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    // One-shot scan on open (the sync setScanning(true) is the loading flag).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+
+  const handleClean = useCallback(
+    async (item: Reclaimable) => {
+      const ok = window.confirm(
+        `Remove "${item.label}" (${formatBytes(item.sizeBytes)})?\n\nAfter removal: ${item.consequence}`,
+      )
+      if (!ok) return
+      await bridge.repair.clean(item.id).catch(() => null)
+      void refresh()
+    },
+    [refresh],
+  )
+
+  const existingLocations = report?.locations.filter((location) => location.exists) ?? []
+
+  return (
+    <div className="repair-view">
+      <PanelHeader
+        eyebrow="Repair"
+        title="Storage & health"
+        action={
+          <button className="secondary-button compact" type="button" disabled={scanning} onClick={() => void refresh()}>
+            <RefreshCw size={14} className={scanning ? 'spinning' : undefined} />
+            {scanning ? 'Scanning…' : 'Re-scan'}
+          </button>
+        }
+      />
+
+      <div className="policy-note repair-contract">
+        <ShieldCheck size={17} />
+        <span>
+          Repair never deletes or edits anything outside PowerStation's own data folder. Everything else is
+          measured and <strong>revealed</strong> — you decide, in Finder, where deletes go to the recoverable Trash.
+        </span>
+      </div>
+
+      {report?.disk ? (
+        <section className="repair-section">
+          <h3>
+            <HardDrive size={15} />
+            This disk
+          </h3>
+          <div className="repair-disk-row">
+            <span className="repair-disk-bar" role="img" aria-label={`Disk ${Math.round((report.disk.usedGb / report.disk.totalGb) * 100)}% full`}>
+              <span style={{ width: `${Math.min(100, (report.disk.usedGb / report.disk.totalGb) * 100)}%` }} />
+            </span>
+            <span className="repair-disk-figures">
+              {formatNumber(report.disk.freeGb, 1)} GB free of {formatNumber(report.disk.totalGb, 0)} GB
+            </span>
+          </div>
+          <p className="repair-note">
+            A model download needs its full file size in free space, plus room for the context cache while running —
+            the Models tab checks this before every download and load.
+          </p>
+        </section>
+      ) : null}
+
+      <section className="repair-section">
+        <h3>
+          <FolderSearch size={15} />
+          Where the space is
+        </h3>
+        <p className="repair-note">
+          Well-known homes of AI-related files, measured read-only.{' '}
+          {scanning && !report ? 'Scanning…' : 'Sizes marked "at least" hit the scan cap.'}
+        </p>
+        {report ? (
+          <div className="repair-location-list">
+            {existingLocations.map((location) => (
+              <div className="repair-location-row" key={location.id}>
+                <div className="repair-location-main">
+                  <strong>{location.label}</strong>
+                  <span>
+                    {location.approximate ? 'at least ' : ''}
+                    {formatBytes(location.sizeBytes)}
+                    {location.fileCount ? ` · ${location.fileCount.toLocaleString()} files` : ''}
+                  </span>
+                  <small>{location.note}</small>
+                </div>
+                <button
+                  className="secondary-button compact"
+                  type="button"
+                  title={location.path}
+                  onClick={() => void bridge.repair.reveal(location.id)}
+                >
+                  <ExternalLink size={13} />
+                  Reveal
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty-hint">Measuring…</p>
+        )}
+
+        {report && report.duplicates.length > 0 ? (
+          <div className="repair-duplicates">
+            <h4>
+              <AlertTriangle size={14} />
+              Same model installed more than once
+            </h4>
+            {report.duplicates.map((group) => (
+              <div className="repair-duplicate-group" key={group.key}>
+                <p>
+                  <strong>{group.copies[0].name}</strong> — keeping one copy frees{' '}
+                  <strong>{formatBytes(group.wastedBytes)}</strong>. PowerStation can use another app's copy without
+                  re-downloading (Models tab), so the spare is safe to remove <em>in that app or Finder</em>.
+                </p>
+                <ul>
+                  {group.copies.map((copy) => (
+                    <li key={copy.path}>
+                      <span className="repair-dup-app">{copy.app}</span> <code>{copy.path}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        {report && report.duplicates.length === 0 ? (
+          <p className="repair-note subtle-ok">No duplicate models found across PowerStation and LM Studio.</p>
+        ) : null}
+      </section>
+
+      <section className="repair-section">
+        <h3>
+          <Trash2 size={15} />
+          Reclaim space in PowerStation
+        </h3>
+        <p className="repair-note">
+          The only things Repair can remove — data PowerStation itself created, all rebuildable or re-downloadable.
+        </p>
+        {reclaimables === null ? (
+          <p className="empty-hint">Checking…</p>
+        ) : reclaimables.length === 0 ? (
+          <p className="repair-note subtle-ok">Nothing to reclaim — PowerStation's own data is tidy.</p>
+        ) : (
+          <div className="repair-location-list">
+            {reclaimables.map((item) => (
+              <div className="repair-location-row" key={item.id}>
+                <div className="repair-location-main">
+                  <strong>{item.label}</strong>
+                  <span>{formatBytes(item.sizeBytes)}</span>
+                  <small>
+                    {item.detail} After removal: {item.consequence}
+                  </small>
+                </div>
+                <button className="ghost-button danger" type="button" onClick={() => void handleClean(item)}>
+                  Remove…
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {repairLog.length > 0 ? (
+          <details className="repair-log">
+            <summary>What Repair has removed ({repairLog.length})</summary>
+            <ul>
+              {[...repairLog].reverse().map((entry) => (
+                <li key={`${entry.id}-${entry.timestamp}`}>
+                  {new Date(entry.timestamp).toLocaleString()} — {entry.label} ({formatBytes(entry.sizeBytes)})
+                </li>
+              ))}
+            </ul>
+          </details>
+        ) : null}
+      </section>
+
+      <section className="repair-section">
+        <h3>
+          <BadgeCheck size={15} />
+          Model file health
+        </h3>
+        <p className="repair-note">
+          Read-only checks: a valid GGUF signature and a plausible size against the catalogue — catching corrupt or
+          incomplete downloads before they crash a chat.
+        </p>
+        {integrity === null ? (
+          <p className="empty-hint">Checking…</p>
+        ) : integrity.length === 0 ? (
+          <p className="repair-note">No local models yet — add one from the Models tab.</p>
+        ) : (
+          <div className="repair-location-list">
+            {integrity.map((result) => (
+              <div className="repair-location-row" key={result.path}>
+                <div className="repair-location-main">
+                  <strong>{result.name}</strong>
+                  <small>{result.detail}</small>
+                </div>
+                <Badge tone={result.status === 'ok' ? 'real' : 'danger'}>{result.status === 'ok' ? 'healthy' : result.status}</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="repair-section repair-wont">
+        <h3>
+          <ShieldCheck size={15} />
+          What Repair won't do
+        </h3>
+        <ul>
+          <li>No deleting or editing system files, caches, or anything in ~/Library beyond PowerStation's own folder.</li>
+          <li>No plist, permission, daemon, or startup-item changes; no elevated commands, ever.</li>
+          <li>No "speed up your Mac" claims — the Monitor tab shows the real signals, labelled measured or estimated.</li>
+        </ul>
+        <p className="repair-note">
+          If a location above looks bloated, the Reveal button takes you there — decisions about files PowerStation
+          didn't create belong to you and Finder, not to an app.
+        </p>
+      </section>
     </div>
   )
 }

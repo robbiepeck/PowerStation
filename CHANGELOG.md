@@ -2,6 +2,19 @@
 
 The "See what's new" card in the app links here.
 
+## v0.12.0 — Repair
+
+- **Repair tab** — storage and health for AI workloads, built on one hard rule: *PowerStation never
+  deletes or edits anything outside its own data folder.* Read-only scans of the well-known homes of
+  AI files (Downloads, Trash, Hugging Face cache, Ollama, LM Studio, PowerStation's own data) with
+  "Reveal in Finder" as the only action on external paths; cross-app **duplicate model detection**
+  (exact name + size, deliberately conservative); a **reclaim** list scoped to data PowerStation
+  itself created (orphaned folder indexes, the re-downloadable embeddings model, rebuildable
+  catalogue caches) with per-item confirmation and a persistent removal log; **model file health
+  checks** (GGUF signature + size vs the catalogue) that catch corrupt downloads before they crash a
+  chat; and an explicit "What Repair won't do" card. Every delete passes a symlink-resolving
+  containment guard that is unit-tested against traversal and symlink-escape attacks.
+
 ## v0.11.0 — Projects
 
 - **Projects (workspaces)** — the switcher at the top of the sidebar bundles what you'd otherwise

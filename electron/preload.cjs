@@ -70,6 +70,14 @@ contextBridge.exposeInMainWorld('powerStation', {
     export: (payload) => ipcRenderer.invoke('backup:export', payload),
     restore: (payload) => ipcRenderer.invoke('backup:restore', payload),
   },
+  repair: {
+    report: () => ipcRenderer.invoke('repair:report'),
+    reclaimables: () => ipcRenderer.invoke('repair:reclaimables'),
+    clean: (id) => ipcRenderer.invoke('repair:clean', id),
+    reveal: (id) => ipcRenderer.invoke('repair:reveal', id),
+    integrity: () => ipcRenderer.invoke('repair:integrity'),
+    log: () => ipcRenderer.invoke('repair:log'),
+  },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
     save: (payload) => ipcRenderer.invoke('skills:save', payload),
