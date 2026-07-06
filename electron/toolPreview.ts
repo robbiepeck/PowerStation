@@ -6,6 +6,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { applyTextEdits, previewDiff, type DiffLine, type DiffSummary } from './diffUtil.js'
 import { getServerBaseDir, type McpToolInfo } from './mcp.js'
+import { getReclaimables } from './repair.js'
 
 export type ToolPreview =
   | {
@@ -17,6 +18,7 @@ export type ToolPreview =
       note: string | null
     }
   | { kind: 'move'; from: string; to: string }
+  | { kind: 'note'; title: string; body: string }
 
 const MAX_PREVIEW_BYTES = 200_000
 
@@ -37,6 +39,23 @@ async function readTextIfSmall(filePath: string): Promise<{ text: string; note: 
  */
 export async function buildToolPreview(tool: McpToolInfo, args: unknown): Promise<ToolPreview | null> {
   const record = typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
+  // Built-in repair delete: show exactly what would be removed and what
+  // happens afterwards — the same honesty as a file diff.
+  if (tool.key === 'powerstation:clean_reclaimable') {
+    const id = typeof record.id === 'string' ? record.id : null
+    const item = id ? (await getReclaimables().catch(() => [])).find((r) => r.id === id) : null
+    return item
+      ? {
+          kind: 'note',
+          title: `Remove: ${item.label} (${(item.sizeBytes / 1e6).toFixed(1)} MB)`,
+          body: `${item.detail} After removal: ${item.consequence}`,
+        }
+      : {
+          kind: 'note',
+          title: 'Remove: unknown item',
+          body: 'This id is not on the reclaimable list, so the call will fail safely — only PowerStation-created data can be removed.',
+        }
+  }
   // Models often pass paths relative to the server's allowed folder — resolve
   // the same way the filesystem server will, or the preview reads the wrong file.
   const baseDir = getServerBaseDir(tool.serverId)
@@ -92,5 +111,6 @@ export async function buildToolPreview(tool: McpToolInfo, args: unknown): Promis
 
 export function previewTitle(preview: ToolPreview): string {
   if (preview.kind === 'move') return `Move ${path.basename(preview.from)} → ${preview.to}`
+  if (preview.kind === 'note') return preview.title
   return preview.newFile ? `Create ${preview.path}` : `Modify ${preview.path}`
 }

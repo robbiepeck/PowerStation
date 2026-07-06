@@ -6,6 +6,7 @@
 
 import { getState, mutate, type ToolPermission } from './config.js'
 import * as mcp from './mcp.js'
+import * as builtins from './builtinTools.js'
 import { buildToolPreview, type ToolPreview } from './toolPreview.js'
 import type { ToolDefinition } from './llmProtocol.js'
 
@@ -119,9 +120,15 @@ export async function setToolPermission(toolKey: string, permission: ToolPermiss
   })
 }
 
-/** Tool definitions for the model, from currently connected MCP servers. */
-export function getAgentToolDefinitions(): ToolDefinition[] {
-  return mcp.getConnectedTools().map((tool) => ({
+/**
+ * Tool definitions for the model: connected MCP servers, plus the built-in
+ * repair tools when the Storage repair skill is active for this message.
+ */
+export function getAgentToolDefinitions(includeRepairTools = false): ToolDefinition[] {
+  const tools = includeRepairTools
+    ? [...mcp.getConnectedTools(), ...builtins.getBuiltinRepairTools()]
+    : mcp.getConnectedTools()
+  return tools.map((tool) => ({
     key: tool.key,
     description: tool.description || `${tool.name} (from ${tool.serverName})`,
     parameters: tool.inputSchema,
@@ -143,7 +150,7 @@ export function estimateToolSchemaTokens(definitions: ToolDefinition[] = getAgen
 
 /** The executor installed into the LLM host: runs one model-requested call. */
 export async function executeToolCall(toolKey: string, args: unknown, requestId: string): Promise<string> {
-  const tool = mcp.findTool(toolKey)
+  const tool = builtins.findBuiltinTool(toolKey) ?? mcp.findTool(toolKey)
   if (!tool) return `Tool ${toolKey} is not available.`
 
   const started = Date.now()
@@ -200,7 +207,8 @@ export async function executeToolCall(toolKey: string, args: unknown, requestId:
     return 'The user declined this tool call. Do not retry it; continue without it or ask the user what to do.'
   }
 
-  const result = await mcp.callTool(tool, args)
+  const result =
+    tool.serverId === builtins.BUILTIN_SERVER_ID ? await builtins.callBuiltinTool(tool, args) : await mcp.callTool(tool, args)
   report(result.ok, result.text.slice(0, 300))
   if (!result.ok) return `Tool error: ${result.text}`
   // Frame tool output as data, not instructions — small local models are

@@ -20,20 +20,26 @@ model landscape and with what users hit first.
   status pill and a per-chat energy estimate.
 - **Projects (workspaces) + backup** — instructions, knowledge folder, skills, connectors and
   model bundled per workspace; one-file backup & restore. See [projects.md](docs/projects.md).
+- **Model choice with evidence** — measured read/write benchmarks, side-by-side compare, and
+  "why this over that" recommendations (v0.13).
+- **Repair** — storage & health for AI workloads as a tab (v0.12) and as an opt-in agent skill
+  (v0.14) driving the same guarded tools. See [repair.md](docs/repair.md).
+- **Agent trust profiles** — Trusted vs Cautious (every call asks); turn-scoped grants; per-chat
+  audit log.
 
 ## Next
 
 - **macOS Developer ID signing & notarization** — a prerequisite for a friction-free consumer
-  release (no Gatekeeper warning). The blocker before any public binary.
-- ~~**On-device speed micro-benchmark**~~ — shipped in v0.2: measured tokens/sec on your exact
-  machine, shown on every card and recommendation.
-- ~~**Skills & connector presets**~~ — shipped in v0.3: markdown skills (five starters, in-app
-  editing, token metering) and a curated one-click connector gallery. Next iteration:
-  relevance-triggered skills.
-- ~~**Recommendation polish**~~ — shipped in v0.13: every alternate recommendation explains itself
-  against the top pick ("why this over that") using fit, measured speed, capacity, and tool tier.
-- ~~**Multi-model compare**~~ — shipped in v0.13: one prompt, two models, measured side by side,
-  run sequentially so timings are fair.
+  release (no Gatekeeper warning). The blocker before any public binary — and the gate in front
+  of the MLX engine pack.
+- **Menu-bar quick chat + global hotkey** — summon the local model from anywhere; pure Electron
+  work on top of the existing chat stack.
+- **Local voice, verified first** — system-voice TTS is nearly free; speech input depends on
+  whisper.cpp bindings that will be verified before anything ships (the same discipline as
+  vision).
+- **Project templates** — a few starter workspaces so Projects are discoverable.
+- **Agent plan preview** — the model states its intended steps before a multi-tool turn; one
+  approval covers the run.
 
 ## Later
 

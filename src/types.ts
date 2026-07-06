@@ -461,6 +461,7 @@ export type ToolPreview =
       note: string | null
     }
   | { kind: 'move'; from: string; to: string }
+  | { kind: 'note'; title: string; body: string }
 
 export type PermissionRequest = {
   promptId: string

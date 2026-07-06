@@ -40,33 +40,57 @@ function isValidSlug(slug: unknown): slug is string {
 
 let seeded = false
 
+// The starters that shipped before seeding was tracked in config — installs
+// that predate the tracking field are assumed to have been offered these.
+const ORIGINAL_STARTERS = ['action-items', 'code-reviewer', 'concise-answers', 'step-by-step-tutor', 'writing-editor']
+
 /**
- * Copy the bundled starter skills into the user's skills folder on first run
- * only (the folder not existing is the signal) — a deliberately-deleted
- * starter must not resurrect on next launch.
+ * Copy bundled skills the user has never been offered into the skills folder.
+ * Tracked per-slug in config, so a NEW bundled skill seeds once for existing
+ * installs while a deliberately-deleted one never resurrects.
  */
 async function ensureSeeded(): Promise<void> {
   if (seeded) return
   seeded = true
-  try {
-    await fs.access(skillsDir())
-    return // already initialised
-  } catch {
-    /* first run — seed below */
-  }
-  await fs.mkdir(skillsDir(), { recursive: true })
+  // A missing folder means a genuinely fresh install (seed everything); an
+  // existing folder with no tracking field means a pre-tracking install
+  // (assume the original starters were offered).
+  const hadFolder = await fs.access(skillsDir()).then(
+    () => true,
+    () => false,
+  )
+  await fs.mkdir(skillsDir(), { recursive: true }).catch(() => undefined)
   let bundled: string[]
   try {
     bundled = (await fs.readdir(bundledSkillsDir())).filter((f) => f.endsWith('.md'))
   } catch {
     return
   }
+  const state = await getState()
+  const offered = new Set(state.seededSkillSlugs.length ? state.seededSkillSlugs : hadFolder ? ORIGINAL_STARTERS : [])
+  const newlyOffered: string[] = []
   for (const file of bundled) {
-    try {
-      await fs.copyFile(path.join(bundledSkillsDir(), file), path.join(skillsDir(), file))
-    } catch {
-      /* skip unreadable starter */
+    const slug = file.slice(0, -3).toLowerCase()
+    if (offered.has(slug)) continue
+    const dest = path.join(skillsDir(), file)
+    const alreadyThere = await fs.access(dest).then(
+      () => true,
+      () => false,
+    )
+    if (!alreadyThere) {
+      try {
+        await fs.copyFile(path.join(bundledSkillsDir(), file), dest)
+      } catch {
+        continue // unreadable starter — retry next launch, don't mark offered
+      }
     }
+    newlyOffered.push(slug)
+  }
+  const toRecord = [...new Set([...offered, ...newlyOffered])]
+  if (toRecord.length !== state.seededSkillSlugs.length) {
+    await mutate((current) => {
+      current.seededSkillSlugs = toRecord
+    })
   }
 }
 

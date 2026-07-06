@@ -49,13 +49,15 @@ The empty-chat welcome offers four curated starter chips (tiny poem, explain-lik
 ideas, tone rewrite) chosen to be squarely within small-model competence, so the first impression
 is what the model does well. One click sends the prompt.
 
-### 6. Storage cleanup / repair — *decision made; shipped v0.12 as the Repair tab*
+### 6. Storage cleanup / repair — *shipped: tab in v0.12, agent skill in v0.14*
 Robbie called it back into scope (2026-07-06), in a deliberately narrow form: a deterministic
-**Repair tab** (not an agent) built on a hard contract — read-only diagnostics for anything
-PowerStation didn't create (reveal-in-Finder only), deletes scoped strictly to the app's own data
-behind a symlink-resolving containment guard, model-file integrity checks, and an explicit
-"won't do" list. See [repair.md](repair.md). The agent-skill variant (model proposes cleanups
-through the permission flow) remains optional and unbuilt; general device-repair stays out.
+**Repair tab** built on a hard contract — read-only diagnostics for anything PowerStation didn't
+create (reveal-in-Finder only), deletes scoped strictly to the app's own data behind a
+symlink-resolving containment guard, model-file integrity checks, and an explicit "won't do"
+list. v0.14 added the **agent-skill variant**: an opt-in bundled skill whose built-in tools ride
+the same permission/preview/audit rails and the same delete allowlist, so the model can diagnose
+and (with consent) reclaim app-owned space but cannot express an out-of-contract delete. See
+[repair.md](repair.md). General device-repair stays out.
 
 ### 7. Ollama as a detected optional backend — *shipped v0.4 (model import)*
 PowerStation detects Ollama (daemon or install) and lists its models by reading the manifest

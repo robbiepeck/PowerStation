@@ -69,7 +69,13 @@ trying to build.
 | Tokens per second | Measured during generation. |
 | GPU utilisation | Not available without elevated access on macOS — shown as n/a. |
 | **Power draw (watts)** | **Estimated** — real wattage isn't readable on macOS without elevated access, so this is a labelled estimate derived from load, never presented as a sensor reading. |
+| **Battery** | Measured (percentage and charging state). |
 | Thermal headroom | Sensor where available, otherwise estimated (labelled). |
+
+Two battery-aware touches follow the same honesty rules: below 25% on battery the status pill
+suggests a lighter model (smaller models draw less power), and the chat header shows an **estimated
+watt-hours figure** for the session's generation — explicitly a ballpark, because it's built on the
+estimated power draw, and labelled as such.
 
 The everyday surface isn't this dashboard, though — it's the **status pill** in the chat header:
 *Running smoothly · N tok/s*, amber *Memory getting tight*, or red *Memory critical*. The full Monitor

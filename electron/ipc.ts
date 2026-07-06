@@ -11,6 +11,7 @@ import * as lmstudio from './lmstudio.js'
 import * as projects from './projects.js'
 import * as backup from './backup.js'
 import * as repair from './repair.js'
+import { REPAIR_SKILL_SLUG } from './builtinTools.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
 import { composeSystemPrompt } from './skillFormat.js'
@@ -98,7 +99,9 @@ async function getOffloadCeilingBytes(): Promise<number> {
  * The user's base system prompt plus active skills: always-on ones, and — when
  * a message is provided — auto skills whose triggers match it.
  */
-async function getEffectiveSystemPrompt(message?: string): Promise<{ prompt: string | undefined; skillNames: string[] }> {
+async function getEffectiveSystemPrompt(
+  message?: string,
+): Promise<{ prompt: string | undefined; skillNames: string[]; skillSlugs: string[] }> {
   const state = await getState()
   const project = await projects.getActiveProject()
   // Project instructions extend the global base prompt; project skill modes
@@ -109,7 +112,11 @@ async function getEffectiveSystemPrompt(message?: string): Promise<{ prompt: str
     .join('\n\n')
   const active = await skills.getActiveSkills(message, project?.skillModes)
   const composed = composeSystemPrompt(base, active)
-  return { prompt: composed || undefined, skillNames: active.map((skill) => skill.name) }
+  return {
+    prompt: composed || undefined,
+    skillNames: active.map((skill) => skill.name),
+    skillSlugs: active.map((skill) => skill.slug),
+  }
 }
 
 /**
@@ -790,12 +797,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
         // Agent tools: only register them for models that can actually use
         // them — an untrained model flailing at tool calls reads as a broken
-        // app, not a limited model.
+        // app, not a limited model. The built-in repair tools register only
+        // when the Storage repair skill is active for this message: the skill
+        // teaches the workflow, and its mode doubles as the feature switch.
         const tier = resolveToolTier(info, entry)
-        const toolDefinitions = tier === 'none' ? [] : agent.getAgentToolDefinitions()
-        const maxToolCalls = tier === 'multi' ? 15 : 3
-
         const effective = await getEffectiveSystemPrompt(typeof payload.ragQuery === 'string' ? payload.ragQuery : prompt)
+        const includeRepairTools = effective.skillSlugs.includes(REPAIR_SKILL_SLUG)
+        const toolDefinitions = tier === 'none' ? [] : agent.getAgentToolDefinitions(includeRepairTools)
+        const maxToolCalls = tier === 'multi' ? 15 : 3
         send('chat:admission', {
           requestId,
           contextTokens,

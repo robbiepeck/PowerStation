@@ -73,15 +73,20 @@ Config, permissions, downloaded models and saved chats live in the app's user-da
   the user-data directory (including chat contents) — standard OS-level trust applies. Files are
   not encrypted at rest beyond OS disk encryption (e.g. FileVault/BitLocker).
 
-### Repair tab (filesystem surface)
+### Repair surface (tab and agent skill)
 The Repair tab reads sizes from a curated set of well-known directories and deletes only
-app-created data.
+app-created data. The same operations are exposed to the model as built-in tools when the
+Storage repair skill is enabled.
 - **Mitigations:** scan and reveal targets are resolved in the main process from a fixed allowlist
-  of ids — the renderer never supplies a path; scans are read-only `stat` walks (no shell, no
-  elevation, symlinks not followed, entry-capped); every delete must pass a `realpath`-based
-  containment guard proving the target is inside the app's data directory, unit-tested against
-  `..` traversal and symlink-escape attacks; all removals are logged to `repair-log.json`.
-  **Residual risk:** none identified beyond the app's existing write access to its own data folder.
+  of ids — neither the renderer nor the model ever supplies a path; scans are read-only `stat`
+  walks (no shell, no elevation, symlinks not followed, entry-capped); every delete must pass a
+  `realpath`-based containment guard proving the target is inside the app's data directory,
+  unit-tested against `..` traversal and symlink-escape attacks; all removals are logged to
+  `repair-log.json`. Model-initiated calls additionally go through the standard tool-permission
+  prompts and audit log, and the approval dialog states exactly what would be removed. A
+  prompt-injected model can at worst *ask* to delete rebuildable app-owned data, with the user
+  seeing precisely what before it runs. **Residual risk:** none identified beyond the app's
+  existing write access to its own data folder.
 
 ## Out of scope
 

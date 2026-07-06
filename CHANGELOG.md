@@ -2,6 +2,23 @@
 
 The "See what's new" card in the app links here.
 
+## v0.14.0 — Repair, conversationally
+
+- **Storage repair as an agent skill** — a new bundled skill (Utilities → Skills → *Storage
+  repair*; ships off, enable to opt in). When active, the model can diagnose disk usage and — with
+  your consent — reclaim PowerStation-owned space through built-in tools that ride the exact same
+  rails as MCP tools: permission prompts, previews, and the audit log. The approval dialog shows
+  precisely what would be removed and the consequence, and the one mutating tool resolves through
+  the same id allowlist and containment guard as the Repair tab's buttons — the model cannot
+  express an out-of-contract delete no matter what it generates. The skill's instructions bind it
+  to the Repair contract: diagnose first, real numbers only, propose then act on consent, never
+  touch anything PowerStation didn't create, never promise speed-ups.
+- **Smarter skill seeding** — new bundled skills now reach existing installs once, while skills
+  you deliberately deleted stay deleted.
+- **Documentation refresh** — README and every guide brought up to date with v0.10–v0.14:
+  projects, backup, repair (tab + skill), compare, trust profiles, battery/energy telemetry,
+  imports, and the expanded module map.
+
 ## v0.13.0 — Confident choices
 
 - **Compare two models** — Models → *Compare two models*: one prompt, both models, measured side by

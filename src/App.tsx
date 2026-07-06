@@ -2180,6 +2180,11 @@ function AuditModal({
                         ))}
                       </pre>
                     ) : null}
+                    {call.preview && call.preview.kind === 'note' ? (
+                      <p className="audit-summary">
+                        {call.preview.title} — {call.preview.body}
+                      </p>
+                    ) : null}
                     <pre className="permission-args">
                       {typeof call.args === 'string' ? call.args : JSON.stringify(call.args, null, 2)?.slice(0, 1200)}
                     </pre>
@@ -2698,6 +2703,13 @@ function PermissionModal({
                 {preview.from} → {preview.to}
               </code>
             </div>
+          </div>
+        ) : preview?.kind === 'note' ? (
+          <div className="permission-diff">
+            <div className="permission-diff-head">
+              <code>{preview.title}</code>
+            </div>
+            <p className="permission-diff-note">{preview.body}</p>
           </div>
         ) : (
           <pre className="permission-args">{argsPreview}</pre>

@@ -55,11 +55,30 @@ those three gaps:
    → [Memory & monitoring](docs/memory-and-monitoring.md)
 
 3. **An agent harness that respects small models.** A one-click **connector gallery** (local files,
-   memory, web reading, web search…) and **skills** — reusable instruction packs with starters
-   included and in-app editing. MCP servers connect over stdio with every tool call gated by an
-   allow / ask / deny permission model; tool schemas and skills are token-metered. Models that
-   aren't tool-trained get chat only — with the reason stated — instead of present-and-broken
-   agent features. → [Agent harness](docs/agent-harness.md)
+   memory, web reading, web search…) and **skills** — reusable instruction packs with starters,
+   a curated gallery, and in-app editing. Every tool call is gated by an allow / ask / deny
+   permission model with **real diff previews**, turn-scoped grants ("allow rest of turn"),
+   **trust profiles** (cautious mode makes every call ask), and a per-chat **audit log** of every
+   call, decision, and outcome. Models that aren't tool-trained get chat only — with the reason
+   stated — instead of present-and-broken agent features. → [Agent harness](docs/agent-harness.md)
+
+## What's in the box
+
+- **Chat that keeps up** — persistent chats (pin, rename, search, export), file and PDF
+  attachments, **chat-with-a-folder** (local embeddings, cited sources), regenerate/edit,
+  auto-compaction for long conversations, and an artifacts pane for rendered HTML/SVG.
+- **Projects (workspaces)** — bundle instructions, a knowledge folder, skill modes, a connector
+  selection, and a preferred model; switch context in one click. → [Projects & backup](docs/projects.md)
+- **Honest model choice** — measured on-device benchmarks (read *and* write speed), side-by-side
+  **model compare**, recommendations that explain *why this over that*, and one-click import of
+  models you already have in **Ollama or LM Studio** (no re-download).
+- **Repair without snake oil** — storage intelligence for AI files, cross-app duplicate detection,
+  and cleanup strictly limited to PowerStation's own data — as a tab, and as an opt-in **agent
+  skill** driving the same guarded tools. → [Repair](docs/repair.md)
+- **Backup & restore** — one readable JSON archive of settings, permissions, skills, chats, and
+  projects.
+- **Truthful telemetry** — live CPU/RAM/VRAM/pressure/battery, every figure labelled measured or
+  estimated, plus a per-chat energy estimate. → [Memory & monitoring](docs/memory-and-monitoring.md)
 
 ## Requirements
 
@@ -131,6 +150,10 @@ guidance. You can also import any `.gguf` file or folder you already have.
   revealable and deletable from Settings, and saving can be turned off entirely.
 - **Attachments & folder indexes** — extracted file text lives with its chat; folder indexes and
   the small embedding model live in the same user-data directory.
+- **Projects & skills** — one JSON file per workspace (`projects/`), one markdown file per skill
+  (`skills/`) — all revealable and editable outside the app.
+- **Repair log & backups** — everything the Repair tab (or skill) ever removed is listed in
+  `repair-log.json`; backups are single JSON archives written wherever you choose.
 - **Network** — model downloads and catalogue updates from `huggingface.co` / this GitHub
   repo, and update checks against GitHub Releases. Nothing else — attachments and folder
   retrieval are fully local.
@@ -144,7 +167,7 @@ required), `@modelcontextprotocol/sdk` and `systeminformation`.
 
 ```bash
 npm run desktop:dev  # run the app in development
-npm test             # unit tests (admission-control math)
+npm test             # unit tests (admission math, formats, repair guards, recommender…)
 npm run build        # typecheck + build renderer and electron
 npm run lint         # eslint
 npm run package:mac  # package the macOS app (artifacts in release/)

@@ -52,15 +52,25 @@ npx -y @modelcontextprotocol/server-filesystem ~/Documents
 ```
 
 PowerStation connects over stdio, lists the server's tools with a context-cost meter, and when the
-model wants to call a tool you get an **allow once / always allow / deny** prompt. Details in the
-[Agent harness](agent-harness.md) guide.
+model wants to call a tool you get an **allow once / allow rest of turn / always allow / deny**
+prompt. Details in the [Agent harness](agent-harness.md) guide.
 
 ## 5. Watch the machine
 
 The **status pill** in the chat header is your ambient monitor — "Running smoothly · N tok/s", or an
-amber/red warning if memory gets tight. Click it (or the **Monitor** tab) for the full live view of
-CPU, RAM, GPU, VRAM, storage, memory pressure, power and thermal headroom, each labelled as measured
-or estimated.
+amber/red warning if memory gets tight (or battery gets low). Click it (or the **Monitor** tab) for
+the full live view of CPU, RAM, GPU, VRAM, storage, memory pressure, power, battery and thermal
+headroom, each labelled as measured or estimated.
+
+## 6. Where to next
+
+- **Attach a folder** (from the composer) to chat with your documents, with cited sources.
+- **Create a project** (switcher at the top of the sidebar) to bundle instructions, a knowledge
+  folder, skills, and connectors into a workspace. → [Projects & backup](projects.md)
+- **Compare two models** (Models tab) before committing to one; import models you already have in
+  Ollama or LM Studio without re-downloading. → [Models & devices](models-and-devices.md)
+- **Check the Repair tab** if disk space is tight — honest storage intelligence for AI files.
+  → [Repair](repair.md)
 
 ## Troubleshooting
 

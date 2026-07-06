@@ -43,6 +43,18 @@ crash a chat. Fixes are honest: re-download from the Models tab.
 - Every removal is appended to `repair-log.json` in the data folder — the tab shows everything it
   has ever deleted.
 
+## Repair as an agent skill
+
+The same toolset is available to the model through the bundled **Storage repair** skill (Utilities
+→ Skills; ships off, enable to opt in). When active, the model can call
+`powerstation:storage_report`, `list_reclaimables`, `clean_reclaimable`, and
+`check_model_integrity` — through the **same permission prompts, previews, and audit log** as any
+MCP tool. The one mutating tool resolves its target through the same id allowlist and containment
+guard as the tab's buttons, so the model cannot express an out-of-contract delete no matter what
+it generates; the approval dialog shows exactly what would be removed and the consequence. The
+skill's instructions bind it to this page's contract: diagnose first, report real numbers only,
+propose and wait for consent, and never suggest deleting anything PowerStation didn't create.
+
 ## What Repair will never do
 
 - Delete or edit system files, caches, or anything in `~/Library` beyond PowerStation's own folder.

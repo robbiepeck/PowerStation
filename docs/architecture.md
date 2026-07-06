@@ -63,13 +63,23 @@ flowchart LR
 | `electron/catalog.ts` | Fetches/validates `catalog/models.json`; bundled offline fallback. |
 | `electron/recommend.ts` | (hardware × intent) → ranked recommendations with reasons. |
 | `electron/mcp.ts` | MCP client manager: connect servers, list/call tools. |
-| `electron/agent.ts` | Permission-gated bridge between the model's tool calls and MCP execution. |
+| `electron/agent.ts` | Permission-gated bridge for tool calls (MCP **and** built-in): profiles, turn grants, audit events. |
+| `electron/builtinTools.ts` | First-party repair tools the model can call — same permission rails as MCP. |
+| `electron/toolPreview.ts` | Human previews for side-effecting calls (file diffs, repair notes) shown at approval time. |
+| `electron/skills.ts` + `skillFormat.ts` | Markdown skills: seeding, modes, trigger matching, prompt composition. |
+| `electron/chats.ts` | Chat persistence: one JSON per conversation, pin/rename, project scoping, exports. |
+| `electron/projects.ts` + `projectFormat.ts` | Workspaces: one JSON per project; active-project resolution. |
+| `electron/rag.ts` + `ragUtil.ts` | Chat-with-a-folder: local embedding index per folder, retrieval with sources. |
+| `electron/repair.ts` + `repairUtil.ts` | Storage scans (read-only), reclaimables, the containment guard, integrity checks. |
+| `electron/backup.ts` + `backupFormat.ts` | One-file backup archive; restore through the same sanitizers as config reads. |
+| `electron/ollama.ts` / `electron/lmstudio.ts` | Detect models already on disk in other apps; register in place. |
 | `electron/models.ts` | Indexes local GGUFs; reads header geometry; sums split parts. |
-| `electron/telemetry.ts` | Samples CPU/RAM/GPU/VRAM/storage/pressure/tokens-per-sec. |
+| `electron/recommend.ts` | (hardware × intent) → ranked recommendations with reasons and versus-primary rationale. |
+| `electron/telemetry.ts` | Samples CPU/RAM/GPU/VRAM/storage/pressure/battery/tokens-per-sec. |
 | `electron/config.ts` | Persisted state and strict sanitisation of everything on disk. |
-| `src/App.tsx` | App shell, hooks, chat state, permission modal, recovery cards. |
+| `src/App.tsx` | App shell, hooks, chat state, modals (permission, audit, compare, project), recovery cards. |
 | `src/onboarding.tsx` | First-run scan-and-reveal flow. |
-| `src/views.tsx` | Models, Monitor, Utilities, Settings. |
+| `src/views.tsx` | Models, Monitor, Utilities, Settings, Repair. |
 
 ## What happens when you send a message
 
@@ -82,7 +92,9 @@ flowchart LR
    the UI what happened.
 4. **Capability gating** resolves the model's tool tier (catalogue, or the GGUF chat template).
    Tool definitions are only attached for tool-trained models; the call budget is 15 (multi) or
-   3 (single).
+   3 (single). The system prompt is composed here too — global prompt + active project's
+   instructions + active skills — and the built-in repair tools register only when the Storage
+   repair skill is active for this message, so their schema tokens are never spent otherwise.
 5. The request crosses into the **worker**, which loads the model if needed (reusing a warm model
    and only recreating the chat session when the system prompt changes), then streams tokens back
    as `chat:token` events.

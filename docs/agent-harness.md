@@ -98,6 +98,31 @@ Tool **output is treated as untrusted data**: it's capped in size, framed to the
 than instructions, and never executed. This matters because a poisoned file or web page read by a
 tool is a classic prompt-injection vector — see the [Threat model](../THREAT_MODEL.md).
 
+## Trust profiles
+
+Settings → **Agent trust** switches how remembered choices behave:
+
+- **Trusted** (default) — per-tool memory applies: a tool you set to *Always allow* runs without
+  asking again.
+- **Cautious** — every tool call asks, every time. Remembered allows are **suspended, not
+  deleted** — switch back and they apply again exactly as before. "Allow rest of turn" still works
+  (it's an explicit, turn-scoped answer), *Never allow* still blocks silently, and every call is
+  audit-logged in both modes. A chip in the chat header shows while cautious mode is on.
+
+## Built-in repair tools
+
+Beyond MCP servers, PowerStation ships **first-party tools** the model can call — currently the
+Repair toolset (`powerstation:storage_report`, `list_reclaimables`, `clean_reclaimable`,
+`check_model_integrity`). They ride the exact same rails as external tools — the same ask/allow/deny
+prompts, previews, and audit log — and the one mutating tool resolves its target through the Repair
+tab's id allowlist and containment guard, so the model **cannot express an out-of-contract
+delete** no matter what it generates (see [Repair](repair.md)).
+
+They register only when the bundled **Storage repair** skill is active for the message: the skill
+teaches the workflow (diagnose first, propose, act only on consent), and its Off/Auto/Always mode
+doubles as the feature switch, so the tool schemas cost no context tokens otherwise. The skill
+ships **off** — enable it in Utilities → Skills.
+
 ## Capability gating
 
 Not every model can drive tools, and a model flailing at broken tool calls reads as a broken app.

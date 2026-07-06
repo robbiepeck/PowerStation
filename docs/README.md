@@ -13,14 +13,21 @@ run on your machine.
 - **[Architecture](architecture.md)** — the process model, the isolated inference worker, IPC, and
   what happens when you send a message.
 - **[Memory & monitoring](memory-and-monitoring.md)** — pre-load admission control, memory-pressure
-  auto-pause, and honest measured-vs-estimated telemetry.
-- **[Agent harness](agent-harness.md)** — MCP tools, the permission model, capability gating, and
-  loop guards.
+  auto-pause, and honest measured-vs-estimated telemetry (including battery and energy).
+- **[Agent harness](agent-harness.md)** — MCP tools, the permission model (trust profiles,
+  turn-scoped grants, audit log), capability gating, loop guards, and the built-in repair tools.
+
+## Features
+
+- **[Projects & backup](projects.md)** — workspaces that bundle instructions, knowledge, skills and
+  connectors; one-file backup & restore.
+- **[Repair](repair.md)** — storage & health for AI workloads, as a tab and as an agent skill;
+  the diagnose-don't-operate contract.
 
 ## Models & hardware
 
-- **[Models & devices](models-and-devices.md)** — the full model catalogue and which Mac each model
-  needs.
+- **[Models & devices](models-and-devices.md)** — the full model catalogue, which Mac each model
+  needs, imports from Ollama/LM Studio, benchmarks and side-by-side compare.
 
 ## Project
 

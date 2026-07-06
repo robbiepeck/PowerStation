@@ -65,6 +65,11 @@ export type PersistedState = {
   lastSeenVersion: string
   /** Workspace currently applied to chat, skills, and connectors; null = Personal. */
   activeProjectId: string | null
+  /**
+   * Bundled skills ever offered to this install — new bundled skills seed once
+   * for existing users, while a deliberately-deleted one never resurrects.
+   */
+  seededSkillSlugs: string[]
 }
 
 const defaultUtilities: UtilitySettings = {
@@ -233,6 +238,9 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
     benchmarks: sanitizeBenchmarks(parsed?.benchmarks),
     lastSeenVersion: cleanString(parsed?.lastSeenVersion, 40),
     activeProjectId: typeof parsed?.activeProjectId === 'string' ? parsed!.activeProjectId : null,
+    seededSkillSlugs: Array.isArray(parsed?.seededSkillSlugs)
+      ? parsed!.seededSkillSlugs.filter((s): s is string => typeof s === 'string').slice(0, 200)
+      : [],
   }
 }
 

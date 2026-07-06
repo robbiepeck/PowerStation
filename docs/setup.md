@@ -101,6 +101,11 @@ Everything PowerStation writes stays on your machine, under the app's user-data 
 - **`rag/`** — one JSON index per knowledge folder you attach (chunks + embedding vectors).
 - **`embeddings/`** — the small embedding model (~84 MB, downloaded once) that powers
   chat-with-a-folder. Fully offline after the first download.
+- **`skills/`** — one markdown file per skill (starters, gallery installs, and your own).
+- **`projects/`** — one JSON file per workspace (instructions, knowledge folder, skill modes,
+  connector selection, preferred model).
+- **`repair-log.json`** — everything the Repair tab or repair skill has ever removed.
+- **Backups** — single JSON archives written wherever you choose from Settings → Backup & restore.
 
 Network traffic is limited to model downloads and catalogue updates from `huggingface.co` / this
 GitHub repo, plus update checks against GitHub Releases. See [Security](../SECURITY.md).

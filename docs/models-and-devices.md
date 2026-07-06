@@ -166,3 +166,21 @@ Not limited to the catalogue — import any `.gguf` file or point PowerStation a
 from the **Models** tab. Imported models still get admission control (sized from the GGUF header),
 and their tool-calling tier is inferred from the embedded chat template. You are responsible for
 reviewing and complying with each model's licence.
+
+**Already using Ollama or LM Studio?** PowerStation detects models both apps have on disk and
+registers them **in place** with one click — no re-download, no extra disk. They run in
+PowerStation's own runtime with the same admission checks as any other model (split GGUF series
+are priced as the whole set).
+
+## Choosing between models
+
+Three tools answer "which model should I keep?" with measurements rather than vibes:
+
+- **Benchmarks** — one click per model measures real write speed *and* prompt-ingestion (read)
+  speed on your exact machine; results appear on every card and recommendation.
+- **Compare two models** — one prompt, both models, side by side with write speed, first-token
+  latency, and total time. Runs are sequential by design (one model in memory at a time), so each
+  candidate gets the whole machine — fair timings, no memory gamble.
+- **"Why this over that"** — every alternate recommendation explains itself against the top pick
+  on the axes that differ: fit, measured or likely speed, knowledge capacity, and tool-calling
+  strength — honest in both directions when the alternate wins an axis.
