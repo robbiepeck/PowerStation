@@ -6,6 +6,8 @@
 
 **Local AI for your Mac — the agent harness built for small models.**
 
+Created and maintained by Robbie Peck.
+
 Guided model choice for your exact hardware, a local desktop workspace with
 skills, MCP tools and an agent harness, and honest resource monitoring — all running
 on open-weight models, entirely on your machine.
