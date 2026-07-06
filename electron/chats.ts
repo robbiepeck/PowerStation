@@ -42,6 +42,8 @@ export type StoredChat = {
   pinned: boolean
   /** Workspace this chat belongs to; null = Personal. */
   projectId: string | null
+  /** Custom agent this chat was started with — denormalized so the badge survives agent deletion. */
+  agent: { id: string; name: string; emoji: string } | null
   createdAt: number
   updatedAt: number
   modelPath: string | null
@@ -54,6 +56,7 @@ export type ChatSummary = {
   title: string
   pinned: boolean
   projectId: string | null
+  agent: { id: string; name: string; emoji: string } | null
   updatedAt: number
   messageCount: number
   snippet?: string
@@ -176,6 +179,7 @@ function sanitizeChat(raw: unknown, id: string): StoredChat | null {
     pinned: record.pinned === true,
     projectId:
       typeof record.projectId === 'string' && /^proj-[a-z0-9-]{4,60}$/.test(record.projectId) ? record.projectId : null,
+    agent: sanitizeAgentBadge(record.agent),
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : Date.now(),
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : Date.now(),
     modelPath: typeof record.modelPath === 'string' ? record.modelPath : null,
@@ -189,6 +193,15 @@ function sanitizeRagFolder(value: unknown): { id: string; name: string } | null 
   const id = typeof record?.id === 'string' && /^[a-f0-9]{16}$/.test(record.id) ? record.id : null
   const name = typeof record?.name === 'string' ? record.name.slice(0, 120) : ''
   return id ? { id, name } : null
+}
+
+function sanitizeAgentBadge(value: unknown): { id: string; name: string; emoji: string } | null {
+  const record = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+  const id = typeof record?.id === 'string' && /^agent-[a-z0-9-]{4,60}$/.test(record.id) ? record.id : null
+  const name = typeof record?.name === 'string' && record.name.trim() ? record.name.slice(0, 60) : ''
+  if (!id || !name) return null
+  const emoji = typeof record?.emoji === 'string' && record.emoji.trim() ? [...record.emoji.trim()].slice(0, 4).join('') : '🤖'
+  return { id, name, emoji }
 }
 
 async function readChat(id: string): Promise<StoredChat | null> {
@@ -221,6 +234,7 @@ export async function listChats(scope?: ChatScope): Promise<ChatSummary[]> {
       title: c.title,
       pinned: c.pinned,
       projectId: c.projectId,
+      agent: c.agent,
       updatedAt: c.updatedAt,
       messageCount: c.messages.length,
     }))
@@ -237,6 +251,7 @@ export async function saveChat(payload: {
   modelPath?: unknown
   ragFolder?: unknown
   projectId?: unknown
+  agent?: unknown
 }): Promise<{ id: string } | null> {
   const messages = sanitizeMessages(payload.messages)
   if (!messages.length) return null
@@ -251,6 +266,8 @@ export async function saveChat(payload: {
     projectId:
       existing?.projectId ??
       (typeof payload.projectId === 'string' && /^proj-[a-z0-9-]{4,60}$/.test(payload.projectId) ? payload.projectId : null),
+    // Same for its agent badge.
+    agent: existing?.agent ?? sanitizeAgentBadge(payload.agent),
     createdAt: existing?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     modelPath: typeof payload.modelPath === 'string' ? payload.modelPath : existing?.modelPath ?? null,

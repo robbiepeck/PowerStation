@@ -21,6 +21,8 @@ run on your machine.
 
 - **[Projects & backup](projects.md)** — workspaces that bundle instructions, knowledge, skills and
   connectors; one-file backup & restore.
+- **[Agents](agents.md)** — reusable assistants: instructions + multiple knowledge folders,
+  started with one click.
 - **[Repair](repair.md)** — storage & health for AI workloads, as a tab and as an agent skill;
   the diagnose-don't-operate contract.
 

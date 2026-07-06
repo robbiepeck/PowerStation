@@ -3152,6 +3152,168 @@
   font-size: 0.8rem;
 }
 
+/* Agents view & modal */
+
+.agents-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.4rem 1.6rem 2.2rem;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.agents-intro {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.link-button {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.agents-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 1.2rem;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  max-width: 56ch;
+  font-size: 0.84rem;
+}
+
+.agents-empty p {
+  margin: 0;
+}
+
+.agents-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 0.8rem;
+}
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.agent-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.agent-emoji {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+
+.agent-card-title strong {
+  font-size: 0.92rem;
+}
+
+.agent-card-title p {
+  margin: 0.1rem 0 0;
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+
+.agent-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.agent-card-meta .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.agent-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: auto;
+}
+
+.agent-identity-row {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.agent-emoji-field {
+  width: 4.6rem;
+  flex-shrink: 0;
+}
+
+.agent-emoji-field input {
+  text-align: center;
+  font-size: 1.2rem;
+}
+
+.agent-name-field {
+  flex: 1;
+}
+
+.agent-knowledge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.agent-knowledge-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.agent-knowledge-row code {
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: var(--surface-muted);
+  font-size: 0.78rem;
+}
+
+.agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid var(--teal);
+  color: var(--teal);
+  background: rgba(0, 132, 118, 0.07);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: default;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-item-agent {
+  flex-shrink: 0;
+  margin-right: 0.3rem;
+}
+
 /* Compare modal */
 
 .compare-modal {

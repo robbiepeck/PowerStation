@@ -69,6 +69,8 @@ those three gaps:
   auto-compaction for long conversations, and an artifacts pane for rendered HTML/SVG.
 - **Projects (workspaces)** — bundle instructions, a knowledge folder, skill modes, a connector
   selection, and a preferred model; switch context in one click. → [Projects & backup](docs/projects.md)
+- **Agents** — reusable assistants with their own instructions and up to eight knowledge folders,
+  answering with folder-prefixed citations; start a chat with one from its card. → [Agents](docs/agents.md)
 - **Honest model choice** — measured on-device benchmarks (read *and* write speed), side-by-side
   **model compare**, recommendations that explain *why this over that*, and one-click import of
   models you already have in **Ollama or LM Studio** (no re-download).
@@ -124,6 +126,7 @@ troubleshooting in the [Setup Guide](docs/setup.md).
 | [Memory & monitoring](docs/memory-and-monitoring.md) | The admission-control math, auto-pause, and honest telemetry. |
 | [Agent harness](docs/agent-harness.md) | MCP tools, permissions, capability gating, loop guards. |
 | [Projects & backup](docs/projects.md) | Workspaces that bundle instructions, knowledge, skills, connectors; one-file backup. |
+| [Agents](docs/agents.md) | Reusable assistants: instructions + multiple knowledge folders, started with one click. |
 | [Repair](docs/repair.md) | Storage & health for AI workloads — diagnose and reveal, never touch system files. |
 | [Contributing](CONTRIBUTING.md) | Dev setup, how the catalogue works, proposing a model. |
 | [Roadmap](ROADMAP.md) | What's next. |
@@ -150,8 +153,8 @@ guidance. You can also import any `.gguf` file or folder you already have.
   revealable and deletable from Settings, and saving can be turned off entirely.
 - **Attachments & folder indexes** — extracted file text lives with its chat; folder indexes and
   the small embedding model live in the same user-data directory.
-- **Projects & skills** — one JSON file per workspace (`projects/`), one markdown file per skill
-  (`skills/`) — all revealable and editable outside the app.
+- **Projects, agents & skills** — one JSON file per workspace (`projects/`) and per agent
+  (`agents/`), one markdown file per skill (`skills/`) — all revealable and editable outside the app.
 - **Repair log & backups** — everything the Repair tab (or skill) ever removed is listed in
   `repair-log.json`; backups are single JSON archives written wherever you choose.
 - **Network** — model downloads and catalogue updates from `huggingface.co` / this GitHub

@@ -57,6 +57,13 @@ contextBridge.exposeInMainWorld('powerStation', {
     export: (id) => ipcRenderer.invoke('chats:export', id),
     exportAudit: (id) => ipcRenderer.invoke('chats:exportAudit', id),
   },
+  agents: {
+    list: () => ipcRenderer.invoke('agents:list'),
+    get: (id) => ipcRenderer.invoke('agents:get', id),
+    save: (payload) => ipcRenderer.invoke('agents:save', payload),
+    delete: (id) => ipcRenderer.invoke('agents:delete', id),
+    reveal: () => ipcRenderer.invoke('agents:reveal'),
+  },
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),
     get: (id) => ipcRenderer.invoke('projects:get', id),

@@ -2,6 +2,18 @@
 
 The "See what's new" card in the app links here.
 
+## v0.15.0 — Agents
+
+- **Agents tab** — reusable assistants in the Microsoft-365 agent-builder spirit, fully local:
+  a name and emoji, instructions appended to the system prompt, and up to **eight knowledge
+  folders**. Retrieval runs across all of an agent's folders at once — chunks compete for the same
+  top-k slots, and citations are folder-prefixed when there's more than one. **Start chat** on a
+  card opens a conversation with the agent applied; the chat header shows its chip and the sidebar
+  row its emoji, and reopening the chat restores the agent. Deliberately separate from Projects:
+  a project is a workspace you switch into, an agent is an assistant you summon per chat — inside
+  a project you get both sets of instructions. Agents are plain JSON files (`agents/`), revealable
+  from the tab, included in backups, and deleting one keeps its chats (badge and all).
+
 ## v0.14.0 — Repair, conversationally
 
 - **Storage repair as an agent skill** — a new bundled skill (Utilities → Skills → *Storage

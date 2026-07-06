@@ -191,6 +191,34 @@ export async function queryFolder(
   return { block: buildRetrievalBlock(top), sources: sourceFiles(top) }
 }
 
+/**
+ * Retrieval across several folder indexes at once (custom agents reference
+ * multiple knowledge folders). The query is embedded once; chunks from all
+ * folders compete for the same top-k slots, so the best evidence wins no
+ * matter which folder it lives in. With more than one folder, sources are
+ * prefixed with the folder name so citations stay unambiguous.
+ */
+export async function queryFolders(
+  folderIds: string[],
+  question: string,
+): Promise<{ block: string; sources: string[] } | null> {
+  const ids = [...new Set(folderIds.filter((id) => typeof id === 'string' && /^[a-f0-9]{16}$/.test(id)))].slice(0, 8)
+  if (!ids.length) return null
+  const indexes = (await Promise.all(ids.map(readIndex))).filter(
+    (index): index is StoredIndex => index !== null && index.chunks.length > 0,
+  )
+  if (!indexes.length) return null
+  const modelPath = await ensureEmbedModel()
+  const [queryVector] = await embedTexts(modelPath, [QUERY_PREFIX + question])
+  if (!queryVector) return null
+  const chunks =
+    indexes.length === 1
+      ? indexes[0].chunks
+      : indexes.flatMap((index) => index.chunks.map((chunk) => ({ ...chunk, file: `${index.name}/${chunk.file}` })))
+  const top = topKChunks(queryVector, chunks, TOP_K)
+  return { block: buildRetrievalBlock(top), sources: sourceFiles(top) }
+}
+
 export type RagIndexListing = FolderIndexInfo & {
   sizeBytes: number
   stale: boolean

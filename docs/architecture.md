@@ -69,6 +69,7 @@ flowchart LR
 | `electron/skills.ts` + `skillFormat.ts` | Markdown skills: seeding, modes, trigger matching, prompt composition. |
 | `electron/chats.ts` | Chat persistence: one JSON per conversation, pin/rename, project scoping, exports. |
 | `electron/projects.ts` + `projectFormat.ts` | Workspaces: one JSON per project; active-project resolution. |
+| `electron/customAgents.ts` + `customAgentFormat.ts` | Reusable agents: one JSON per agent; instructions + multi-folder knowledge. |
 | `electron/rag.ts` + `ragUtil.ts` | Chat-with-a-folder: local embedding index per folder, retrieval with sources. |
 | `electron/repair.ts` + `repairUtil.ts` | Storage scans (read-only), reclaimables, the containment guard, integrity checks. |
 | `electron/backup.ts` + `backupFormat.ts` | One-file backup archive; restore through the same sanitizers as config reads. |
@@ -79,7 +80,7 @@ flowchart LR
 | `electron/config.ts` | Persisted state and strict sanitisation of everything on disk. |
 | `src/App.tsx` | App shell, hooks, chat state, modals (permission, audit, compare, project), recovery cards. |
 | `src/onboarding.tsx` | First-run scan-and-reveal flow. |
-| `src/views.tsx` | Models, Monitor, Utilities, Settings, Repair. |
+| `src/views.tsx` | Models, Monitor, Utilities, Agents, Settings, Repair. |
 
 ## What happens when you send a message
 

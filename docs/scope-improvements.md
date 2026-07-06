@@ -11,7 +11,7 @@ direction lives in the [Roadmap](../ROADMAP.md); this page is the detailed versi
 | 3 | Conversation persistence | Roadmap / daily-use gap | Medium | **Shipped v0.2** |
 | 4 | Catalogue freshness CI | Critique: "stale catalogue is fatal" | Small | **Shipped v0.4** |
 | 5 | First-run demo moment | UX critique | Small | **Shipped v0.4** |
-| 6 | Storage cleanup as an agent skill | Cut feature, approved return path | Medium | Optional — needs decision |
+| 6 | Storage cleanup / repair (tab + agent skill) | Cut feature, approved return path | Medium | **Shipped v0.12 + v0.14** |
 | 7 | Ollama as detected optional backend | Critique runtime recommendation | Medium | **Shipped v0.4** (model import) |
 | 8 | MLX engine pack (Apple Silicon) | Critique performance chapter | Large | **Designed** — [plan](mlx-engine-plan.md), staged after signing |
 | 9 | Web-based recommender funnel | Product critique | Small–medium | Later |
@@ -109,6 +109,14 @@ deleted; allow-rest-of-turn still works; denies still block). Chat-header chip w
 ### 20. Recommendation "why this over that" — *shipped v0.13*
 Alternates explain themselves against the top pick on fit, measured/likely speed, capacity, and
 tool tier — honest in both directions. Pure `explainVersusPrimary`, unit-tested.
+
+### 21. Custom agents (M365-style) — *shipped v0.15*
+Robbie's ask, modelled on the Microsoft 365 agent builder and scoped via explicit product
+decisions: agents are a **separate concept from projects** (an assistant you summon per chat vs a
+workspace you switch into), invoked by **Start chat** from the Agents tab, configured with
+**instructions + up to eight knowledge folders** (deliberately no model binding or connector
+selection), and chats carry a **badge** that survives agent deletion. Multi-folder retrieval
+merges chunks across folders with folder-prefixed citations. See [agents.md](agents.md).
 
 ### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
 Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face

@@ -11,6 +11,7 @@ import * as lmstudio from './lmstudio.js'
 import * as projects from './projects.js'
 import * as backup from './backup.js'
 import * as repair from './repair.js'
+import * as customAgents from './customAgents.js'
 import { REPAIR_SKILL_SLUG } from './builtinTools.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
@@ -101,12 +102,14 @@ async function getOffloadCeilingBytes(): Promise<number> {
  */
 async function getEffectiveSystemPrompt(
   message?: string,
+  agentId?: string,
 ): Promise<{ prompt: string | undefined; skillNames: string[]; skillSlugs: string[] }> {
   const state = await getState()
   const project = await projects.getActiveProject()
-  // Project instructions extend the global base prompt; project skill modes
-  // override the global ones for the slugs they name.
-  const base = [state.settings.utilities.systemPrompt, project?.instructions ?? '']
+  const agent = agentId ? await customAgents.getAgent(agentId) : null
+  // Composition order: global prompt → active project's instructions → the
+  // chat's custom-agent instructions (most specific last), then skills.
+  const base = [state.settings.utilities.systemPrompt, project?.instructions ?? '', agent?.instructions ?? '']
     .map((part) => part.trim())
     .filter(Boolean)
     .join('\n\n')
@@ -370,6 +373,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     await chats.exportChatMarkdown(chat, result.filePath)
     return result.filePath
   })
+
+  // --- Custom agents --------------------------------------------------------------
+  ipcMain.handle('agents:list', () => customAgents.listAgents())
+  ipcMain.handle('agents:get', (_event, id: string) => customAgents.getAgent(id))
+  ipcMain.handle('agents:save', (_event, payload: unknown) => customAgents.saveAgent(payload))
+  ipcMain.handle('agents:delete', (_event, id: string) => customAgents.deleteAgent(id))
+  ipcMain.handle('agents:reveal', () => customAgents.revealAgentsDir())
 
   // --- Projects (workspaces) ----------------------------------------------------
   ipcMain.handle('projects:list', () => projects.listProjects())
@@ -747,6 +757,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         history?: Array<{ role: string; text: string }>
         ragFolderId?: string
         ragQuery?: string
+        agentId?: string
       },
     ) => {
     const { requestId, prompt } = payload
@@ -801,7 +812,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         // when the Storage repair skill is active for this message: the skill
         // teaches the workflow, and its mode doubles as the feature switch.
         const tier = resolveToolTier(info, entry)
-        const effective = await getEffectiveSystemPrompt(typeof payload.ragQuery === 'string' ? payload.ragQuery : prompt)
+        const agentId = typeof payload.agentId === 'string' ? payload.agentId : undefined
+        const effective = await getEffectiveSystemPrompt(
+          typeof payload.ragQuery === 'string' ? payload.ragQuery : prompt,
+          agentId,
+        )
         const includeRepairTools = effective.skillSlugs.includes(REPAIR_SKILL_SLUG)
         const toolDefinitions = tier === 'none' ? [] : agent.getAgentToolDefinitions(includeRepairTools)
         const maxToolCalls = tier === 'multi' ? 15 : 3
@@ -815,13 +830,20 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           activeSkills: effective.skillNames,
         })
 
-        // Chat-with-a-folder: retrieve the most relevant chunks for this
-        // question and prepend them as framed reference data.
+        // Knowledge retrieval: the chat's manually-attached folder plus every
+        // folder the active custom agent references — one query, chunks from
+        // all folders competing for the same top-k slots.
         let effectivePrompt = prompt
-        if (typeof payload.ragFolderId === 'string') {
+        const folderIds = new Set<string>()
+        if (typeof payload.ragFolderId === 'string') folderIds.add(payload.ragFolderId)
+        if (agentId) {
+          const chatAgent = await customAgents.getAgent(agentId)
+          for (const knowledge of chatAgent?.knowledge ?? []) folderIds.add(knowledge.folderId)
+        }
+        if (folderIds.size > 0) {
           try {
-            const retrieval = await rag.queryFolder(
-              payload.ragFolderId,
+            const retrieval = await rag.queryFolders(
+              [...folderIds],
               typeof payload.ragQuery === 'string' ? payload.ragQuery.slice(0, 4000) : prompt.slice(0, 4000),
             )
             if (retrieval) {

@@ -167,6 +167,7 @@ export type StoredChat = {
   titleLocked: boolean
   pinned: boolean
   projectId: string | null
+  agent: AgentBadge | null
   createdAt: number
   updatedAt: number
   modelPath: string | null
@@ -179,6 +180,7 @@ export type ChatSummary = {
   title: string
   pinned: boolean
   projectId: string | null
+  agent: AgentBadge | null
   updatedAt: number
   messageCount: number
   snippet?: string
@@ -208,8 +210,28 @@ export type BackupSummary = {
   chats: number
   skills: number
   projects: number
+  agents: number
   settingsApplied: boolean
 }
+
+export type AgentKnowledge = {
+  folderId: string
+  folder: string
+  name: string
+}
+
+export type CustomAgent = {
+  id: string
+  name: string
+  emoji: string
+  description: string
+  instructions: string
+  knowledge: AgentKnowledge[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type AgentBadge = { id: string; name: string; emoji: string }
 
 export type StorageLocation = {
   id: string
@@ -589,6 +611,7 @@ export type PowerStationBridge = {
       modelPath?: string
       ragFolder?: { id: string; name: string } | null
       projectId?: string | null
+      agent?: AgentBadge | null
     }) => Promise<{ id: string } | null>
     rename: (id: string, title: string) => Promise<boolean>
     pin: (id: string, pinned: boolean) => Promise<boolean>
@@ -598,6 +621,13 @@ export type PowerStationBridge = {
     search: (query: string, scope?: ChatScope) => Promise<ChatSummary[]>
     export: (id: string) => Promise<string | null>
     exportAudit: (id: string) => Promise<string | null>
+  }
+  agents: {
+    list: () => Promise<CustomAgent[]>
+    get: (id: string) => Promise<CustomAgent | null>
+    save: (payload: Partial<CustomAgent> & { name: string }) => Promise<CustomAgent | null>
+    delete: (id: string) => Promise<boolean>
+    reveal: () => Promise<boolean>
   }
   projects: {
     list: () => Promise<Project[]>
@@ -680,6 +710,7 @@ export type PowerStationBridge = {
       history?: Array<{ role: 'user' | 'assistant'; text: string }>
       ragFolderId?: string
       ragQuery?: string
+      agentId?: string
     }) => Promise<{ requestId: string; ok: boolean }>
     stop: (requestId: string) => Promise<boolean>
     reset: () => Promise<void>

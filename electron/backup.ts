@@ -10,12 +10,14 @@ import { buildBackupJson, parseBackupJson } from './backupFormat.js'
 import { applyRestoredState, getState, type PersistedState } from './config.js'
 import * as chats from './chats.js'
 import * as projects from './projects.js'
+import * as customAgents from './customAgents.js'
 import { skillsDir } from './skills.js'
 
 export type BackupSummary = {
   chats: number
   skills: number
   projects: number
+  agents: number
   settingsApplied: boolean
 }
 
@@ -48,6 +50,7 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
   const fullChats = (await Promise.all(summaries.map((s) => chats.getChat(s.id)))).filter((c) => c !== null)
   const skills = await collectSkillFiles()
   const projectList = await projects.listProjects()
+  const agentList = await customAgents.listAgents()
 
   // lastSeenVersion stays out: restoring on a newer build should still show
   // that build's what's-new card, not suppress it with the old machine's value.
@@ -59,9 +62,16 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
     skills,
     chats: fullChats,
     projects: projectList,
+    agents: agentList,
   })
   await fs.writeFile(filePath, json, 'utf8')
-  return { chats: fullChats.length, skills: skills.length, projects: projectList.length, settingsApplied: true }
+  return {
+    chats: fullChats.length,
+    skills: skills.length,
+    projects: projectList.length,
+    agents: agentList.length,
+    settingsApplied: true,
+  }
 }
 
 export async function restoreBackup(filePath: string): Promise<BackupSummary> {
@@ -84,9 +94,14 @@ export async function restoreBackup(filePath: string): Promise<BackupSummary> {
     if (await projects.importProject(project)) projectCount += 1
   }
 
+  let agentCount = 0
+  for (const agent of archive.agents) {
+    if (await customAgents.importAgent(agent)) agentCount += 1
+  }
+
   // Archive fields win, then the whole thing is re-normalized exactly like a
   // config-file read (clamps, unknown-field drops, sanitizers).
   await applyRestoredState(archive.state as Partial<PersistedState>)
 
-  return { chats: chatCount, skills: skillCount, projects: projectCount, settingsApplied: true }
+  return { chats: chatCount, skills: skillCount, projects: projectCount, agents: agentCount, settingsApplied: true }
 }

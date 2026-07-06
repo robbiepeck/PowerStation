@@ -27,7 +27,7 @@ storage as chats — revealable, readable, yours.
 ## Backup & restore
 
 Settings → **Backup & restore** writes a single JSON archive containing settings, tool
-permissions, benchmarks, skills, chats, and projects. Restore on any machine:
+permissions, benchmarks, skills, chats, projects, and agents. Restore on any machine:
 
 - **Settings and permissions are replaced** by the backup's values.
 - **Chats, skills and projects overwrite items with the same id**; everything else you already

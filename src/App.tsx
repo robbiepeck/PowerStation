@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AlertTriangle,
+  Bot,
   BrainCircuit,
   FolderKanban,
   FolderSearch,
@@ -32,12 +33,15 @@ import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
 import { artifactSrcDoc, extractArtifacts, type Artifact } from './artifacts'
-import { ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
+import { AgentsView, ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
 import { CopyButton, formatNumber } from './ui'
 import type {
+  AgentBadge,
+  AgentKnowledge,
   BenchmarkRecord,
+  CustomAgent,
   Catalog,
   CatalogModel,
   ChatStatusPayload,
@@ -69,7 +73,7 @@ import type {
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'settings' | 'repair'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'settings' | 'repair'
 
 const bridge = getDesktop()
 
@@ -78,6 +82,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'monitor', label: 'Monitor', icon: Activity },
   { id: 'models', label: 'Models', icon: BrainCircuit },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
+  { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
   { id: 'repair', label: 'Repair', icon: LifeBuoy },
 ]
@@ -355,6 +360,20 @@ function useChatHistory(projectId: string | null) {
   return { summaries, refresh, search }
 }
 
+function useAgents() {
+  const [agents, setAgents] = useState<CustomAgent[]>([])
+  const refresh = useCallback(async () => {
+    const list = await bridge.agents.list().catch(() => [])
+    setAgents(list)
+  }, [])
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+  return { agents, refresh }
+}
+
 function useProjects() {
   const [projects, setProjects] = useState<Project[]>([])
   const [active, setActive] = useState<Project | null>(null)
@@ -529,7 +548,7 @@ function useChat(getWatts: () => number) {
   }, [getWatts, patchAssistant])
 
   const send = useCallback(
-    (text: string, options?: { attachments?: StoredAttachment[]; ragFolderId?: string }) => {
+    (text: string, options?: { attachments?: StoredAttachment[]; ragFolderId?: string; agentId?: string }) => {
       const trimmed = text.trim()
       if (!trimmed) return
       const attachments = options?.attachments?.length ? options.attachments : undefined
@@ -548,7 +567,8 @@ function useChat(getWatts: () => number) {
         prompt: frameAttachments(attachments) + trimmed,
         history,
         ragFolderId: options?.ragFolderId,
-        ragQuery: options?.ragFolderId ? trimmed : undefined,
+        ragQuery: options?.ragFolderId || options?.agentId ? trimmed : undefined,
+        agentId: options?.agentId,
       })
     },
     [],
@@ -709,6 +729,9 @@ function App() {
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [projectModal, setProjectModal] = useState<{ project: Project | null } | null>(null)
   const [showCompare, setShowCompare] = useState(false)
+  const agentsHook = useAgents()
+  const [activeAgent, setActiveAgent] = useState<AgentBadge | null>(null)
+  const [agentModal, setAgentModal] = useState<{ agent: CustomAgent | null } | null>(null)
   const [download, setDownload] = useState<DownloadState>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchBusyPath, setBenchBusyPath] = useState<string | null>(null)
@@ -802,6 +825,7 @@ function App() {
           modelPath: selectedPath ?? undefined,
           ragFolder: ragFolder ? { id: ragFolder.id, name: ragFolder.name } : null,
           projectId: activeProject?.id ?? null,
+          agent: activeAgent,
         })
         .then((result) => {
           if (result?.id && result.id !== chatIdRef.current) chat.setChatId(result.id)
@@ -811,7 +835,7 @@ function App() {
     }, 600)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.messages, chat.streaming, settings?.saveChats, selectedPath, ragFolder, activeProject?.id])
+  }, [chat.messages, chat.streaming, settings?.saveChats, selectedPath, ragFolder, activeProject?.id, activeAgent])
 
   const handleNewChat = useCallback(() => {
     chat.reset()
@@ -822,10 +846,27 @@ function App() {
         ? { id: activeProject.knowledge.folderId, name: activeProject.knowledge.name }
         : null,
     )
+    setActiveAgent(null)
     setComposerSeed(null)
     setArtifact(null)
     seenArtifactRef.current = null
   }, [activeProject, chat])
+
+  // "Start chat" from the Agents tab: a fresh chat with the agent's
+  // instructions and knowledge applied (main-side, per message).
+  const handleStartAgentChat = useCallback(
+    (agent: CustomAgent) => {
+      chat.reset()
+      setPendingAttachments([])
+      setRagFolder(null)
+      setComposerSeed(null)
+      setArtifact(null)
+      seenArtifactRef.current = null
+      setActiveAgent({ id: agent.id, name: agent.name, emoji: agent.emoji })
+      setActiveView('chat')
+    },
+    [chat],
+  )
 
   // Switch workspace: persist, re-point connectors (main side), then apply the
   // project's model and knowledge folder here and start a clean chat.
@@ -837,6 +878,7 @@ function App() {
       projectsHook.setActive(project)
       chat.reset()
       setPendingAttachments([])
+      setActiveAgent(null)
       setComposerSeed(null)
       setArtifact(null)
       seenArtifactRef.current = null
@@ -918,6 +960,9 @@ function App() {
       setPendingAttachments([])
       setArtifact(null)
       seenArtifactRef.current = null
+      // Restore the chat's agent badge; if the agent was deleted, the send
+      // path passes the id and the main process ignores it gracefully.
+      setActiveAgent(stored.agent)
       setRagFolder(stored.ragFolder ? { ...stored.ragFolder } : null)
       if (stored.ragFolder) {
         void bridge.rag.info(stored.ragFolder.id).then((info) => {
@@ -1001,10 +1046,11 @@ function App() {
       chat.send(text, {
         attachments: pendingAttachments.length ? pendingAttachments : undefined,
         ragFolderId: ragFolder?.id,
+        agentId: activeAgent?.id,
       })
       setPendingAttachments([])
     },
-    [chat, pendingAttachments, ragFolder],
+    [activeAgent, chat, pendingAttachments, ragFolder],
   )
 
   const mergeExtractResults = useCallback((results: Array<{ ok: boolean; file?: StoredAttachment & { truncated?: boolean }; name?: string; error?: string }>) => {
@@ -1312,6 +1358,11 @@ function App() {
                       onClick={() => void handleLoadChat(summary.id)}
                     >
                       {summary.pinned ? <Pin className="chat-item-pin-mark" size={11} /> : null}
+                      {summary.agent ? (
+                        <span className="chat-item-agent" title={`Agent: ${summary.agent.name}`}>
+                          {summary.agent.emoji}
+                        </span>
+                      ) : null}
                       {summary.title}
                       {summary.snippet ? <small className="chat-item-snippet">{summary.snippet}</small> : null}
                     </button>
@@ -1363,6 +1414,7 @@ function App() {
             attachments={pendingAttachments}
             chatId={chat.chatId}
             composerSeed={composerSeed}
+            agentBadge={activeAgent}
             cautiousMode={settings?.agentProfile === 'cautious'}
             contextUsage={chat.contextUsage}
             energyWh={chat.energyWh}
@@ -1404,6 +1456,13 @@ function App() {
         )}
         {visibleView === 'monitor' && <MonitorView device={device} series={series} snapshot={snapshot} />}
         {visibleView === 'repair' && <RepairView />}
+        {visibleView === 'agents' && (
+          <AgentsView
+            agents={agentsHook.agents}
+            onEdit={(agent) => setAgentModal({ agent })}
+            onStartChat={handleStartAgentChat}
+          />
+        )}
         {visibleView === 'models' && (
           <div className="scroll-view">
             <ModelsView
@@ -1472,6 +1531,22 @@ function App() {
           onSelectModel={(path) => {
             void handleSelectModel(path)
             setShowCompare(false)
+          }}
+        />
+      ) : null}
+      {agentModal ? (
+        <AgentModal
+          agent={agentModal.agent}
+          onClose={() => setAgentModal(null)}
+          onDeleted={(id) => {
+            setAgentModal(null)
+            void agentsHook.refresh()
+            if (activeAgent?.id === id) setActiveAgent(null)
+          }}
+          onSaved={(saved) => {
+            setAgentModal(null)
+            void agentsHook.refresh()
+            if (activeAgent?.id === saved.id) setActiveAgent({ id: saved.id, name: saved.name, emoji: saved.emoji })
           }}
         />
       ) : null}
@@ -1603,6 +1678,7 @@ function StatusPill({
 function ChatView({
   artifact,
   attachments,
+  agentBadge,
   cautiousMode,
   chatId,
   composerSeed,
@@ -1640,6 +1716,7 @@ function ChatView({
 }: {
   artifact: Artifact | null
   attachments: StoredAttachment[]
+  agentBadge: AgentBadge | null
   cautiousMode: boolean
   chatId: string | null
   composerSeed: { text: string; key: number } | null
@@ -1696,6 +1773,15 @@ function ChatView({
           selectedModel={selectedModel}
         />
         <div className="chat-header-right">
+          {agentBadge ? (
+            <span
+              className="agent-chip"
+              title={`This chat runs with the agent "${agentBadge.name}" — its instructions and knowledge folders apply to every message.`}
+            >
+              <span aria-hidden="true">{agentBadge.emoji}</span>
+              {agentBadge.name}
+            </span>
+          ) : null}
           {contextUsage ? (
             <div
               className={contextUsage.used / contextUsage.total > 0.8 ? 'context-usage warn' : 'context-usage'}
@@ -2416,6 +2502,179 @@ function CompareModal({
               </div>
             )
           })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// --- Agent modal ----------------------------------------------------------------
+
+function AgentModal({
+  agent,
+  onClose,
+  onDeleted,
+  onSaved,
+}: {
+  agent: CustomAgent | null
+  onClose: () => void
+  onDeleted: (id: string) => void
+  onSaved: (agent: CustomAgent) => void
+}) {
+  const [name, setName] = useState(agent?.name ?? '')
+  const [emoji, setEmoji] = useState(agent?.emoji ?? '🤖')
+  const [description, setDescription] = useState(agent?.description ?? '')
+  const [instructions, setInstructions] = useState(agent?.instructions ?? '')
+  const [knowledge, setKnowledge] = useState<AgentKnowledge[]>(agent?.knowledge ?? [])
+  const [indexing, setIndexing] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const addFolder = async () => {
+    const folder = await bridge.connectors.pickFolder()
+    if (!folder) return
+    setIndexing(true)
+    try {
+      const info = await bridge.rag.index(folder)
+      setKnowledge((prev) =>
+        prev.some((k) => k.folderId === info.folderId)
+          ? prev
+          : [...prev, { folderId: info.folderId, folder: info.folder, name: info.name }],
+      )
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIndexing(false)
+    }
+  }
+
+  const save = async () => {
+    if (!name.trim()) {
+      window.alert('Give the agent a name.')
+      return
+    }
+    setSaving(true)
+    try {
+      const saved = await bridge.agents.save({
+        id: agent?.id,
+        name,
+        emoji,
+        description,
+        instructions,
+        knowledge,
+      })
+      if (saved) onSaved(saved)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!agent) return
+    if (!window.confirm(`Delete the agent "${agent.name}"? Chats made with it keep their badge; only the agent is removed.`)) return
+    await bridge.agents.delete(agent.id).catch(() => false)
+    onDeleted(agent.id)
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={agent ? 'Edit agent' : 'New agent'}>
+      <div className="permission-modal project-modal">
+        <div className="permission-head">
+          <Bot size={20} />
+          <div>
+            <h3>{agent ? `Edit ${agent.name}` : 'New agent'}</h3>
+            <p>A reusable assistant: instructions plus the knowledge folders it answers from.</p>
+          </div>
+        </div>
+
+        <div className="project-form">
+          <div className="agent-identity-row">
+            <label className="project-field agent-emoji-field">
+              <span>Face</span>
+              <input
+                value={emoji}
+                maxLength={4}
+                aria-label="Agent emoji"
+                onChange={(event) => setEmoji(event.target.value)}
+              />
+            </label>
+            <label className="project-field agent-name-field">
+              <span>Name</span>
+              <input value={name} placeholder="e.g. Docs assistant" onChange={(event) => setName(event.target.value)} />
+            </label>
+          </div>
+
+          <label className="project-field">
+            <span>Description</span>
+            <input
+              value={description}
+              placeholder="One line shown on the agent's card."
+              onChange={(event) => setDescription(event.target.value)}
+            />
+          </label>
+
+          <label className="project-field">
+            <span>Instructions</span>
+            <textarea
+              value={instructions}
+              rows={5}
+              placeholder="Added to the system prompt for every message in this agent's chats — tone, role, rules, how to use the knowledge."
+              onChange={(event) => setInstructions(event.target.value)}
+            />
+          </label>
+
+          <div className="project-field">
+            <span>Knowledge folders ({knowledge.length}/8)</span>
+            {knowledge.length ? (
+              <div className="agent-knowledge-list">
+                {knowledge.map((k) => (
+                  <div className="agent-knowledge-row" key={k.folderId}>
+                    <code title={k.folder}>{k.name}</code>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() => setKnowledge((prev) => prev.filter((item) => item.folderId !== k.folderId))}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="project-knowledge-row">
+              <button
+                className="secondary-button compact"
+                type="button"
+                disabled={indexing || knowledge.length >= 8}
+                onClick={() => void addFolder()}
+              >
+                {indexing ? 'Indexing…' : 'Add folder…'}
+              </button>
+            </div>
+            <p className="project-field-note">
+              Folders are indexed locally; the agent retrieves the best excerpts across all of them and cites
+              its sources.
+            </p>
+          </div>
+        </div>
+
+        <div className="permission-actions">
+          {agent ? (
+            <button className="ghost-button danger" type="button" onClick={() => void remove()}>
+              Delete agent
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="permission-allow">
+            <button className="secondary-button" type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="primary-button" type="button" disabled={saving || indexing} onClick={() => void save()}>
+              {saving ? 'Saving…' : agent ? 'Save changes' : 'Create agent'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

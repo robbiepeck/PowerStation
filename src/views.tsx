@@ -38,6 +38,7 @@ import type {
   CatalogModel,
   ConnectorCatalog,
   ConnectorEntry,
+  CustomAgent,
   DeviceInfo,
   FitReport,
   McpServerConfig,
@@ -2129,6 +2130,97 @@ export function RepairView() {
           didn't create belong to you and Finder, not to an app.
         </p>
       </section>
+    </div>
+  )
+}
+
+// --- Agents view ---------------------------------------------------------------
+//
+// Reusable assistants in the Microsoft-365 agent-builder sense, scoped to what
+// a local app can honestly deliver: instructions + knowledge folders, started
+// from here with one click. Deliberately separate from Projects (workspaces):
+// an agent shapes a chat; a project scopes your workspace.
+
+export function AgentsView({
+  agents,
+  onEdit,
+  onStartChat,
+}: {
+  agents: CustomAgent[]
+  onEdit: (agent: CustomAgent | null) => void
+  onStartChat: (agent: CustomAgent) => void
+}) {
+  return (
+    <div className="agents-view">
+      <PanelHeader
+        eyebrow="Agents"
+        title="Your agents"
+        action={
+          <button className="primary-button compact-primary" type="button" onClick={() => onEdit(null)}>
+            <Plus size={15} />
+            New agent
+          </button>
+        }
+      />
+      <p className="agents-intro">
+        An agent is a reusable assistant: a name, instructions, and the knowledge folders it should answer
+        from. Start a chat with one and the model follows its instructions and cites its folders — everything
+        stays on this machine. Agents are plain JSON files,{' '}
+        <button className="link-button" type="button" onClick={() => void bridge.agents.reveal()}>
+          revealable here
+        </button>
+        .
+      </p>
+
+      {agents.length === 0 ? (
+        <div className="agents-empty">
+          <p>
+            No agents yet. Try one like <strong>“Docs assistant”</strong> — instructions to answer only from
+            the attached folders and cite sources — or <strong>“Style checker”</strong> with your writing
+            guide as knowledge.
+          </p>
+          <button className="secondary-button" type="button" onClick={() => onEdit(null)}>
+            <Plus size={15} />
+            Create your first agent
+          </button>
+        </div>
+      ) : (
+        <div className="agents-grid">
+          {agents.map((agent) => (
+            <article className="agent-card" key={agent.id}>
+              <div className="agent-card-head">
+                <span className="agent-emoji" aria-hidden="true">
+                  {agent.emoji}
+                </span>
+                <div className="agent-card-title">
+                  <strong>{agent.name}</strong>
+                  {agent.description ? <p>{agent.description}</p> : null}
+                </div>
+              </div>
+              <div className="agent-card-meta">
+                {agent.knowledge.length ? (
+                  agent.knowledge.map((k) => (
+                    <span className="badge neutral" key={k.folderId} title={k.folder}>
+                      <FolderOpen size={11} /> {k.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="badge neutral">no knowledge folders</span>
+                )}
+                {agent.instructions ? <span className="badge neutral">instructions</span> : null}
+              </div>
+              <div className="agent-card-actions">
+                <button className="secondary-button compact" type="button" onClick={() => onEdit(agent)}>
+                  Edit
+                </button>
+                <button className="primary-button compact-primary" type="button" onClick={() => onStartChat(agent)}>
+                  Start chat
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

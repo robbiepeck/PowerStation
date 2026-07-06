@@ -19,6 +19,8 @@ export type BackupArchive = {
   skills: BackupSkill[]
   chats: unknown[]
   projects: unknown[]
+  /** Custom agents; absent in pre-v0.15 archives (parses to []). */
+  agents: unknown[]
 }
 
 const MAX_INPUT_CHARS = 300 * 1024 * 1024 // chats dominate; generous but bounded
@@ -33,6 +35,7 @@ export function buildBackupJson(parts: {
   skills: BackupSkill[]
   chats: unknown[]
   projects: unknown[]
+  agents?: unknown[]
 }): string {
   const archive: BackupArchive = {
     format: BACKUP_FORMAT,
@@ -43,6 +46,7 @@ export function buildBackupJson(parts: {
     skills: parts.skills.slice(0, MAX_SKILLS),
     chats: parts.chats.slice(0, MAX_CHATS),
     projects: parts.projects.slice(0, MAX_PROJECTS),
+    agents: (parts.agents ?? []).slice(0, MAX_PROJECTS),
   }
   return JSON.stringify(archive, null, 1)
 }
@@ -81,5 +85,6 @@ export function parseBackupJson(text: string): BackupArchive {
     skills,
     chats: (Array.isArray(record.chats) ? record.chats : []).slice(0, MAX_CHATS),
     projects: (Array.isArray(record.projects) ? record.projects : []).slice(0, MAX_PROJECTS),
+    agents: (Array.isArray(record.agents) ? record.agents : []).slice(0, MAX_PROJECTS),
   }
 }
