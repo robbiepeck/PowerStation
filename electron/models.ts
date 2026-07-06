@@ -34,29 +34,42 @@ function isSecondarySplitPart(fileName: string): boolean {
   return Boolean(match && match[1] !== '00001')
 }
 
+/**
+ * Every file that makes up a model on disk: the file itself, plus its sibling
+ * split parts when it is the first shard of a multi-part GGUF. Used both to
+ * sum a model's real size and to delete it completely (a multi-part model
+ * lives across several files — removing only the first frees nothing).
+ */
+async function modelFilePaths(filePath: string): Promise<string[]> {
+  const dir = path.dirname(filePath)
+  const fileName = path.basename(filePath)
+  const match = fileName.match(SPLIT_PART)
+  if (!match || match[1] !== '00001') return [filePath]
+  const prefix = fileName.slice(0, fileName.length - match[0].length)
+  const suffix = `-of-${match[2]}.gguf`
+  try {
+    const parts = (await fs.readdir(dir))
+      .filter((s) => s.startsWith(prefix) && s.toLowerCase().endsWith(suffix.toLowerCase()) && SPLIT_PART.test(s))
+      .map((s) => path.join(dir, s))
+    return parts.length ? parts : [filePath]
+  } catch {
+    return [filePath]
+  }
+}
+
 // Multi-part GGUFs are listed by their first part only, but the model needs
 // ALL parts in memory — admission control must see the summed size, not the
 // first shard, or a 63GB model reads as 21GB and "fits".
 async function totalSizeWithSplitParts(filePath: string, firstPartSize: number): Promise<number> {
-  const fileName = path.basename(filePath)
-  const match = fileName.match(SPLIT_PART)
-  if (!match || match[1] !== '00001') return firstPartSize
-  const prefix = fileName.slice(0, fileName.length - match[0].length)
-  const suffix = `-of-${match[2]}.gguf`
+  const parts = await modelFilePaths(filePath)
+  if (parts.length <= 1) return firstPartSize
   let total = 0
-  try {
-    const siblings = await fs.readdir(path.dirname(filePath))
-    for (const sibling of siblings) {
-      if (sibling.startsWith(prefix) && sibling.toLowerCase().endsWith(suffix.toLowerCase()) && SPLIT_PART.test(sibling)) {
-        try {
-          total += (await fs.stat(path.join(path.dirname(filePath), sibling))).size
-        } catch {
-          /* ignore unreadable sibling */
-        }
-      }
+  for (const part of parts) {
+    try {
+      total += (await fs.stat(part)).size
+    } catch {
+      /* ignore unreadable sibling */
     }
-  } catch {
-    return firstPartSize
   }
   return total > firstPartSize ? total : firstPartSize
 }
@@ -240,13 +253,24 @@ export async function isKnownModelPath(filePath: string): Promise<boolean> {
   )
 }
 
-export async function deleteModelFile(filePath: string): Promise<{ deleted: boolean; reason?: string }> {
+export async function deleteModelFile(filePath: string): Promise<{ deleted: boolean; freedBytes: number; reason?: string }> {
   const resolved = path.resolve(filePath)
   const known = await isKnownModelPath(resolved)
-  if (!known) return { deleted: false, reason: 'File is outside any known model folder' }
-  await fs.rm(resolved)
+  if (!known) return { deleted: false, freedBytes: 0, reason: 'File is outside any known model folder' }
+  // Delete every file the model occupies — the first shard plus all sibling
+  // split parts — so a multi-part GGUF actually frees its full size.
+  const parts = await modelFilePaths(resolved)
+  let freedBytes = 0
+  for (const part of parts) {
+    try {
+      freedBytes += (await fs.stat(part)).size
+    } catch {
+      /* size best-effort */
+    }
+    await fs.rm(part, { force: true })
+  }
   await removeImported(resolved)
-  return { deleted: true }
+  return { deleted: true, freedBytes }
 }
 
 export async function selectModel(filePath: string | null): Promise<string | null> {

@@ -951,8 +951,14 @@ export function ModelsView({
                       Remove
                     </button>
                   ) : null}
-                  <button className="ghost-button danger" type="button" title="Delete file from disk" onClick={() => onDelete(model)}>
+                  <button
+                    className="ghost-button danger"
+                    type="button"
+                    title={`Delete "${model.name}" from this computer (${formatBytes(model.sizeBytes)}) to free up space`}
+                    onClick={() => onDelete(model)}
+                  >
                     <Trash2 size={13} />
+                    Delete
                   </button>
                 </div>
               </div>

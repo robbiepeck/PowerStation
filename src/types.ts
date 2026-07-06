@@ -594,7 +594,7 @@ export type PowerStationBridge = {
     select: (filePath: string | null) => Promise<string | null>
     getSelected: () => Promise<string | null>
     remove: (filePath: string) => Promise<void>
-    deleteFile: (filePath: string) => Promise<{ deleted: boolean; reason?: string }>
+    deleteFile: (filePath: string) => Promise<{ deleted: boolean; freedBytes: number; reason?: string }>
     reveal: (filePath: string) => Promise<boolean>
     download: (uri: string) => Promise<string>
     onDownloadProgress: (callback: (payload: DownloadProgress) => void) => Unsubscribe

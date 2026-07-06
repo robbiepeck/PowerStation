@@ -243,7 +243,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('models:getSelected', async () => (await getState()).selectedModelPath)
   ipcMain.handle('models:select', (_event, filePath: string | null) => models.selectModel(filePath))
   ipcMain.handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
-  ipcMain.handle('models:deleteFile', (_event, filePath: string) => models.deleteModelFile(filePath))
+  ipcMain.handle('models:deleteFile', async (_event, filePath: string) => {
+    // If this model is the one currently loaded, unload it first so the file
+    // handle is released and the disk space is actually reclaimed (and the
+    // worker isn't left holding a model that no longer exists).
+    const loaded = llm.getLoadedPath()
+    if (loaded && path.resolve(loaded) === path.resolve(filePath)) await llm.unloadModel().catch(() => undefined)
+    return models.deleteModelFile(filePath)
+  })
   ipcMain.handle('models:reveal', async (_event, filePath: string) => {
     if (!(await models.isKnownModelPath(filePath))) return false
     shell.showItemInFolder(path.resolve(filePath))

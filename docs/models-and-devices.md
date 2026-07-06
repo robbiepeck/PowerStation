@@ -167,6 +167,11 @@ from the **Models** tab. Imported models still get admission control (sized from
 and their tool-calling tier is inferred from the embedded chat template. You are responsible for
 reviewing and complying with each model's licence.
 
+**Removing a model.** Each model in the Models view has a **Delete** button that permanently
+removes it from disk to free up space (multi-part models delete every part; the currently-loaded
+model is unloaded first). For an *imported* file you can instead **Remove** it — that only
+unregisters it from PowerStation and leaves the file where it is.
+
 **Already using Ollama or LM Studio?** PowerStation detects models both apps have on disk and
 registers them **in place** with one click — no re-download, no extra disk. They run in
 PowerStation's own runtime with the same admission checks as any other model (split GGUF series

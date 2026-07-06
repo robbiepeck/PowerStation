@@ -37,7 +37,7 @@ import { artifactSrcDoc, extractArtifacts, type Artifact } from './artifacts'
 import { AgentsView, ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
-import { CopyButton, formatNumber } from './ui'
+import { CopyButton, formatBytes, formatNumber } from './ui'
 import type {
   AgentBadge,
   AgentKnowledge,
@@ -1222,13 +1222,25 @@ function App() {
 
   const handleDelete = useCallback(
     async (model: ModelInfo) => {
-      const confirmed = window.confirm(`Delete ${model.fileName} from disk? This permanently removes the file.`)
+      const confirmed = window.confirm(
+        `Delete "${model.name}" from this computer?\n\nThis permanently removes ${formatBytes(model.sizeBytes)} (${model.fileName}${
+          model.fileName.match(/-00001-of-/i) ? ' and all its parts' : ''
+        }) from disk to free up space. This cannot be undone.`,
+      )
       if (!confirmed) return
+      const wasSelected = model.path === selectedPath
       const result = await bridge.models.deleteFile(model.path)
-      if (!result.deleted && result.reason) window.alert(result.reason)
+      if (!result.deleted) {
+        window.alert(result.reason ?? 'The model file could not be deleted.')
+        return
+      }
+      // If we just deleted the model in use, drop the stale conversation —
+      // refresh() re-picks a remaining model (or none).
+      if (wasSelected) chat.reset()
       await refresh()
+      if (result.freedBytes > 0) window.alert(`Deleted "${model.name}" — freed ${formatBytes(result.freedBytes)}.`)
     },
-    [refresh],
+    [chat, refresh, selectedPath],
   )
 
   if (onboarding === null) return null

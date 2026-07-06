@@ -2,6 +2,16 @@
 
 The "See what's new" card in the app links here.
 
+## v0.17.0 — Delete models to reclaim space
+
+- **Delete an installed model from disk** — each model in the Models view now has a clear
+  **Delete** button that permanently removes the model to free up space (distinct from "Remove",
+  which only unregisters an imported file without touching disk). The confirmation shows the exact
+  size that will be freed, and a summary reports how much was reclaimed. **Multi-part (split) GGUF
+  models now delete every part** — previously only the first shard was removed, leaving gigabytes
+  behind. If the model being deleted is the one currently loaded, it's unloaded first so the space
+  is actually released.
+
 ## v0.16.0 — Agents that travel and act
 
 - **Export & import agents** — an agent is one JSON file, so it travels. **Export…** in the agent
