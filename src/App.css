@@ -3152,6 +3152,186 @@
   font-size: 0.8rem;
 }
 
+/* Compare modal */
+
+.compare-modal {
+  width: min(940px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.compare-controls {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  margin: 0.5rem 0 0.8rem;
+}
+
+.compare-controls textarea {
+  flex: 1;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.compare-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.compare-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+  min-height: 0;
+  flex: 1;
+}
+
+.compare-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.compare-column select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.compare-bench {
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.compare-body {
+  flex: 1;
+  min-height: 180px;
+  max-height: 44vh;
+  overflow-y: auto;
+  padding: 0.5rem;
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 0.84rem;
+}
+
+.compare-waiting {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.compare-refused {
+  margin: 0;
+  color: var(--red);
+  font-size: 0.8rem;
+}
+
+.compare-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.8rem;
+}
+
+.compare-stats {
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Agent trust profiles */
+
+.profile-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+}
+
+.profile-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-option small {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.profile-option.active {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 1px var(--teal) inset;
+}
+
+.cautious-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(180, 83, 9, 0.12);
+  color: #b45309;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: default;
+}
+
+/* Recommendation versus block */
+
+.recommend-versus,
+.ob-rec-versus {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  border-left: 3px solid var(--teal);
+  border-radius: 4px;
+  background: var(--surface-muted);
+  font-size: 0.76rem;
+}
+
+.recommend-versus strong,
+.ob-rec-versus strong {
+  display: block;
+  margin-bottom: 0.15rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.recommend-versus ul,
+.ob-rec-versus ul {
+  margin: 0;
+  padding-left: 1rem;
+}
+
 /* Repair view */
 
 .repair-view {

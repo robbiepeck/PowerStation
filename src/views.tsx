@@ -614,6 +614,16 @@ function RecommendPanel({
                       <li key={reason}>{reason}</li>
                     ))}
                   </ul>
+                  {rec.versusPrimary?.length && results[0] ? (
+                    <div className="recommend-versus">
+                      <strong>vs {results[0].model.name}</strong>
+                      <ul>
+                        {rec.versusPrimary.map((line) => (
+                          <li key={line}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                   {installed ? (
                     <Badge tone="neutral">already installed</Badge>
                   ) : (
@@ -657,6 +667,7 @@ export function ModelsView({
   onDownload,
   onImportLmStudio,
   onImportOllama,
+  onOpenCompare,
   onOpenWebsite,
   onImportFile,
   onRefreshCatalog,
@@ -682,6 +693,7 @@ export function ModelsView({
   onDownload: (uri: string) => void
   onImportLmStudio: (path: string) => void
   onImportOllama: (name: string) => void
+  onOpenCompare: () => void
   onOpenWebsite: (url: string) => void
   onImportFile: () => void
   onRefreshCatalog: () => void
@@ -825,6 +837,17 @@ export function ModelsView({
           <FolderSearch size={15} />
           Add models folder
         </button>
+        {models.length >= 2 ? (
+          <button
+            className="secondary-button"
+            type="button"
+            title="One prompt, two models, measured side by side"
+            onClick={onOpenCompare}
+          >
+            <FlaskConical size={15} />
+            Compare two models
+          </button>
+        ) : null}
       </div>
 
       <form
@@ -1756,6 +1779,33 @@ export function SettingsView({
           <p className="policy-note subtle">
             When a conversation nears the context limit, the model summarizes its older turns for itself and keeps
             going — the transcript you see is never shortened. A notice appears in the chat whenever this happens.
+          </p>
+        </section>
+
+        <section className="settings-section">
+          <h3>Agent trust</h3>
+          <div className="profile-switch" role="radiogroup" aria-label="Agent trust profile">
+            <button
+              className={settings.agentProfile === 'trusted' ? 'profile-option active' : 'profile-option'}
+              type="button"
+              onClick={() => onChange({ agentProfile: 'trusted' })}
+            >
+              Trusted
+              <small>Remembered per-tool choices apply — tools you allowed run without asking again.</small>
+            </button>
+            <button
+              className={settings.agentProfile === 'cautious' ? 'profile-option active' : 'profile-option'}
+              type="button"
+              onClick={() => onChange({ agentProfile: 'cautious' })}
+            >
+              Cautious
+              <small>Every tool call asks, every time — remembered allows are suspended, not deleted.</small>
+            </button>
+          </div>
+          <p className="policy-note subtle">
+            In cautious mode "Allow rest of turn" still works (it's an explicit answer, scoped to one reply) and
+            tools you set to Never allow still block silently. Every call lands in the audit log in both modes;
+            switching back to Trusted restores your remembered choices exactly as they were.
           </p>
         </section>
 

@@ -123,6 +123,7 @@ export type Settings = {
   maxTokens: number
   saveChats: boolean
   autoCompact: boolean
+  agentProfile: 'trusted' | 'cautious'
   utilities: UtilitySettings
 }
 
@@ -402,6 +403,19 @@ export type Recommendation = {
   defaultContextTokens: number
   score: number
   reasons: string[]
+  versusPrimary?: string[]
+}
+
+export type ComparePhase = 'loading' | 'generating' | 'refused' | 'error' | 'skipped'
+export type CompareStatusPayload = { requestId: string; slot: number; phase: ComparePhase; message?: string }
+export type CompareTokenPayload = { requestId: string; slot: number; token: string }
+export type CompareResultPayload = {
+  requestId: string
+  slot: number
+  text: string
+  tokensPerSec: number
+  elapsedMs: number
+  aborted: boolean
 }
 
 export type OnboardingState = {
@@ -604,6 +618,14 @@ export type PowerStationBridge = {
     reveal: (id: string) => Promise<boolean>
     integrity: () => Promise<IntegrityResult[]>
     log: () => Promise<RepairLogEntry[]>
+  }
+  compare: {
+    run: (payload: { requestId: string; prompt: string; modelPaths: string[] }) => Promise<{ ok: boolean }>
+    stop: (requestId: string) => Promise<boolean>
+    onToken: (callback: (payload: CompareTokenPayload) => void) => Unsubscribe
+    onStatus: (callback: (payload: CompareStatusPayload) => void) => Unsubscribe
+    onResult: (callback: (payload: CompareResultPayload) => void) => Unsubscribe
+    onDone: (callback: (payload: { requestId: string }) => void) => Unsubscribe
   }
   files: {
     pickAndExtract: () => Promise<ExtractResult[]>

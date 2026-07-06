@@ -153,6 +153,12 @@ export async function executeToolCall(toolKey: string, args: unknown, requestId:
 
   let decision: ToolDecision
   let permission = await getToolPermission(toolKey)
+  // Cautious profile: remembered allows are suspended — every call asks. The
+  // turn-scoped grant below still applies (it is itself an explicit answer),
+  // and denies still block without a prompt.
+  if (permission === 'allow' && (await getState()).settings.agentProfile === 'cautious') {
+    permission = 'ask'
+  }
   if (permission === 'ask' && turnAllowedRequests.has(requestId)) {
     permission = 'allow'
     decision = 'allowed-turn'

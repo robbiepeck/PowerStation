@@ -30,8 +30,10 @@ model landscape and with what users hit first.
 - ~~**Skills & connector presets**~~ — shipped in v0.3: markdown skills (five starters, in-app
   editing, token metering) and a curated one-click connector gallery. Next iteration:
   relevance-triggered skills.
-- **Recommendation polish** — richer capability tiers and a "why this over that" comparison in the
-  onboarding results.
+- ~~**Recommendation polish**~~ — shipped in v0.13: every alternate recommendation explains itself
+  against the top pick ("why this over that") using fit, measured speed, capacity, and tool tier.
+- ~~**Multi-model compare**~~ — shipped in v0.13: one prompt, two models, measured side by side,
+  run sequentially so timings are fair.
 
 ## Later
 

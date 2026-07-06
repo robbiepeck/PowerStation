@@ -863,5 +863,97 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
   ipcMain.handle('chat:stop', (_event, requestId: string) => llm.stopChat(requestId))
   ipcMain.handle('chat:reset', () => llm.resetChat())
+
+  // --- Model compare -----------------------------------------------------------
+  // One prompt, two models, run SEQUENTIALLY: the worker holds one model at a
+  // time, so each run gets the whole machine — fair timings and no memory
+  // gamble. Each slot goes through the same admission check as a normal chat;
+  // a model that doesn't fit shows its honest refusal in that column.
+  const abortedCompares = new Set<string>()
+  ipcMain.handle(
+    'compare:run',
+    async (_event, payload: { requestId: string; prompt: string; modelPaths: string[] }) => {
+      const requestId = typeof payload?.requestId === 'string' ? payload.requestId : ''
+      const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
+      const modelPaths = Array.isArray(payload?.modelPaths) ? payload.modelPaths.slice(0, 2) : []
+      if (!requestId || !prompt || modelPaths.length !== 2) return { ok: false }
+      for (const modelPath of modelPaths) {
+        if (typeof modelPath !== 'string' || !(await models.isKnownModelPath(modelPath))) return { ok: false }
+      }
+      abortedCompares.delete(requestId)
+      void (async () => {
+        const state = await getState()
+        const effective = await getEffectiveSystemPrompt(prompt)
+        for (let slot = 0; slot < modelPaths.length; slot++) {
+          if (abortedCompares.has(requestId)) {
+            send('compare:status', { requestId, slot, phase: 'skipped' })
+            continue
+          }
+          const modelPath = modelPaths[slot]
+          try {
+            const [info, entry, budget, offloadCeilingBytes] = await Promise.all([
+              models.getModelInfo(modelPath),
+              findCatalogEntryForModel(modelPath),
+              getGpuBudgetBytes(),
+              getOffloadCeilingBytes(),
+            ])
+            const fitRequest = {
+              weightsBytes: Math.max(info?.sizeBytes ?? 0, entry?.sizeBytes ?? 0),
+              geometry: info?.geometry ?? entry?.geometry ?? null,
+              kvBytesPerToken: entry?.kvBytesPerToken ?? null,
+              contextTokens: state.settings.contextTokens,
+              budgetBytes: budget,
+              offloadCeilingBytes,
+            }
+            const fit = checkFit(fitRequest)
+            if (!fit.fits && fit.maxComfortableContext === null) {
+              send('compare:status', { requestId, slot, phase: 'refused', message: `${fit.summary} ${fit.suggestions.join(' ')}` })
+              continue
+            }
+            send('compare:status', { requestId, slot, phase: 'loading' })
+            const result = await llm.chat({
+              requestId: `${requestId}-slot${slot}`,
+              modelPath,
+              prompt,
+              systemPrompt: effective.prompt,
+              contextTokens: admittedContextTokens(fitRequest),
+              temperature: state.settings.temperature,
+              maxTokens: state.settings.maxTokens,
+              autoCompact: false,
+              onToken: (token) => send('compare:token', { requestId, slot, token }),
+              onStatus: (status) => {
+                if (status.phase === 'generating') send('compare:status', { requestId, slot, phase: 'generating' })
+              },
+            })
+            send('compare:result', {
+              requestId,
+              slot,
+              text: result.text,
+              tokensPerSec: result.tokensPerSec,
+              elapsedMs: result.elapsedMs,
+              aborted: result.aborted,
+            })
+          } catch (error) {
+            send('compare:status', {
+              requestId,
+              slot,
+              phase: 'error',
+              message: error instanceof Error ? error.message : String(error),
+            })
+          }
+        }
+        abortedCompares.delete(requestId)
+        send('compare:done', { requestId })
+      })()
+      return { ok: true }
+    },
+  )
+  ipcMain.handle('compare:stop', (_event, requestId: string) => {
+    if (typeof requestId !== 'string') return false
+    abortedCompares.add(requestId)
+    // Abort whichever slot is currently generating; pending slots are skipped.
+    for (const slot of [0, 1]) void llm.stopChat(`${requestId}-slot${slot}`)
+    return true
+  })
   ipcMain.handle('chat:unload', () => llm.unloadModel())
 }

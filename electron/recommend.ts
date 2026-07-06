@@ -19,6 +19,8 @@ export type Recommendation = {
   defaultContextTokens: number
   score: number
   reasons: string[]
+  /** For non-primary picks: how this model compares to the top pick, honestly both ways. */
+  versusPrimary?: string[]
 }
 
 const GIB = 1024 ** 3
@@ -128,7 +130,72 @@ export function recommendModels(options: {
   }
 
   ranked.sort((a, b) => b.score - a.score)
-  return ranked.slice(0, options.limit ?? 3)
+  const top = ranked.slice(0, options.limit ?? 3)
+  for (let i = 1; i < top.length; i++) {
+    top[i].versusPrimary = explainVersusPrimary(top[0], top[i], measuredTpsByFile)
+  }
+  return top
+}
+
+/**
+ * "Why this over that": compare an alternate against the primary pick on the
+ * axes that actually differ — fit, speed, capacity, tool training. Honest in
+ * both directions: an alternate is allowed to win an axis (that's exactly the
+ * information a chooser needs). Pure and unit-tested.
+ */
+export function explainVersusPrimary(
+  primary: Recommendation,
+  alternate: Recommendation,
+  measuredTpsByFile?: Record<string, number>,
+): string[] {
+  const lines: string[] = []
+  const p = primary.model
+  const a = alternate.model
+
+  const fitRank = (r: Recommendation) => (r.fit.verdict === 'comfortable' && !r.fit.offload ? 2 : r.fit.offload ? 0 : 1)
+  const fitLabel = (r: Recommendation) => (r.fit.offload ? 'needs CPU offload (much slower)' : r.fit.verdict === 'comfortable' ? 'fits comfortably' : 'fits, but tightly')
+  if (fitRank(alternate) !== fitRank(primary)) {
+    lines.push(
+      fitRank(alternate) < fitRank(primary)
+        ? `Heavier on this machine: ${fitLabel(alternate)}, where ${p.name} ${fitLabel(primary)}.`
+        : `Easier on this machine: ${fitLabel(alternate)}, where ${p.name} ${fitLabel(primary)}.`,
+    )
+  }
+
+  const measuredA = measuredTpsByFile?.[a.fileName.toLowerCase()]
+  const measuredP = measuredTpsByFile?.[p.fileName.toLowerCase()]
+  if (measuredA && measuredP && Math.abs(measuredA - measuredP) >= 2) {
+    lines.push(
+      measuredA > measuredP
+        ? `Measured faster on your machine: ${measuredA} vs ${measuredP} tok/s.`
+        : `Measured slower on your machine: ${measuredA} vs ${measuredP} tok/s.`,
+    )
+  } else {
+    const speedA = a.activeParamsB ?? a.totalParamsB
+    const speedP = p.activeParamsB ?? p.totalParamsB
+    if (speedA <= speedP * 0.6) {
+      lines.push(`Lighter per token (≈${speedA}B active vs ≈${speedP}B) — likely faster replies.`)
+    } else if (speedA >= speedP * 1.6) {
+      lines.push(`Heavier per token (≈${speedA}B active vs ≈${speedP}B) — likely slower replies.`)
+    }
+  }
+
+  if (a.totalParamsB >= p.totalParamsB * 1.5) {
+    lines.push(`More knowledge capacity (${a.totalParamsB}B vs ${p.totalParamsB}B total) — often better on hard questions.`)
+  } else if (a.totalParamsB <= p.totalParamsB * 0.6) {
+    lines.push(`Less knowledge capacity (${a.totalParamsB}B vs ${p.totalParamsB}B total) — may miss on hard questions.`)
+  }
+
+  const tierRank = { none: 0, single: 1, multi: 2 } as const
+  if (tierRank[a.toolCalling] !== tierRank[p.toolCalling]) {
+    lines.push(
+      tierRank[a.toolCalling] < tierRank[p.toolCalling]
+        ? `Weaker tool calling (${a.toolCalling} vs ${p.toolCalling}) — matters for connectors and agents.`
+        : `Stronger tool calling (${a.toolCalling} vs ${p.toolCalling}) — matters for connectors and agents.`,
+    )
+  }
+
+  return lines.slice(0, 3)
 }
 
 function describeUseCaseFit(useCase: UseCase, model: CatalogModel): string {

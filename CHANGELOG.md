@@ -2,6 +2,23 @@
 
 The "See what's new" card in the app links here.
 
+## v0.13.0 — Confident choices
+
+- **Compare two models** — Models → *Compare two models*: one prompt, both models, measured side by
+  side (write speed, first-token latency, total time), with "Use this model" on the winner. Runs are
+  deliberately sequential — the worker holds one model at a time, so each candidate gets the whole
+  machine: fair timings, no memory gamble. Each side passes the same admission check as a normal
+  chat; a model that doesn't fit shows its honest refusal in its column.
+- **Agent trust profiles** — Settings → Agent trust: **Trusted** (remembered per-tool choices apply,
+  today's behaviour) or **Cautious** (every tool call asks, every time; remembered allows are
+  suspended, not deleted). "Allow rest of turn" still works in cautious mode, Never-allow still
+  blocks silently, and everything is audit-logged in both. A chip in the chat header shows when
+  cautious mode is on.
+- **"Why this over that"** — recommendations (onboarding and the Models panel) now explain each
+  alternate against the top pick on the axes that differ: fit on your machine, measured or likely
+  speed, knowledge capacity, and tool-calling strength — honest in both directions when the
+  alternate wins an axis.
+
 ## v0.12.0 — Repair
 
 - **Repair tab** — storage and health for AI workloads, built on one hard rule: *PowerStation never

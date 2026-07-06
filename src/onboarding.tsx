@@ -385,6 +385,17 @@ export function OnboardingFlow({
                       ))}
                     </ul>
 
+                    {rec.versusPrimary?.length && recommendations[0] ? (
+                      <div className="ob-rec-versus">
+                        <strong>vs {recommendations[0].model.name}</strong>
+                        <ul>
+                          {rec.versusPrimary.map((line) => (
+                            <li key={line}>{line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+
                     <div className="ob-rec-capability">
                       <div>
                         <strong>Great at</strong>

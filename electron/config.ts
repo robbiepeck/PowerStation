@@ -13,6 +13,11 @@ export type Settings = {
   saveChats: boolean
   /** Compress older turns automatically when a chat nears the context limit. */
   autoCompact: boolean
+  /**
+   * Agent trust profile. 'trusted' honours remembered per-tool allows;
+   * 'cautious' asks on every call regardless (denies still block silently).
+   */
+  agentProfile: 'trusted' | 'cautious'
   utilities: UtilitySettings
 }
 
@@ -78,6 +83,7 @@ const defaultSettings: Settings = {
   maxTokens: 1024,
   saveChats: true,
   autoCompact: true,
+  agentProfile: 'trusted',
   utilities: defaultUtilities,
 }
 
@@ -179,6 +185,7 @@ function sanitizeSettings(patch: Partial<Settings> | null | undefined, base: Set
     maxTokens: clampNumber(s.maxTokens, 0, 4096, defaultSettings.maxTokens),
     saveChats: boolOr(s.saveChats, defaultSettings.saveChats),
     autoCompact: boolOr(s.autoCompact, defaultSettings.autoCompact),
+    agentProfile: s.agentProfile === 'cautious' ? 'cautious' : 'trusted',
     utilities: sanitizeUtilities(utilities),
   }
 }

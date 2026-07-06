@@ -708,6 +708,7 @@ function App() {
   const [renamingChat, setRenamingChat] = useState<{ id: string; value: string } | null>(null)
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [projectModal, setProjectModal] = useState<{ project: Project | null } | null>(null)
+  const [showCompare, setShowCompare] = useState(false)
   const [download, setDownload] = useState<DownloadState>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchBusyPath, setBenchBusyPath] = useState<string | null>(null)
@@ -1362,6 +1363,7 @@ function App() {
             attachments={pendingAttachments}
             chatId={chat.chatId}
             composerSeed={composerSeed}
+            cautiousMode={settings?.agentProfile === 'cautious'}
             contextUsage={chat.contextUsage}
             energyWh={chat.energyWh}
             messages={chat.messages}
@@ -1415,6 +1417,7 @@ function App() {
               fitReports={fitReports}
               models={models}
               lmstudio={lmstudio.status}
+              onOpenCompare={() => setShowCompare(true)}
               ollama={ollama.status}
               onAddFolder={handleAddFolder}
               onBenchmark={(model) => void handleBenchmark(model)}
@@ -1460,6 +1463,18 @@ function App() {
         )}
       </main>
 
+      {showCompare ? (
+        <CompareModal
+          benchResults={benchmarks.results}
+          models={models}
+          selectedPath={selectedPath}
+          onClose={() => setShowCompare(false)}
+          onSelectModel={(path) => {
+            void handleSelectModel(path)
+            setShowCompare(false)
+          }}
+        />
+      ) : null}
       {projectModal ? (
         <ProjectModal
           models={models}
@@ -1476,7 +1491,11 @@ function App() {
         />
       ) : null}
       {permissionPrompt.request ? (
-        <PermissionModal request={permissionPrompt.request} onRespond={permissionPrompt.respond} />
+        <PermissionModal
+          cautious={settings?.agentProfile === 'cautious'}
+          request={permissionPrompt.request}
+          onRespond={permissionPrompt.respond}
+        />
       ) : null}
       {showAudit ? (
         <AuditModal
@@ -1584,6 +1603,7 @@ function StatusPill({
 function ChatView({
   artifact,
   attachments,
+  cautiousMode,
   chatId,
   composerSeed,
   contextUsage,
@@ -1620,6 +1640,7 @@ function ChatView({
 }: {
   artifact: Artifact | null
   attachments: StoredAttachment[]
+  cautiousMode: boolean
   chatId: string | null
   composerSeed: { text: string; key: number } | null
   contextUsage: { used: number; total: number } | null
@@ -1694,6 +1715,15 @@ function ChatView({
               }`}
             >
               ~{energyWh >= 10 ? energyWh.toFixed(0) : energyWh.toFixed(2)} Wh
+            </span>
+          ) : null}
+          {cautiousMode ? (
+            <span
+              className="cautious-chip"
+              title="Cautious mode: every tool call asks, nothing is remembered. Change under Settings → Agent trust."
+            >
+              <ShieldQuestion size={12} />
+              cautious
             </span>
           ) : null}
           {hasToolActivity ? (
@@ -2175,6 +2205,218 @@ function AuditModal({
 
 // --- Permission modal ----------------------------------------------------------
 
+// --- Compare modal -----------------------------------------------------------
+//
+// One prompt, two models. Runs are SEQUENTIAL by design: the worker holds one
+// model at a time, so each candidate gets the whole machine — fair timings and
+// no memory gamble. The UI says so rather than pretending to race them.
+
+type CompareSlotState = {
+  status: 'idle' | 'loading' | 'generating' | 'done' | 'refused' | 'error' | 'skipped'
+  text: string
+  message?: string
+  tokensPerSec?: number
+  elapsedMs?: number
+  firstTokenMs?: number
+}
+
+const IDLE_SLOT: CompareSlotState = { status: 'idle', text: '' }
+
+function CompareModal({
+  benchResults,
+  models,
+  onClose,
+  onSelectModel,
+  selectedPath,
+}: {
+  benchResults: Record<string, BenchmarkRecord>
+  models: ModelInfo[]
+  onClose: () => void
+  onSelectModel: (path: string) => void
+  selectedPath: string | null
+}) {
+  const firstPath = selectedPath ?? models[0]?.path ?? ''
+  const [paths, setPaths] = useState<[string, string]>([
+    firstPath,
+    models.find((m) => m.path !== firstPath)?.path ?? '',
+  ])
+  const [prompt, setPrompt] = useState('Explain, in two sentences, why the sky looks blue.')
+  const [running, setRunning] = useState(false)
+  const [slots, setSlots] = useState<CompareSlotState[]>([IDLE_SLOT, IDLE_SLOT])
+  const requestIdRef = useRef<string | null>(null)
+  const genStartRef = useRef<[number, number]>([0, 0])
+
+  const patchSlot = useCallback((slot: number, patch: (prev: CompareSlotState) => CompareSlotState) => {
+    setSlots((prev) => prev.map((s, i) => (i === slot ? patch(s) : s)))
+  }, [])
+
+  useEffect(() => {
+    const offToken = bridge.compare.onToken(({ requestId, slot, token }) => {
+      if (requestIdRef.current !== requestId) return
+      const started = genStartRef.current[slot]
+      patchSlot(slot, (s) => ({
+        ...s,
+        status: 'generating',
+        text: s.text + token,
+        firstTokenMs: s.firstTokenMs ?? (started ? Math.round(performance.now() - started) : undefined),
+      }))
+    })
+    const offStatus = bridge.compare.onStatus(({ requestId, slot, phase, message }) => {
+      if (requestIdRef.current !== requestId) return
+      if (phase === 'generating') genStartRef.current[slot] = performance.now()
+      patchSlot(slot, (s) => ({ ...s, status: phase, ...(message ? { message } : {}) }))
+    })
+    const offResult = bridge.compare.onResult(({ requestId, slot, text, tokensPerSec, elapsedMs, aborted }) => {
+      if (requestIdRef.current !== requestId) return
+      patchSlot(slot, (s) => ({
+        ...s,
+        status: 'done',
+        text: text || s.text,
+        tokensPerSec,
+        elapsedMs,
+        message: aborted ? 'Stopped early.' : undefined,
+      }))
+    })
+    const offDone = bridge.compare.onDone(({ requestId }) => {
+      if (requestIdRef.current !== requestId) return
+      setRunning(false)
+    })
+    return () => {
+      offToken()
+      offStatus()
+      offResult()
+      offDone()
+    }
+  }, [patchSlot])
+
+  const run = () => {
+    if (!prompt.trim() || !paths[0] || !paths[1] || paths[0] === paths[1]) return
+    const requestId = `cmp-${Date.now()}-${Math.round(Math.random() * 1e6)}`
+    requestIdRef.current = requestId
+    genStartRef.current = [0, 0]
+    setSlots([
+      { ...IDLE_SLOT, status: 'loading' },
+      { ...IDLE_SLOT },
+    ])
+    setRunning(true)
+    void bridge.compare.run({ requestId, prompt: prompt.trim(), modelPaths: [...paths] })
+  }
+
+  const stop = () => {
+    if (requestIdRef.current) void bridge.compare.stop(requestIdRef.current)
+  }
+
+  const benchLine = (path: string) => {
+    const model = models.find((m) => m.path === path)
+    const bench = model ? benchResults[model.fileName.toLowerCase()] : undefined
+    if (!bench) return null
+    return `measured: writes ${formatNumber(bench.tokensPerSec, 1)} tok/s${bench.promptTokensPerSec ? ` · reads ${formatNumber(bench.promptTokensPerSec, 0)} tok/s` : ''}`
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Compare two models">
+      <div className="permission-modal compare-modal">
+        <div className="permission-head">
+          <BrainCircuit size={20} />
+          <div>
+            <h3>Compare two models</h3>
+            <p>
+              One prompt, both models, measured. They run one at a time so each gets the whole machine — fair
+              timings, no memory risk.
+            </p>
+          </div>
+        </div>
+
+        <div className="compare-controls">
+          <textarea
+            aria-label="Comparison prompt"
+            value={prompt}
+            rows={2}
+            disabled={running}
+            onChange={(event) => setPrompt(event.target.value)}
+          />
+          <div className="compare-actions">
+            {running ? (
+              <button className="secondary-button" type="button" onClick={stop}>
+                <Square size={14} />
+                Stop
+              </button>
+            ) : (
+              <button
+                className="primary-button"
+                type="button"
+                disabled={!prompt.trim() || paths[0] === paths[1]}
+                onClick={run}
+              >
+                Run both
+              </button>
+            )}
+            <button className="secondary-button" type="button" onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="compare-columns">
+          {[0, 1].map((slot) => {
+            const state = slots[slot]
+            const model = models.find((m) => m.path === paths[slot])
+            return (
+              <div className="compare-column" key={slot}>
+                <select
+                  aria-label={`Model ${slot === 0 ? 'A' : 'B'}`}
+                  value={paths[slot]}
+                  disabled={running}
+                  onChange={(event) =>
+                    setPaths((prev) => (slot === 0 ? [event.target.value, prev[1]] : [prev[0], event.target.value]))
+                  }
+                >
+                  {models.map((m) => (
+                    <option key={m.path} value={m.path}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+                {benchLine(paths[slot]) ? <small className="compare-bench">{benchLine(paths[slot])}</small> : null}
+
+                <div className="compare-body">
+                  {state.status === 'idle' && running ? (
+                    <p className="compare-waiting">
+                      Waiting its turn — models run one at a time so each gets the whole machine.
+                    </p>
+                  ) : null}
+                  {state.status === 'idle' && !running ? <p className="compare-waiting">Ready.</p> : null}
+                  {state.status === 'loading' ? <p className="compare-waiting">Loading {model?.name}…</p> : null}
+                  {state.status === 'refused' || state.status === 'error' ? (
+                    <p className="compare-refused">{state.message ?? 'This model could not run.'}</p>
+                  ) : null}
+                  {state.status === 'skipped' ? <p className="compare-waiting">Skipped (stopped).</p> : null}
+                  {state.text ? <Markdown source={state.text} /> : null}
+                </div>
+
+                <div className="compare-foot">
+                  {state.status === 'done' ? (
+                    <>
+                      <span className="compare-stats">
+                        {state.tokensPerSec ? `${formatNumber(state.tokensPerSec, 1)} tok/s` : ''}
+                        {state.firstTokenMs ? ` · first token ${(state.firstTokenMs / 1000).toFixed(1)}s` : ''}
+                        {state.elapsedMs ? ` · total ${(state.elapsedMs / 1000).toFixed(1)}s` : ''}
+                      </span>
+                      <button className="secondary-button compact" type="button" onClick={() => onSelectModel(paths[slot])}>
+                        Use this model
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // --- Project modal -----------------------------------------------------------
 
 function ProjectModal({
@@ -2391,9 +2633,11 @@ function ProjectModal({
 }
 
 function PermissionModal({
+  cautious,
   request,
   onRespond,
 }: {
+  cautious: boolean
   request: PermissionRequest
   onRespond: (promptId: string, decision: PermissionDecision) => void
 }) {
@@ -2459,16 +2703,20 @@ function PermissionModal({
           <pre className="permission-args">{argsPreview}</pre>
         )}
         <p className="permission-note">
-          Tools run on your machine with your permissions. Only allow calls you understand.
+          {cautious
+            ? 'Cautious mode: every call asks, nothing is remembered. Only allow calls you understand.'
+            : 'Tools run on your machine with your permissions. Only allow calls you understand.'}
         </p>
         <div className="permission-actions">
           <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, 'deny')}>
             Deny
           </button>
           <div className="permission-allow">
-            <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, 'allow-always')}>
-              Always allow
-            </button>
+            {!cautious ? (
+              <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, 'allow-always')}>
+                Always allow
+              </button>
+            ) : null}
             <button
               className="secondary-button"
               type="button"

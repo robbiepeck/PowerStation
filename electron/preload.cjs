@@ -70,6 +70,14 @@ contextBridge.exposeInMainWorld('powerStation', {
     export: (payload) => ipcRenderer.invoke('backup:export', payload),
     restore: (payload) => ipcRenderer.invoke('backup:restore', payload),
   },
+  compare: {
+    run: (payload) => ipcRenderer.invoke('compare:run', payload),
+    stop: (requestId) => ipcRenderer.invoke('compare:stop', requestId),
+    onToken: (callback) => subscribe('compare:token', callback),
+    onStatus: (callback) => subscribe('compare:status', callback),
+    onResult: (callback) => subscribe('compare:result', callback),
+    onDone: (callback) => subscribe('compare:done', callback),
+  },
   repair: {
     report: () => ipcRenderer.invoke('repair:report'),
     reclaimables: () => ipcRenderer.invoke('repair:reclaimables'),

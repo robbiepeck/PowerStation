@@ -95,6 +95,19 @@ One readable JSON archive (settings, tool permissions, benchmarks, skills, chats
 Settings; restore replaces settings/permissions, overwrites same-id content, and passes everything
 through the same sanitizers as a normal config read. Model weights stay out by design.
 
+### 18. Multi-model compare — *shipped v0.13*
+One prompt, two models, measured side by side with "use this model" on the winner. Sequential by
+design (one model in memory at a time → fair timings, no memory gamble); each side goes through
+normal admission and can honestly refuse.
+
+### 19. Agent trust profiles — *shipped v0.13*
+Trusted (remembered allows apply) vs Cautious (every call asks; remembered allows suspended, not
+deleted; allow-rest-of-turn still works; denies still block). Chat-header chip when cautious.
+
+### 20. Recommendation "why this over that" — *shipped v0.13*
+Alternates explain themselves against the top pick on fit, measured/likely speed, capacity, and
+tool tier — honest in both directions. Pure `explainVersusPrimary`, unit-tested.
+
 ### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
 Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face
 (schema + data + weekly CI verification shipped, plus an honest "vision-capable model" badge) —
