@@ -163,6 +163,9 @@ export type StoredChatMessage = {
 export type StoredChat = {
   id: string
   title: string
+  titleLocked: boolean
+  pinned: boolean
+  projectId: string | null
   createdAt: number
   updatedAt: number
   modelPath: string | null
@@ -174,9 +177,37 @@ export type ChatSummary = {
   id: string
   title: string
   pinned: boolean
+  projectId: string | null
   updatedAt: number
   messageCount: number
   snippet?: string
+}
+
+export type ChatScope = { projectId: string | null }
+
+export type ProjectKnowledge = {
+  folderId: string
+  folder: string
+  name: string
+}
+
+export type Project = {
+  id: string
+  name: string
+  instructions: string
+  modelPath: string | null
+  knowledge: ProjectKnowledge | null
+  skillModes: Record<string, SkillMode>
+  mcpServerIds: string[]
+  createdAt: number
+  updatedAt: number
+}
+
+export type BackupSummary = {
+  chats: number
+  skills: number
+  projects: number
+  settingsApplied: boolean
 }
 
 export type ExtractedFile = {
@@ -488,22 +519,36 @@ export type PowerStationBridge = {
     results: () => Promise<Record<string, BenchmarkRecord>>
   }
   chats: {
-    list: () => Promise<ChatSummary[]>
+    list: (scope?: ChatScope) => Promise<ChatSummary[]>
     get: (id: string) => Promise<StoredChat | null>
     save: (payload: {
       id?: string
       messages: StoredChatMessage[]
       modelPath?: string
       ragFolder?: { id: string; name: string } | null
+      projectId?: string | null
     }) => Promise<{ id: string } | null>
     rename: (id: string, title: string) => Promise<boolean>
     pin: (id: string, pinned: boolean) => Promise<boolean>
     delete: (id: string) => Promise<boolean>
     deleteAll: () => Promise<number>
     reveal: () => Promise<boolean>
-    search: (query: string) => Promise<ChatSummary[]>
+    search: (query: string, scope?: ChatScope) => Promise<ChatSummary[]>
     export: (id: string) => Promise<string | null>
     exportAudit: (id: string) => Promise<string | null>
+  }
+  projects: {
+    list: () => Promise<Project[]>
+    get: (id: string) => Promise<Project | null>
+    getActive: () => Promise<Project | null>
+    save: (payload: Partial<Project> & { name: string }) => Promise<Project | null>
+    delete: (id: string) => Promise<boolean>
+    setActive: (id: string | null) => Promise<Project | null>
+    reveal: () => Promise<boolean>
+  }
+  backup: {
+    export: (payload?: { filePath?: string }) => Promise<(BackupSummary & { filePath: string }) | null>
+    restore: (payload?: { filePath?: string }) => Promise<BackupSummary | null>
   }
   files: {
     pickAndExtract: () => Promise<ExtractResult[]>

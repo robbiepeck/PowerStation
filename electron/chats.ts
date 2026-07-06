@@ -40,6 +40,8 @@ export type StoredChat = {
   /** True once the user renamed the chat — saves stop re-deriving the title. */
   titleLocked: boolean
   pinned: boolean
+  /** Workspace this chat belongs to; null = Personal. */
+  projectId: string | null
   createdAt: number
   updatedAt: number
   modelPath: string | null
@@ -51,10 +53,14 @@ export type ChatSummary = {
   id: string
   title: string
   pinned: boolean
+  projectId: string | null
   updatedAt: number
   messageCount: number
   snippet?: string
 }
+
+/** Sidebar scope: a project id for that workspace, or null for Personal (unassigned). */
+export type ChatScope = { projectId: string | null } | undefined
 
 const MAX_CHATS = 200
 const MAX_MESSAGES = 400
@@ -168,6 +174,8 @@ function sanitizeChat(raw: unknown, id: string): StoredChat | null {
     title: typeof record.title === 'string' && record.title.trim() ? record.title.slice(0, 80) : deriveTitle(messages),
     titleLocked: record.titleLocked === true,
     pinned: record.pinned === true,
+    projectId:
+      typeof record.projectId === 'string' && /^proj-[a-z0-9-]{4,60}$/.test(record.projectId) ? record.projectId : null,
     createdAt: typeof record.createdAt === 'number' ? record.createdAt : Date.now(),
     updatedAt: typeof record.updatedAt === 'number' ? record.updatedAt : Date.now(),
     modelPath: typeof record.modelPath === 'string' ? record.modelPath : null,
@@ -192,7 +200,7 @@ async function readChat(id: string): Promise<StoredChat | null> {
   }
 }
 
-export async function listChats(): Promise<ChatSummary[]> {
+export async function listChats(scope?: ChatScope): Promise<ChatSummary[]> {
   let files: string[]
   try {
     files = await fs.readdir(chatsDir())
@@ -205,9 +213,17 @@ export async function listChats(): Promise<ChatSummary[]> {
     .filter(isValidId)
   const chats = (await Promise.all(ids.map(readChat))).filter((c): c is StoredChat => c !== null)
   return chats
+    .filter((c) => (scope === undefined ? true : c.projectId === scope.projectId))
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)
     .slice(0, MAX_CHATS)
-    .map((c) => ({ id: c.id, title: c.title, pinned: c.pinned, updatedAt: c.updatedAt, messageCount: c.messages.length }))
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      pinned: c.pinned,
+      projectId: c.projectId,
+      updatedAt: c.updatedAt,
+      messageCount: c.messages.length,
+    }))
 }
 
 export async function getChat(id: unknown): Promise<StoredChat | null> {
@@ -220,6 +236,7 @@ export async function saveChat(payload: {
   messages: unknown
   modelPath?: unknown
   ragFolder?: unknown
+  projectId?: unknown
 }): Promise<{ id: string } | null> {
   const messages = sanitizeMessages(payload.messages)
   if (!messages.length) return null
@@ -230,6 +247,10 @@ export async function saveChat(payload: {
     title: existing?.titleLocked ? existing.title : deriveTitle(messages),
     titleLocked: existing?.titleLocked ?? false,
     pinned: existing?.pinned ?? false,
+    // A chat's workspace is set at creation and never migrates on later saves.
+    projectId:
+      existing?.projectId ??
+      (typeof payload.projectId === 'string' && /^proj-[a-z0-9-]{4,60}$/.test(payload.projectId) ? payload.projectId : null),
     createdAt: existing?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
     modelPath: typeof payload.modelPath === 'string' ? payload.modelPath : existing?.modelPath ?? null,
@@ -272,6 +293,16 @@ export async function setChatPinned(id: unknown, pinned: unknown): Promise<boole
   return true
 }
 
+/** Used by backup restore — sanitizes a full raw chat and writes it under its own id. */
+export async function importChat(raw: unknown): Promise<boolean> {
+  const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+  if (!isValidId(record.id)) return false
+  const chat = sanitizeChat(record, record.id)
+  if (!chat) return false
+  await writeChat(chat)
+  return true
+}
+
 export async function deleteChat(id: unknown): Promise<boolean> {
   if (!isValidId(id)) return false
   try {
@@ -291,10 +322,10 @@ export async function deleteAllChats(): Promise<number> {
   return removed
 }
 
-export async function searchChats(query: unknown): Promise<ChatSummary[]> {
-  if (typeof query !== 'string' || !query.trim()) return listChats()
+export async function searchChats(query: unknown, scope?: ChatScope): Promise<ChatSummary[]> {
+  if (typeof query !== 'string' || !query.trim()) return listChats(scope)
   const needle = query.trim().toLowerCase()
-  const summaries = await listChats()
+  const summaries = await listChats(scope)
   const results: ChatSummary[] = []
   for (const summary of summaries) {
     const chat = await readChat(summary.id)

@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   BrainCircuit,
+  FolderKanban,
   FolderSearch,
   ChevronDown,
   Download,
@@ -50,6 +51,10 @@ import type {
   LmStudioStatus,
   PermissionDecision,
   PermissionRequest,
+  Project,
+  ProjectKnowledge,
+  SkillInfo,
+  SkillMode,
   RuntimeEventPayload,
   Settings,
   IndexProgress,
@@ -326,22 +331,45 @@ function useUpdates() {
   return { installLatest, updateState }
 }
 
-function useChatHistory() {
+/** Sidebar chats, scoped to the active workspace (null = Personal). */
+function useChatHistory(projectId: string | null) {
   const [summaries, setSummaries] = useState<ChatSummary[]>([])
   const refresh = useCallback(async () => {
-    const list = await bridge.chats.list().catch(() => [])
+    const list = await bridge.chats.list({ projectId }).catch(() => [])
     setSummaries(list)
-  }, [])
-  const search = useCallback(async (query: string) => {
-    const list = await bridge.chats.search(query).catch(() => [])
-    setSummaries(list)
+  }, [projectId])
+  const search = useCallback(
+    async (query: string) => {
+      const list = await bridge.chats.search(query, { projectId }).catch(() => [])
+      setSummaries(list)
+    },
+    [projectId],
+  )
+  useEffect(() => {
+    // Load on mount and whenever the workspace changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+  }, [refresh])
+  return { summaries, refresh, search }
+}
+
+function useProjects() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [active, setActive] = useState<Project | null>(null)
+  const refresh = useCallback(async () => {
+    const [list, current] = await Promise.all([
+      bridge.projects.list().catch(() => []),
+      bridge.projects.getActive().catch(() => null),
+    ])
+    setProjects(list)
+    setActive(current)
   }, [])
   useEffect(() => {
     // One-shot load on mount; state is set after awaited IPC, not synchronously.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh()
   }, [refresh])
-  return { summaries, refresh, search }
+  return { projects, active, setActive, refresh }
 }
 
 function useBenchmarks() {
@@ -668,12 +696,16 @@ function App() {
   }, [snapshot])
   const getWatts = useCallback(() => wattsRef.current, [])
   const chat = useChat(getWatts)
-  const chatHistory = useChatHistory()
+  const projectsHook = useProjects()
+  const activeProject = projectsHook.active
+  const chatHistory = useChatHistory(activeProject?.id ?? null)
   const benchmarks = useBenchmarks()
   const refreshBenchmarks = benchmarks.refresh
   const ollama = useOllama()
   const lmstudio = useLmStudio()
   const [renamingChat, setRenamingChat] = useState<{ id: string; value: string } | null>(null)
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [projectModal, setProjectModal] = useState<{ project: Project | null } | null>(null)
   const [download, setDownload] = useState<DownloadState>(null)
   const [benchmarking, setBenchmarking] = useState(false)
   const [benchBusyPath, setBenchBusyPath] = useState<string | null>(null)
@@ -766,6 +798,7 @@ function App() {
           messages: serialized,
           modelPath: selectedPath ?? undefined,
           ragFolder: ragFolder ? { id: ragFolder.id, name: ragFolder.name } : null,
+          projectId: activeProject?.id ?? null,
         })
         .then((result) => {
           if (result?.id && result.id !== chatIdRef.current) chat.setChatId(result.id)
@@ -775,16 +808,101 @@ function App() {
     }, 600)
     return () => window.clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chat.messages, chat.streaming, settings?.saveChats, selectedPath, ragFolder])
+  }, [chat.messages, chat.streaming, settings?.saveChats, selectedPath, ragFolder, activeProject?.id])
 
   const handleNewChat = useCallback(() => {
     chat.reset()
     setPendingAttachments([])
-    setRagFolder(null)
+    // In a workspace, a fresh chat starts with the project's knowledge folder.
+    setRagFolder(
+      activeProject?.knowledge
+        ? { id: activeProject.knowledge.folderId, name: activeProject.knowledge.name }
+        : null,
+    )
     setComposerSeed(null)
     setArtifact(null)
     seenArtifactRef.current = null
-  }, [chat])
+  }, [activeProject, chat])
+
+  // Switch workspace: persist, re-point connectors (main side), then apply the
+  // project's model and knowledge folder here and start a clean chat.
+  const handleSelectProject = useCallback(
+    async (id: string | null) => {
+      setProjectMenuOpen(false)
+      if ((activeProject?.id ?? null) === id) return
+      const project = await bridge.projects.setActive(id).catch(() => null)
+      projectsHook.setActive(project)
+      chat.reset()
+      setPendingAttachments([])
+      setComposerSeed(null)
+      setArtifact(null)
+      seenArtifactRef.current = null
+      setChatQuery('')
+      if (project?.knowledge) {
+        const knowledge = project.knowledge
+        setRagFolder({ id: knowledge.folderId, name: knowledge.name })
+        // Restored on a new machine the index may not exist yet — rebuild quietly.
+        void bridge.rag
+          .info(knowledge.folderId)
+          .then((info) => (info ? null : bridge.rag.index(knowledge.folder)))
+          .catch(() => undefined)
+      } else {
+        setRagFolder(null)
+      }
+      if (project?.modelPath && project.modelPath !== selectedPath) {
+        await select(project.modelPath).catch(() => undefined)
+      }
+    },
+    [activeProject, chat, projectsHook, select, selectedPath],
+  )
+
+  const handleProjectSaved = useCallback(
+    (saved: Project) => {
+      void projectsHook.refresh()
+      if (saved.id === activeProject?.id) {
+        // Instructions/skills apply on the next message via the main process;
+        // the knowledge chip is renderer state, so mirror it now.
+        setRagFolder(saved.knowledge ? { id: saved.knowledge.folderId, name: saved.knowledge.name } : null)
+        if (saved.modelPath && saved.modelPath !== selectedPath) void select(saved.modelPath).catch(() => undefined)
+      }
+    },
+    [activeProject, projectsHook, select, selectedPath],
+  )
+
+  const handleProjectDeleted = useCallback(
+    (id: string) => {
+      void projectsHook.refresh()
+      if (id === activeProject?.id) void handleSelectProject(null)
+    },
+    [activeProject, handleSelectProject, projectsHook],
+  )
+
+  const handleExportBackup = useCallback(async () => {
+    try {
+      const result = await bridge.backup.export()
+      if (result) {
+        window.alert(
+          `Backed up ${result.chats} chats, ${result.skills} skills, and ${result.projects} projects to:\n${result.filePath}`,
+        )
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    }
+  }, [])
+
+  const handleRestoreBackup = useCallback(async () => {
+    try {
+      const summary = await bridge.backup.restore()
+      if (summary) {
+        window.alert(
+          `Restored ${summary.chats} chats, ${summary.skills} skills, and ${summary.projects} projects. PowerStation will reload to apply everything.`,
+        )
+        window.location.reload()
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    }
+  }, [])
 
   const handleLoadChat = useCallback(
     async (id: string) => {
@@ -1051,6 +1169,79 @@ function App() {
           <PowerIcon size={21} strokeWidth={2.4} />
           <span>PowerStation</span>
         </button>
+
+        <div className="project-switcher">
+          <button
+            className="project-switcher-button"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={projectMenuOpen}
+            title={activeProject ? `Workspace: ${activeProject.name}` : 'Personal — no workspace active'}
+            onClick={() => setProjectMenuOpen((open) => !open)}
+          >
+            <FolderKanban size={15} />
+            <span className="project-switcher-name">{activeProject?.name ?? 'Personal'}</span>
+            <ChevronDown size={13} />
+          </button>
+          {projectMenuOpen ? (
+            <>
+              <div className="project-menu-backdrop" onClick={() => setProjectMenuOpen(false)} />
+              <div className="project-menu" role="menu" aria-label="Workspaces">
+                <button
+                  className={activeProject ? 'project-menu-item' : 'project-menu-item active'}
+                  type="button"
+                  onClick={() => void handleSelectProject(null)}
+                >
+                  Personal
+                  <small>Global setup, no project instructions</small>
+                </button>
+                {projectsHook.projects.map((project) => (
+                  <div className="project-menu-row" key={project.id}>
+                    <button
+                      className={activeProject?.id === project.id ? 'project-menu-item active' : 'project-menu-item'}
+                      type="button"
+                      onClick={() => void handleSelectProject(project.id)}
+                    >
+                      {project.name}
+                      <small>
+                        {[
+                          project.knowledge ? `folder: ${project.knowledge.name}` : null,
+                          project.instructions ? 'instructions' : null,
+                          project.mcpServerIds.length ? `${project.mcpServerIds.length} connectors` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || 'empty project'}
+                      </small>
+                    </button>
+                    <button
+                      className="project-menu-edit"
+                      type="button"
+                      aria-label={`Edit project: ${project.name}`}
+                      onClick={() => {
+                        setProjectMenuOpen(false)
+                        setProjectModal({ project })
+                      }}
+                    >
+                      <Pencil size={12} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  className="project-menu-new"
+                  type="button"
+                  onClick={() => {
+                    setProjectMenuOpen(false)
+                    setProjectModal({ project: null })
+                  }}
+                >
+                  <Plus size={13} />
+                  New project…
+                </button>
+              </div>
+            </>
+          ) : null}
+        </div>
+
         <nav className="nav-stack" aria-label="PowerStation sections">
           {navItems.map((item) => {
             const Icon = item.icon
@@ -1256,6 +1447,8 @@ function App() {
               <SettingsView
                 onChange={updateSettings}
                 onDeleteAllChats={() => void handleDeleteAllChats()}
+                onExportBackup={() => void handleExportBackup()}
+                onRestoreBackup={() => void handleRestoreBackup()}
                 onRevealChats={() => void bridge.chats.reveal()}
                 settings={settings}
               />
@@ -1264,6 +1457,21 @@ function App() {
         )}
       </main>
 
+      {projectModal ? (
+        <ProjectModal
+          models={models}
+          project={projectModal.project}
+          onClose={() => setProjectModal(null)}
+          onDeleted={(id) => {
+            setProjectModal(null)
+            handleProjectDeleted(id)
+          }}
+          onSaved={(saved) => {
+            setProjectModal(null)
+            handleProjectSaved(saved)
+          }}
+        />
+      ) : null}
       {permissionPrompt.request ? (
         <PermissionModal request={permissionPrompt.request} onRespond={permissionPrompt.respond} />
       ) : null}
@@ -1963,6 +2171,221 @@ function AuditModal({
 }
 
 // --- Permission modal ----------------------------------------------------------
+
+// --- Project modal -----------------------------------------------------------
+
+function ProjectModal({
+  models,
+  onClose,
+  onDeleted,
+  onSaved,
+  project,
+}: {
+  models: ModelInfo[]
+  onClose: () => void
+  onDeleted: (id: string) => void
+  onSaved: (project: Project) => void
+  project: Project | null
+}) {
+  const [name, setName] = useState(project?.name ?? '')
+  const [instructions, setInstructions] = useState(project?.instructions ?? '')
+  const [modelPath, setModelPath] = useState(project?.modelPath ?? '')
+  const [knowledge, setKnowledge] = useState<ProjectKnowledge | null>(project?.knowledge ?? null)
+  const [skillModes, setSkillModes] = useState<Record<string, SkillMode>>(project?.skillModes ?? {})
+  const [serverIds, setServerIds] = useState<string[]>(project?.mcpServerIds ?? [])
+  const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [servers, setServers] = useState<Array<{ id: string; name: string }>>([])
+  const [indexing, setIndexing] = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    void bridge.skills.list().then(setSkills).catch(() => undefined)
+    void bridge.settings
+      .get()
+      .then((s) => setServers(s.utilities.mcpServers.map((server) => ({ id: server.id, name: server.name }))))
+      .catch(() => undefined)
+  }, [])
+
+  const pickKnowledge = async () => {
+    const folder = await bridge.connectors.pickFolder()
+    if (!folder) return
+    setIndexing(true)
+    try {
+      const info = await bridge.rag.index(folder)
+      setKnowledge({ folderId: info.folderId, folder: info.folder, name: info.name })
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIndexing(false)
+    }
+  }
+
+  const save = async () => {
+    if (!name.trim()) {
+      window.alert('Give the project a name.')
+      return
+    }
+    setSaving(true)
+    try {
+      const saved = await bridge.projects.save({
+        id: project?.id,
+        name,
+        instructions,
+        modelPath: modelPath || null,
+        knowledge,
+        skillModes,
+        mcpServerIds: serverIds,
+      })
+      if (saved) onSaved(saved)
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async () => {
+    if (!project) return
+    if (!window.confirm(`Delete the project "${project.name}"? Its chats stay in your history; only the workspace bundle is removed.`)) return
+    await bridge.projects.delete(project.id).catch(() => false)
+    onDeleted(project.id)
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={project ? 'Edit project' : 'New project'}>
+      <div className="permission-modal project-modal">
+        <div className="permission-head">
+          <FolderKanban size={20} />
+          <div>
+            <h3>{project ? `Edit ${project.name}` : 'New project'}</h3>
+            <p>A workspace bundles instructions, a knowledge folder, skills, connectors, and a model.</p>
+          </div>
+        </div>
+
+        <div className="project-form">
+          <label className="project-field">
+            <span>Name</span>
+            <input
+              value={name}
+              placeholder="e.g. Client docs"
+              onChange={(event) => setName(event.target.value)}
+            />
+          </label>
+
+          <label className="project-field">
+            <span>Project instructions</span>
+            <textarea
+              value={instructions}
+              rows={4}
+              placeholder="Added to the system prompt for every chat in this project."
+              onChange={(event) => setInstructions(event.target.value)}
+            />
+          </label>
+
+          <label className="project-field">
+            <span>Model</span>
+            <select value={modelPath} onChange={(event) => setModelPath(event.target.value)}>
+              <option value="">Keep whatever model is selected</option>
+              {models.map((model) => (
+                <option key={model.path} value={model.path}>
+                  {model.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="project-field">
+            <span>Knowledge folder</span>
+            <div className="project-knowledge-row">
+              {knowledge ? <code title={knowledge.folder}>{knowledge.name}</code> : <em>None</em>}
+              <button className="secondary-button compact" type="button" disabled={indexing} onClick={() => void pickKnowledge()}>
+                {indexing ? 'Indexing…' : knowledge ? 'Change…' : 'Choose…'}
+              </button>
+              {knowledge ? (
+                <button className="ghost-button" type="button" onClick={() => setKnowledge(null)}>
+                  Remove
+                </button>
+              ) : null}
+            </div>
+            <p className="project-field-note">New chats in this project start with this folder attached; answers cite sources.</p>
+          </div>
+
+          {skills.length ? (
+            <div className="project-field">
+              <span>Skills in this project</span>
+              <div className="project-choice-list">
+                {skills.map((skill) => (
+                  <label className="project-choice" key={skill.slug}>
+                    <span className="project-choice-name">{skill.name}</span>
+                    <select
+                      value={skillModes[skill.slug] ?? ''}
+                      onChange={(event) => {
+                        const value = event.target.value as SkillMode | ''
+                        setSkillModes((prev) => {
+                          const next = { ...prev }
+                          if (value === '') delete next[skill.slug]
+                          else next[skill.slug] = value
+                          return next
+                        })
+                      }}
+                    >
+                      <option value="">Global setting ({skill.mode})</option>
+                      <option value="off">Off here</option>
+                      <option value="auto">Auto here</option>
+                      <option value="always">Always here</option>
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {servers.length ? (
+            <div className="project-field">
+              <span>Connectors in this project</span>
+              <div className="project-choice-list">
+                {servers.map((server) => (
+                  <label className="project-choice" key={server.id}>
+                    <input
+                      type="checkbox"
+                      checked={serverIds.includes(server.id)}
+                      onChange={(event) =>
+                        setServerIds((prev) =>
+                          event.target.checked ? [...prev, server.id] : prev.filter((id) => id !== server.id),
+                        )
+                      }
+                    />
+                    <span className="project-choice-name">{server.name}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="project-field-note">Only checked connectors run while this project is active.</p>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="permission-actions">
+          {project ? (
+            <button className="ghost-button danger" type="button" onClick={() => void remove()}>
+              Delete project
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="permission-allow">
+            <button className="secondary-button" type="button" onClick={onClose}>
+              Cancel
+            </button>
+            <button className="primary-button" type="button" disabled={saving || indexing} onClick={() => void save()}>
+              {saving ? 'Saving…' : project ? 'Save changes' : 'Create project'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function PermissionModal({
   request,

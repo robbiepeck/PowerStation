@@ -184,11 +184,16 @@ export async function revealSkillsDir(): Promise<boolean> {
  * Skills active for a given message: always-on skills plus auto skills whose
  * triggers match. Without a message (e.g. benchmarks), only always-on apply.
  */
-export async function getActiveSkills(message?: string): Promise<SkillInfo[]> {
+export async function getActiveSkills(
+  message?: string,
+  // Per-project modes win over the global setting for the slugs they name.
+  modeOverrides?: Record<string, SkillMode>,
+): Promise<SkillInfo[]> {
   const skills = await listSkills()
   return skills.filter((skill) => {
-    if (!skill.body || skill.mode === 'off') return false
-    if (skill.mode === 'always') return true
+    const mode = modeOverrides?.[skill.slug] ?? skill.mode
+    if (!skill.body || mode === 'off') return false
+    if (mode === 'always') return true
     return message ? skillMatchesMessage(skill, message) : false
   })
 }

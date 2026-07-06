@@ -1695,11 +1695,15 @@ function KnowledgeFoldersSection() {
 export function SettingsView({
   onChange,
   onDeleteAllChats,
+  onExportBackup,
+  onRestoreBackup,
   onRevealChats,
   settings,
 }: {
   onChange: (patch: Partial<Settings>) => void
   onDeleteAllChats: () => void
+  onExportBackup: () => void
+  onRestoreBackup: () => void
   onRevealChats: () => void
   settings: Settings
 }) {
@@ -1773,6 +1777,27 @@ export function SettingsView({
         </section>
 
         <KnowledgeFoldersSection />
+
+        <section className="settings-section">
+          <h3>Backup & restore</h3>
+          <p className="policy-note subtle">
+            One JSON file with your settings, tool permissions, benchmarks, skills, chats, and projects — readable,
+            local, yours. Model weights don't travel (they're huge and re-downloadable); their entries reappear once
+            the files exist on the target machine.
+          </p>
+          <div className="settings-actions">
+            <button className="secondary-button compact" type="button" onClick={onExportBackup}>
+              Back up now…
+            </button>
+            <button className="secondary-button compact" type="button" onClick={onRestoreBackup}>
+              Restore from backup…
+            </button>
+          </div>
+          <p className="policy-note subtle">
+            Restoring replaces settings and permissions with the backup's; chats, skills and projects from the backup
+            overwrite items with the same id and everything else stays.
+          </p>
+        </section>
 
         <section className="settings-section">
           <h3>Memory safety</h3>

@@ -45,7 +45,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     results: () => ipcRenderer.invoke('bench:results'),
   },
   chats: {
-    list: () => ipcRenderer.invoke('chats:list'),
+    list: (scope) => ipcRenderer.invoke('chats:list', scope),
     get: (id) => ipcRenderer.invoke('chats:get', id),
     save: (payload) => ipcRenderer.invoke('chats:save', payload),
     rename: (id, title) => ipcRenderer.invoke('chats:rename', id, title),
@@ -53,9 +53,22 @@ contextBridge.exposeInMainWorld('powerStation', {
     delete: (id) => ipcRenderer.invoke('chats:delete', id),
     deleteAll: () => ipcRenderer.invoke('chats:deleteAll'),
     reveal: () => ipcRenderer.invoke('chats:reveal'),
-    search: (query) => ipcRenderer.invoke('chats:search', query),
+    search: (query, scope) => ipcRenderer.invoke('chats:search', query, scope),
     export: (id) => ipcRenderer.invoke('chats:export', id),
     exportAudit: (id) => ipcRenderer.invoke('chats:exportAudit', id),
+  },
+  projects: {
+    list: () => ipcRenderer.invoke('projects:list'),
+    get: (id) => ipcRenderer.invoke('projects:get', id),
+    getActive: () => ipcRenderer.invoke('projects:getActive'),
+    save: (payload) => ipcRenderer.invoke('projects:save', payload),
+    delete: (id) => ipcRenderer.invoke('projects:delete', id),
+    setActive: (id) => ipcRenderer.invoke('projects:setActive', id),
+    reveal: () => ipcRenderer.invoke('projects:reveal'),
+  },
+  backup: {
+    export: (payload) => ipcRenderer.invoke('backup:export', payload),
+    restore: (payload) => ipcRenderer.invoke('backup:restore', payload),
   },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),

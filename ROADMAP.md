@@ -18,6 +18,8 @@ model landscape and with what users hit first.
   re-download; inference stays in PowerStation's own runtime with the same admission checks.
 - **Turn-scoped tool approval** — "Allow rest of turn" in the permission dialog; battery-aware
   status pill and a per-chat energy estimate.
+- **Projects (workspaces) + backup** — instructions, knowledge folder, skills, connectors and
+  model bundled per workspace; one-file backup & restore. See [projects.md](docs/projects.md).
 
 ## Next
 

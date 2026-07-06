@@ -2,6 +2,19 @@
 
 The "See what's new" card in the app links here.
 
+## v0.11.0 — Projects
+
+- **Projects (workspaces)** — the switcher at the top of the sidebar bundles what you'd otherwise
+  set up per chat: project instructions (added to the system prompt), a knowledge folder (attached
+  to every new chat, answers cite sources), per-project skill modes, a connector selection (only
+  checked servers run while the project is active), and a preferred model. Chats belong to the
+  project they were started in; the sidebar shows the active workspace's history. Projects are
+  plain JSON files in the data folder, like chats.
+- **Backup & restore** — Settings → Backup & restore writes one readable JSON file with your
+  settings, tool permissions, benchmarks, skills, chats, and projects. Restoring replaces settings
+  and permissions and overwrites same-id content; model weights don't travel (their entries
+  reappear once the files exist). Everything passes the same sanitizers as normal config reads.
+
 ## v0.10.0 — Daily driver
 
 - **LM Studio import** — models you already downloaded with LM Studio appear in the Models view

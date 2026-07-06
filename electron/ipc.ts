@@ -8,6 +8,8 @@ import * as chats from './chats.js'
 import * as skills from './skills.js'
 import * as ollama from './ollama.js'
 import * as lmstudio from './lmstudio.js'
+import * as projects from './projects.js'
+import * as backup from './backup.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
 import { composeSystemPrompt } from './skillFormat.js'
@@ -97,8 +99,15 @@ async function getOffloadCeilingBytes(): Promise<number> {
  */
 async function getEffectiveSystemPrompt(message?: string): Promise<{ prompt: string | undefined; skillNames: string[] }> {
   const state = await getState()
-  const active = await skills.getActiveSkills(message)
-  const composed = composeSystemPrompt(state.settings.utilities.systemPrompt, active)
+  const project = await projects.getActiveProject()
+  // Project instructions extend the global base prompt; project skill modes
+  // override the global ones for the slugs they name.
+  const base = [state.settings.utilities.systemPrompt, project?.instructions ?? '']
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join('\n\n')
+  const active = await skills.getActiveSkills(message, project?.skillModes)
+  const composed = composeSystemPrompt(base, active)
   return { prompt: composed || undefined, skillNames: active.map((skill) => skill.name) }
 }
 
@@ -152,10 +161,18 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   return record
 }
 
-/** Reconnect/disconnect MCP servers so connections mirror the settings. */
+/**
+ * Reconnect/disconnect MCP servers so connections mirror the settings — or,
+ * while a project is active, that project's connector selection.
+ */
 async function reconcileMcpServers(): Promise<void> {
   const state = await getState()
-  const wanted = new Map(state.settings.utilities.mcpServers.filter((server) => server.enabled).map((s) => [s.id, s]))
+  const project = await projects.getActiveProject()
+  const wanted = new Map(
+    state.settings.utilities.mcpServers
+      .filter((server) => (project ? project.mcpServerIds.includes(server.id) : server.enabled))
+      .map((s) => [s.id, s]),
+  )
   const statuses = new Map(mcp.getMcpStatuses().map((status) => [status.id, status.state]))
   for (const [id, serverState] of statuses) {
     if (!wanted.has(id) && (serverState === 'connected' || serverState === 'connecting')) {
@@ -300,7 +317,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('bench:results', async () => (await getState()).benchmarks)
 
   // --- Chat history -------------------------------------------------------------
-  ipcMain.handle('chats:list', () => chats.listChats())
+  const chatScope = (scope: unknown): chats.ChatScope => {
+    if (typeof scope !== 'object' || scope === null || !('projectId' in scope)) return undefined
+    const projectId = (scope as { projectId: unknown }).projectId
+    return { projectId: typeof projectId === 'string' ? projectId : null }
+  }
+  ipcMain.handle('chats:list', (_event, scope?: unknown) => chats.listChats(chatScope(scope)))
   ipcMain.handle('chats:get', (_event, id: string) => chats.getChat(id))
   ipcMain.handle('chats:save', async (_event, payload: { id?: string; messages: unknown; modelPath?: string }) => {
     const state = await getState()
@@ -312,7 +334,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('chats:delete', (_event, id: string) => chats.deleteChat(id))
   ipcMain.handle('chats:deleteAll', () => chats.deleteAllChats())
   ipcMain.handle('chats:reveal', () => chats.revealChatsDir())
-  ipcMain.handle('chats:search', (_event, query: string) => chats.searchChats(query))
+  ipcMain.handle('chats:search', (_event, query: string, scope?: unknown) => chats.searchChats(query, chatScope(scope)))
   ipcMain.handle('chats:exportAudit', async (_event, id: string) => {
     const chat = await chats.getChat(id)
     if (!chat) return null
@@ -339,6 +361,67 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     if (result.canceled || !result.filePath) return null
     await chats.exportChatMarkdown(chat, result.filePath)
     return result.filePath
+  })
+
+  // --- Projects (workspaces) ----------------------------------------------------
+  ipcMain.handle('projects:list', () => projects.listProjects())
+  ipcMain.handle('projects:get', (_event, id: string) => projects.getProject(id))
+  ipcMain.handle('projects:getActive', () => projects.getActiveProject())
+  ipcMain.handle('projects:save', async (_event, payload: unknown) => {
+    const saved = await projects.saveProject(payload)
+    // Editing the active project can change its connector selection.
+    if (saved && (await getState()).activeProjectId === saved.id) void reconcileMcpServers()
+    return saved
+  })
+  ipcMain.handle('projects:delete', async (_event, id: string) => {
+    const removed = await projects.deleteProject(id)
+    if (removed) void reconcileMcpServers()
+    return removed
+  })
+  ipcMain.handle('projects:setActive', async (_event, id: string | null) => {
+    const project = await projects.setActiveProject(typeof id === 'string' ? id : null)
+    await reconcileMcpServers()
+    return project
+  })
+  ipcMain.handle('projects:reveal', () => projects.revealProjectsDir())
+
+  // --- Backup & restore -----------------------------------------------------------
+  ipcMain.handle('backup:export', async (_event, payload?: { filePath?: string }) => {
+    let filePath = typeof payload?.filePath === 'string' ? payload.filePath : null
+    if (!filePath) {
+      const result = await dialog.showSaveDialog({
+        defaultPath: `powerstation-backup-${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      })
+      if (result.canceled || !result.filePath) return null
+      filePath = result.filePath
+    }
+    const summary = await backup.exportBackup(filePath)
+    return { filePath, ...summary }
+  })
+  ipcMain.handle('backup:restore', async (_event, payload?: { filePath?: string }) => {
+    let filePath = typeof payload?.filePath === 'string' ? payload.filePath : null
+    if (!filePath) {
+      const picked = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [{ name: 'PowerStation backup', extensions: ['json'] }],
+      })
+      if (picked.canceled || !picked.filePaths.length) return null
+      const confirm = await dialog.showMessageBox({
+        type: 'warning',
+        buttons: ['Restore', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+        message: 'Restore from this backup?',
+        detail:
+          'Settings and permissions will be replaced by the backup. Chats, skills and projects from the backup overwrite items with the same id; everything else you have stays. Model files do not travel in backups — models missing on this machine simply will not appear until re-downloaded.',
+      })
+      if (confirm.response !== 0) return null
+      filePath = picked.filePaths[0]
+    }
+    const summary = await backup.restoreBackup(filePath)
+    await reconcileMcpServers()
+    return summary
   })
 
   // --- Attachments & folder knowledge ------------------------------------------
@@ -491,21 +574,30 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const existing = state.settings.utilities.mcpServers.find(
       (server) => !entry.needsFolder && server.command.startsWith(`npx -y ${entry.npmPackage}`),
     )
+    let serverId: string
     if (existing) {
+      serverId = existing.id
       await mutate((current) => {
         const server = current.settings.utilities.mcpServers.find((s) => s.id === existing.id)
         if (server) server.enabled = true
       })
     } else {
+      serverId = `mcp-${Date.now()}-${Math.round(Math.random() * 1e6)}`
       const name = entry.needsFolder ? `${entry.name} (${path.basename(folder!)})` : entry.name
       await mutate((current) => {
         current.settings.utilities.mcpServers.push({
-          id: `mcp-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+          id: serverId,
           name,
           command,
           enabled: true,
         })
       })
+    }
+    // Adding a connector while a project is active should take effect there —
+    // otherwise the project's selection silently filters the new server out.
+    const activeProject = await projects.getActiveProject()
+    if (activeProject && !activeProject.mcpServerIds.includes(serverId)) {
+      await projects.saveProject({ ...activeProject, mcpServerIds: [...activeProject.mcpServerIds, serverId] })
     }
     void reconcileMcpServers()
     return (await getState()).settings.utilities.mcpServers

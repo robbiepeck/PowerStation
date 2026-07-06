@@ -58,6 +58,8 @@ export type PersistedState = {
   benchmarks: Record<string, BenchmarkRecord>
   /** App version last acknowledged by the user — drives the what's-new card. */
   lastSeenVersion: string
+  /** Workspace currently applied to chat, skills, and connectors; null = Personal. */
+  activeProjectId: string | null
 }
 
 const defaultUtilities: UtilitySettings = {
@@ -223,6 +225,7 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
     onboarding: sanitizeOnboarding(parsed?.onboarding),
     benchmarks: sanitizeBenchmarks(parsed?.benchmarks),
     lastSeenVersion: cleanString(parsed?.lastSeenVersion, 40),
+    activeProjectId: typeof parsed?.activeProjectId === 'string' ? parsed!.activeProjectId : null,
   }
 }
 
@@ -252,6 +255,18 @@ export async function patchSettings(patch: Partial<Settings>): Promise<Settings>
   current.settings = sanitizeSettings(patch, current.settings)
   await saveState()
   return current.settings
+}
+
+/**
+ * Backup restore: archive fields win, then everything passes through the same
+ * normalize() as a config-file read — a hand-edited archive can't smuggle in
+ * values the app would never write. lastSeenVersion stays local so restoring
+ * on a newer build still shows that build's what's-new card.
+ */
+export async function applyRestoredState(restored: Partial<PersistedState>): Promise<void> {
+  const current = await getState()
+  state = normalize({ ...current, ...restored, lastSeenVersion: current.lastSeenVersion })
+  await saveState()
 }
 
 export async function mutate(fn: (current: PersistedState) => void): Promise<PersistedState> {

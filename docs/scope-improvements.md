@@ -81,6 +81,18 @@ Battery state in the monitor and telemetry; a status-pill nudge below 25% on bat
 models draw less power); an estimated per-chat watt-hours figure in the chat header, labelled as
 the ballpark it is (the power reading is itself an estimate).
 
+### 16. Projects (workspaces) — *shipped v0.11*
+The sidebar switcher bundles per-context setup: instructions appended to the system prompt, a
+knowledge folder auto-attached to new chats, per-project skill-mode overrides, a connector
+selection that scopes which MCP servers run, and a preferred model. Chats are stamped with their
+project; Personal shows unassigned history. One JSON file per project, next to the chats. See
+[projects.md](projects.md).
+
+### 17. Backup & restore — *shipped v0.11*
+One readable JSON archive (settings, tool permissions, benchmarks, skills, chats, projects) from
+Settings; restore replaces settings/permissions, overwrites same-id content, and passes everything
+through the same sanitizers as a normal config read. Model weights stay out by design.
+
 ### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
 Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face
 (schema + data + weekly CI verification shipped, plus an honest "vision-capable model" badge) —

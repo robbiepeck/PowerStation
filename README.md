@@ -102,6 +102,7 @@ troubleshooting in the [Setup Guide](docs/setup.md).
 | [Models & devices](docs/models-and-devices.md) | The full model catalogue and which Mac each model needs. |
 | [Memory & monitoring](docs/memory-and-monitoring.md) | The admission-control math, auto-pause, and honest telemetry. |
 | [Agent harness](docs/agent-harness.md) | MCP tools, permissions, capability gating, loop guards. |
+| [Projects & backup](docs/projects.md) | Workspaces that bundle instructions, knowledge, skills, connectors; one-file backup. |
 | [Contributing](CONTRIBUTING.md) | Dev setup, how the catalogue works, proposing a model. |
 | [Roadmap](ROADMAP.md) | What's next. |
 | [Security](SECURITY.md) · [Threat model](THREAT_MODEL.md) | The local-first posture and the agent attack surface. |
