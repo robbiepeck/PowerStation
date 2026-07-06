@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_AGENT_EMOJI, isValidAgentId, sanitizeCustomAgent } from './customAgentFormat.js'
+import {
+  buildAgentShare,
+  DEFAULT_AGENT_EMOJI,
+  isValidAgentId,
+  parseAgentShare,
+  sanitizeCustomAgent,
+} from './customAgentFormat.js'
 
 const ID = 'agent-1751500000000-123456'
 const FOLDER = { folderId: 'a'.repeat(16), folder: '/Users/robbie/docs', name: 'docs' }
@@ -58,5 +64,26 @@ describe('sanitizeCustomAgent', () => {
 
   it('caps oversized instructions', () => {
     expect(sanitizeCustomAgent({ name: 'X', instructions: 'a'.repeat(10_000) }, ID)?.instructions.length).toBe(8_000)
+  })
+
+  it('dedupes connector ids and defaults to empty', () => {
+    expect(sanitizeCustomAgent({ name: 'X' }, ID)?.mcpServerIds).toEqual([])
+    expect(sanitizeCustomAgent({ name: 'X', mcpServerIds: ['a', 'a', 'b', 42] }, ID)?.mcpServerIds).toEqual(['a', 'b'])
+  })
+})
+
+describe('agent share format', () => {
+  it('round-trips a valid export', () => {
+    const agent = sanitizeCustomAgent({ name: 'Docs bot', mcpServerIds: ['mcp-1'] }, ID)!
+    const raw = parseAgentShare(buildAgentShare(agent))
+    expect(sanitizeCustomAgent(raw, ID)?.name).toBe('Docs bot')
+  })
+
+  it('rejects non-agent files with readable messages', () => {
+    expect(() => parseAgentShare('')).toThrow('empty')
+    expect(() => parseAgentShare('{not json')).toThrow('not valid JSON')
+    expect(() => parseAgentShare('{"format":"other"}')).toThrow('not a PowerStation agent export')
+    expect(() => parseAgentShare(JSON.stringify({ format: 'powerstation-agent', version: 99 }))).toThrow('version 99')
+    expect(() => parseAgentShare(JSON.stringify({ format: 'powerstation-agent', version: 1 }))).toThrow('missing its agent data')
   })
 })

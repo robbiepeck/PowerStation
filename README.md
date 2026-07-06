@@ -69,16 +69,17 @@ those three gaps:
   auto-compaction for long conversations, and an artifacts pane for rendered HTML/SVG.
 - **Projects (workspaces)** — bundle instructions, a knowledge folder, skill modes, a connector
   selection, and a preferred model; switch context in one click. → [Projects & backup](docs/projects.md)
-- **Agents** — reusable assistants with their own instructions and up to eight knowledge folders,
-  answering with folder-prefixed citations; start a chat with one from its card. → [Agents](docs/agents.md)
+- **Agents** — reusable assistants with instructions, up to eight knowledge folders, and a
+  connector selection; answer with folder-prefixed citations, export/import as a file, and
+  optionally preview a turn's plan before it runs. → [Agents](docs/agents.md)
 - **Honest model choice** — measured on-device benchmarks (read *and* write speed), side-by-side
   **model compare**, recommendations that explain *why this over that*, and one-click import of
   models you already have in **Ollama or LM Studio** (no re-download).
 - **Repair without snake oil** — storage intelligence for AI files, cross-app duplicate detection,
   and cleanup strictly limited to PowerStation's own data — as a tab, and as an opt-in **agent
   skill** driving the same guarded tools. → [Repair](docs/repair.md)
-- **Backup & restore** — one readable JSON archive of settings, permissions, skills, chats, and
-  projects.
+- **Backup & restore** — one readable JSON archive of settings, permissions, skills, chats,
+  projects, and agents.
 - **Truthful telemetry** — live CPU/RAM/VRAM/pressure/battery, every figure labelled measured or
   estimated, plus a per-chat energy estimate. → [Memory & monitoring](docs/memory-and-monitoring.md)
 

@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Download,
   LifeBuoy,
+  ListChecks,
   LoaderCircle,
   MessageSquareText,
   Plus,
@@ -56,6 +57,7 @@ import type {
   LmStudioStatus,
   PermissionDecision,
   PermissionRequest,
+  PlanRequest,
   Project,
   ProjectKnowledge,
   SkillInfo,
@@ -297,6 +299,26 @@ function usePermissionPrompt() {
   const respond = useCallback((promptId: string, decision: PermissionDecision) => {
     void bridge.agent.respondPermission({ promptId, decision })
     setRequest(queue.current.shift() ?? null)
+  }, [])
+  return { request, respond }
+}
+
+function usePlanPrompt() {
+  const [request, setRequest] = useState<PlanRequest | null>(null)
+  useEffect(() => {
+    const offRequest = bridge.agent.onPlanRequest((payload) => setRequest(payload))
+    // A plan prompt also expires via the permission-expired channel.
+    const offExpired = bridge.agent.onPermissionExpired(({ promptId }) => {
+      setRequest((current) => (current?.promptId === promptId ? null : current))
+    })
+    return () => {
+      offRequest()
+      offExpired()
+    }
+  }, [])
+  const respond = useCallback((promptId: string, approved: boolean) => {
+    void bridge.agent.respondPlan({ promptId, approved })
+    setRequest(null)
   }, [])
   return { request, respond }
 }
@@ -709,6 +731,7 @@ function App() {
   const device = useDevice()
   const mcpStatuses = useMcpStatuses()
   const permissionPrompt = usePermissionPrompt()
+  const planPrompt = usePlanPrompt()
   const runtimeEvents = useRuntimeEvents()
   const { installLatest, updateState } = useUpdates()
   // Latest power estimate, readable synchronously when a generation finishes.
@@ -847,13 +870,15 @@ function App() {
         : null,
     )
     setActiveAgent(null)
+    void bridge.agents.setActive(null)
     setComposerSeed(null)
     setArtifact(null)
     seenArtifactRef.current = null
   }, [activeProject, chat])
 
   // "Start chat" from the Agents tab: a fresh chat with the agent's
-  // instructions and knowledge applied (main-side, per message).
+  // instructions, knowledge, and connectors applied (main-side, per message /
+  // via reconcile).
   const handleStartAgentChat = useCallback(
     (agent: CustomAgent) => {
       chat.reset()
@@ -863,10 +888,23 @@ function App() {
       setArtifact(null)
       seenArtifactRef.current = null
       setActiveAgent({ id: agent.id, name: agent.name, emoji: agent.emoji })
+      void bridge.agents.setActive(agent.id)
       setActiveView('chat')
     },
     [chat],
   )
+
+  const handleImportAgent = useCallback(async () => {
+    try {
+      const imported = await bridge.agents.import()
+      if (imported) {
+        await agentsHook.refresh()
+        setAgentModal({ agent: imported })
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : String(error))
+    }
+  }, [agentsHook])
 
   // Switch workspace: persist, re-point connectors (main side), then apply the
   // project's model and knowledge folder here and start a clean chat.
@@ -879,6 +917,7 @@ function App() {
       chat.reset()
       setPendingAttachments([])
       setActiveAgent(null)
+      void bridge.agents.setActive(null)
       setComposerSeed(null)
       setArtifact(null)
       seenArtifactRef.current = null
@@ -963,6 +1002,7 @@ function App() {
       // Restore the chat's agent badge; if the agent was deleted, the send
       // path passes the id and the main process ignores it gracefully.
       setActiveAgent(stored.agent)
+      void bridge.agents.setActive(stored.agent?.id ?? null)
       setRagFolder(stored.ragFolder ? { ...stored.ragFolder } : null)
       if (stored.ragFolder) {
         void bridge.rag.info(stored.ragFolder.id).then((info) => {
@@ -1460,6 +1500,7 @@ function App() {
           <AgentsView
             agents={agentsHook.agents}
             onEdit={(agent) => setAgentModal({ agent })}
+            onImport={() => void handleImportAgent()}
             onStartChat={handleStartAgentChat}
           />
         )}
@@ -1571,6 +1612,9 @@ function App() {
           request={permissionPrompt.request}
           onRespond={permissionPrompt.respond}
         />
+      ) : null}
+      {planPrompt.request ? (
+        <PlanModal request={planPrompt.request} onRespond={planPrompt.respond} />
       ) : null}
       {showAudit ? (
         <AuditModal
@@ -2526,8 +2570,18 @@ function AgentModal({
   const [description, setDescription] = useState(agent?.description ?? '')
   const [instructions, setInstructions] = useState(agent?.instructions ?? '')
   const [knowledge, setKnowledge] = useState<AgentKnowledge[]>(agent?.knowledge ?? [])
+  const [serverIds, setServerIds] = useState<string[]>(agent?.mcpServerIds ?? [])
+  const [servers, setServers] = useState<Array<{ id: string; name: string }>>([])
   const [indexing, setIndexing] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+    void bridge.settings
+      .get()
+      .then((s) => setServers(s.utilities.mcpServers.map((server) => ({ id: server.id, name: server.name }))))
+      .catch(() => undefined)
+  }, [])
 
   const addFolder = async () => {
     const folder = await bridge.connectors.pickFolder()
@@ -2561,6 +2615,7 @@ function AgentModal({
         description,
         instructions,
         knowledge,
+        mcpServerIds: serverIds,
       })
       if (saved) onSaved(saved)
     } catch (error) {
@@ -2657,13 +2712,44 @@ function AgentModal({
               its sources.
             </p>
           </div>
+
+          {servers.length ? (
+            <div className="project-field">
+              <span>Connectors this agent may use</span>
+              <div className="project-choice-list">
+                {servers.map((server) => (
+                  <label className="project-choice" key={server.id}>
+                    <input
+                      type="checkbox"
+                      checked={serverIds.includes(server.id)}
+                      onChange={(event) =>
+                        setServerIds((prev) =>
+                          event.target.checked ? [...prev, server.id] : prev.filter((id) => id !== server.id),
+                        )
+                      }
+                    />
+                    <span className="project-choice-name">{server.name}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="project-field-note">
+                Leave all unchecked to use whatever connectors are normally on. Check some to scope this agent to
+                exactly those while its chats are active — tool calls stay permission-gated as always.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="permission-actions">
           {agent ? (
-            <button className="ghost-button danger" type="button" onClick={() => void remove()}>
-              Delete agent
-            </button>
+            <div className="permission-allow">
+              <button className="ghost-button danger" type="button" onClick={() => void remove()}>
+                Delete
+              </button>
+              <button className="secondary-button" type="button" onClick={() => void bridge.agents.export(agent.id)}>
+                Export…
+              </button>
+            </div>
           ) : (
             <span />
           )}
@@ -2890,6 +2976,40 @@ function ProjectModal({
               {saving ? 'Saving…' : project ? 'Save changes' : 'Create project'}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PlanModal({
+  request,
+  onRespond,
+}: {
+  request: PlanRequest
+  onRespond: (promptId: string, approved: boolean) => void
+}) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Review the plan">
+      <div className="permission-modal">
+        <div className="permission-head">
+          <ListChecks size={20} />
+          <div>
+            <h3>Review the plan</h3>
+            <p>The model proposes these steps. Running the plan approves every tool call in this turn at once.</p>
+          </div>
+        </div>
+        <pre className="plan-body">{request.plan}</pre>
+        <p className="permission-note">
+          Each step still runs on your machine and is recorded in the audit log. Cancel to stop before anything runs.
+        </p>
+        <div className="permission-actions">
+          <button className="secondary-button" type="button" onClick={() => onRespond(request.promptId, false)}>
+            Cancel
+          </button>
+          <button className="primary-button" type="button" onClick={() => onRespond(request.promptId, true)}>
+            Run plan
+          </button>
         </div>
       </div>
     </div>

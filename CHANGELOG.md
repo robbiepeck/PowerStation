@@ -2,6 +2,20 @@
 
 The "See what's new" card in the app links here.
 
+## v0.16.0 — Agents that travel and act
+
+- **Export & import agents** — an agent is one JSON file, so it travels. **Export…** in the agent
+  editor writes a `*.agent.json`; **Import** on the Agents tab reads one back under a fresh id (so
+  it never overwrites an existing agent). Knowledge-folder references and connector ids travel too
+  and degrade gracefully on a machine that lacks them.
+- **Agent connectors** — an agent can now name the MCP servers it may use. Leave them unchecked to
+  inherit whatever's normally on; check some to scope the agent's chats to exactly those while
+  active (precedence: agent → project → global). Tool calls stay permission-gated and audit-logged.
+- **Plan preview** — Settings → Agent trust → *Preview the plan before tool use*. When on, a
+  tool-capable model proposes its steps before a multi-tool turn (via an isolated planning pass
+  that leaves the conversation untouched); approve the plan once to run the whole turn without a
+  per-call prompt, or cancel and nothing runs. Every call is still audit-logged.
+
 ## v0.15.0 — Agents
 
 - **Agents tab** — reusable assistants in the Microsoft-365 agent-builder spirit, fully local:

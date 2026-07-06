@@ -4,7 +4,14 @@
 import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
-import { isValidAgentId, newAgentId, sanitizeCustomAgent, type CustomAgent } from './customAgentFormat.js'
+import {
+  buildAgentShare,
+  isValidAgentId,
+  newAgentId,
+  parseAgentShare,
+  sanitizeCustomAgent,
+  type CustomAgent,
+} from './customAgentFormat.js'
 
 const MAX_AGENTS = 100
 
@@ -68,6 +75,27 @@ export async function importAgent(raw: unknown): Promise<boolean> {
   if (!agent) return false
   await writeAgent(agent)
   return true
+}
+
+/** Serialize one agent as a portable share file. */
+export async function exportAgentShare(id: unknown): Promise<string | null> {
+  const agent = await getAgent(id)
+  return agent ? buildAgentShare(agent) : null
+}
+
+/**
+ * Import a shared agent file under a FRESH id — unlike backup restore, importing
+ * a shared file should never overwrite an existing agent, even if the file
+ * carries a colliding id. Throws with a readable message on a bad file.
+ */
+export async function importAgentShare(text: string): Promise<CustomAgent | null> {
+  const raw = parseAgentShare(text)
+  const id = newAgentId()
+  const now = Date.now()
+  const agent = sanitizeCustomAgent({ ...raw, createdAt: now, updatedAt: now }, id)
+  if (!agent) return null
+  await writeAgent(agent)
+  return agent
 }
 
 export async function deleteAgent(id: unknown): Promise<boolean> {

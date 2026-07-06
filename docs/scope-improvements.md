@@ -110,13 +110,29 @@ deleted; allow-rest-of-turn still works; denies still block). Chat-header chip w
 Alternates explain themselves against the top pick on fit, measured/likely speed, capacity, and
 tool tier — honest in both directions. Pure `explainVersusPrimary`, unit-tested.
 
-### 21. Custom agents (M365-style) — *shipped v0.15*
+### 21. Custom agents (M365-style) — *shipped v0.15, extended v0.16*
 Robbie's ask, modelled on the Microsoft 365 agent builder and scoped via explicit product
 decisions: agents are a **separate concept from projects** (an assistant you summon per chat vs a
 workspace you switch into), invoked by **Start chat** from the Agents tab, configured with
-**instructions + up to eight knowledge folders** (deliberately no model binding or connector
-selection), and chats carry a **badge** that survives agent deletion. Multi-folder retrieval
-merges chunks across folders with folder-prefixed citations. See [agents.md](agents.md).
+**instructions + up to eight knowledge folders**, and chats carry a **badge** that survives agent
+deletion. Multi-folder retrieval merges chunks across folders with folder-prefixed citations. See
+[agents.md](agents.md).
+
+### 22. Agent export/import — *shipped v0.16*
+An agent is one JSON file; **Export…** writes a versioned `*.agent.json`, **Import** reads one back
+under a fresh id (never overwriting). Knowledge/connector references travel and degrade gracefully
+where they don't resolve. Pure share format, unit-tested.
+
+### 23. Agent connectors — *shipped v0.16*
+Agents can name the MCP servers they may use (the one thing deliberately left out of v0.15). An
+in-memory active-agent id drives reconcile precedence: agent → project → global; empty inherits
+rather than silencing. Tool calls stay permission-gated.
+
+### 24. Agent plan preview — *shipped v0.16*
+Opt-in (Settings → Agent trust). A tool-capable model proposes a turn's steps via an isolated
+planning pass (snapshots/restores the session so the conversation is untouched); approving runs the
+whole turn with tools pre-authorized, cancelling runs nothing. Reuses the turn-scoped grant and the
+audit log.
 
 ### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
 Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face

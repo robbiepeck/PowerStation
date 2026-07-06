@@ -264,8 +264,12 @@ class ToolGuard {
 async function chat(request: ChatRequest): Promise<ChatResult> {
   const controller = new AbortController()
   abortControllers.set(request.requestId, controller)
+  let active: Awaited<ReturnType<typeof ensureModelLoaded>> | null = null
+  // Plan-preview probe: snapshot the conversation so the probe leaves no trace.
+  let isolatedSnapshot: ChatHistoryItem[] | null = null
   try {
-    const active = await ensureModelLoaded(request)
+    active = await ensureModelLoaded(request)
+    if (request.isolated) isolatedSnapshot = active.session.getChatHistory()
     // Resuming a persisted chat: replay the saved turns into the session so
     // the model actually remembers the conversation (the renderer sends this
     // once, on the first message after loading a chat).
@@ -278,7 +282,7 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
       }
       active.session.setChatHistory(items)
     }
-    if (request.autoCompact !== false) {
+    if (!request.isolated && request.autoCompact !== false) {
       await maybeCompact(active, request.requestId, request.systemPrompt ?? '')
     }
     post({ event: 'chat:status', requestId: request.requestId, status: { phase: 'generating' } })
@@ -294,7 +298,8 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
       ...(functions ? { functions } : {}),
       onTextChunk: (chunk: string) => {
         charCount += chunk.length
-        post({ event: 'chat:token', requestId: request.requestId, token: chunk })
+        // An isolated probe never streams into the visible turn.
+        if (!request.isolated) post({ event: 'chat:token', requestId: request.requestId, token: chunk })
       },
     } as Parameters<LlamaChatSession['prompt']>[1])
     activeGenerations.add(generation)
@@ -306,11 +311,11 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
     }
     const elapsedSec = (Date.now() - start) / 1000
     const approxTokens = Math.max(1, Math.round(charCount / 4))
-    lastTokensPerSec = elapsedSec > 0 ? approxTokens / elapsedSec : 0
+    if (!request.isolated) lastTokensPerSec = elapsedSec > 0 ? approxTokens / elapsedSec : 0
     publishState()
     return {
       text,
-      tokensPerSec: lastTokensPerSec,
+      tokensPerSec: elapsedSec > 0 ? approxTokens / elapsedSec : 0,
       elapsedMs: Math.round(elapsedSec * 1000),
       aborted: controller.signal.aborted && guard.haltReason === null,
       toolCallCount: guard.callCount,
@@ -319,6 +324,8 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
       contextSize: active.contextTokens,
     }
   } finally {
+    // Restore the conversation exactly as it was before the probe.
+    if (active && isolatedSnapshot) active.session.setChatHistory(isolatedSnapshot)
     abortControllers.delete(request.requestId)
   }
 }

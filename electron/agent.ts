@@ -47,11 +47,52 @@ const turnAllowedRequests = new Set<string>()
 let permissionRequester: ((request: PermissionRequest) => void) | null = null
 let permissionExpiredNotifier: ((promptId: string) => void) | null = null
 let toolResultReporter: ((event: ToolResultEvent) => void) | null = null
+let planRequester: ((request: { promptId: string; requestId: string; plan: string }) => void) | null = null
 const pendingPermissions = new Map<string, (decision: PermissionDecision) => void>()
+const pendingPlans = new Map<string, (approved: boolean) => void>()
 let nextPromptId = 1
 
 export function setPermissionRequester(fn: typeof permissionRequester): void {
   permissionRequester = fn
+}
+
+export function setPlanRequester(fn: typeof planRequester): void {
+  planRequester = fn
+}
+
+/** Pre-authorize every ask-gated call in a turn — used after the user approves a plan. */
+export function allowTurn(requestId: string): void {
+  turnAllowedRequests.add(requestId)
+}
+
+export function resolvePlan(promptId: string, approved: boolean): boolean {
+  const resolve = pendingPlans.get(promptId)
+  if (!resolve) return false
+  pendingPlans.delete(promptId)
+  resolve(approved)
+  return true
+}
+
+/**
+ * Show the model's proposed plan and wait for the user to run or cancel it.
+ * Returns false (cancel) if no requester is wired or the prompt times out.
+ */
+export function requestPlanApproval(requestId: string, plan: string): Promise<boolean> {
+  const requester = planRequester
+  if (!requester) return Promise.resolve(false)
+  const promptId = `plan-${nextPromptId++}`
+  return new Promise<boolean>((resolve) => {
+    const timer = setTimeout(() => {
+      pendingPlans.delete(promptId)
+      permissionExpiredNotifier?.(promptId)
+      resolve(false)
+    }, PERMISSION_TIMEOUT_MS)
+    pendingPlans.set(promptId, (approved) => {
+      clearTimeout(timer)
+      resolve(approved)
+    })
+    requester({ promptId, requestId, plan })
+  })
 }
 
 /** Notifies the renderer that a prompt expired so it can dismiss the modal. */

@@ -15,16 +15,21 @@ and the **knowledge folders** it answers from. Build one once, start chats with 
   once and chunks from every folder compete for the same top-k slots, so the best evidence wins
   no matter where it lives. With more than one folder, citations are folder-prefixed
   (`finance-notes/budget.md`) so sources stay unambiguous.
+- **Connectors (optional)** — the MCP servers the agent may use. Leave all unchecked and the agent
+  uses whatever connectors are normally on; check some and its chats are scoped to exactly those
+  while active (an empty list never silences tools, it just inherits). Every tool call stays
+  permission-gated and audit-logged as always. Precedence when several things are in play: an
+  active agent's connectors win over a project's, which win over the global enabled set.
 
-Deliberately **not** part of an agent: model binding and connector selection. An agent shapes the
-conversation; the model stays whatever you've selected, and tools remain governed by the
-connector settings, trust profile, and permission prompts exactly as everywhere else.
+Deliberately **not** part of an agent: model binding. An agent shapes the conversation; the model
+stays whatever you've selected.
 
 ## Using agents
 
 **Start chat** on an agent's card opens a fresh conversation with that agent applied; the chat
 header shows its chip, and the sidebar row carries its emoji so agent chats are recognisable
-later. Reopening a saved agent chat restores the agent. **New chat** always starts plain.
+later. Reopening a saved agent chat restores the agent (and its connector scope). **New chat**
+always starts plain.
 
 Agents and **projects** compose: a project is a workspace you switch into (scoping your chat
 list); an agent is an assistant you summon per chat. Inside a project, an agent chat gets both
@@ -32,6 +37,22 @@ sets of instructions — project first, agent second.
 
 Deleting an agent keeps every chat made with it (the badge stays, denormalized); only the
 reusable definition goes away.
+
+## Share an agent
+
+An agent is one JSON file, so it travels: **Export…** in the agent editor writes a
+`*.agent.json` file; **Import** on the Agents tab reads one back in under a fresh id (so importing
+never overwrites an existing agent). Knowledge-folder references travel too — on another machine
+they simply retrieve nothing until those folders exist and are re-indexed, and connector ids that
+don't resolve there just connect nothing. Nothing errors; the agent degrades gracefully.
+
+## Plan preview
+
+Independently of agents, Settings → Agent trust has **Preview the plan before tool use**. When on,
+a tool-capable model first proposes the steps it intends to take before a multi-tool turn; you
+approve the plan once (every tool call in the turn then runs without a prompt) or cancel and
+nothing runs. Every call is still audit-logged. It pairs naturally with agents that have
+connectors. See the [Agent harness](agent-harness.md).
 
 ## Where they live
 

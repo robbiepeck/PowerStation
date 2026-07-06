@@ -1808,6 +1808,15 @@ export function SettingsView({
             tools you set to Never allow still block silently. Every call lands in the audit log in both modes;
             switching back to Trusted restores your remembered choices exactly as they were.
           </p>
+          <ToggleControl
+            label="Preview the plan before tool use"
+            checked={settings.agentPlanPreview}
+            onChange={(value) => onChange({ agentPlanPreview: value })}
+          />
+          <p className="policy-note subtle">
+            When on, a tool-capable model first proposes the steps it intends to take; approving the plan runs the
+            whole turn without a prompt per call. Cancel and nothing runs. Best for multi-step agent tasks.
+          </p>
         </section>
 
         <section className="settings-section">
@@ -2144,10 +2153,12 @@ export function RepairView() {
 export function AgentsView({
   agents,
   onEdit,
+  onImport,
   onStartChat,
 }: {
   agents: CustomAgent[]
   onEdit: (agent: CustomAgent | null) => void
+  onImport: () => void
   onStartChat: (agent: CustomAgent) => void
 }) {
   return (
@@ -2156,10 +2167,16 @@ export function AgentsView({
         eyebrow="Agents"
         title="Your agents"
         action={
-          <button className="primary-button compact-primary" type="button" onClick={() => onEdit(null)}>
-            <Plus size={15} />
-            New agent
-          </button>
+          <div className="agents-header-actions">
+            <button className="secondary-button compact" type="button" onClick={onImport}>
+              <FileDown size={14} />
+              Import
+            </button>
+            <button className="primary-button compact-primary" type="button" onClick={() => onEdit(null)}>
+              <Plus size={15} />
+              New agent
+            </button>
+          </div>
         }
       />
       <p className="agents-intro">

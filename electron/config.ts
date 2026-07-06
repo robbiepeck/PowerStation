@@ -18,6 +18,11 @@ export type Settings = {
    * 'cautious' asks on every call regardless (denies still block silently).
    */
   agentProfile: 'trusted' | 'cautious'
+  /**
+   * When on, a tool-capable model first proposes a plan before a multi-tool
+   * turn; approving it runs the whole turn without per-call prompts.
+   */
+  agentPlanPreview: boolean
   utilities: UtilitySettings
 }
 
@@ -89,6 +94,7 @@ const defaultSettings: Settings = {
   saveChats: true,
   autoCompact: true,
   agentProfile: 'trusted',
+  agentPlanPreview: false,
   utilities: defaultUtilities,
 }
 
@@ -191,6 +197,7 @@ function sanitizeSettings(patch: Partial<Settings> | null | undefined, base: Set
     saveChats: boolOr(s.saveChats, defaultSettings.saveChats),
     autoCompact: boolOr(s.autoCompact, defaultSettings.autoCompact),
     agentProfile: s.agentProfile === 'cautious' ? 'cautious' : 'trusted',
+    agentPlanPreview: boolOr(s.agentPlanPreview, defaultSettings.agentPlanPreview),
     utilities: sanitizeUtilities(utilities),
   }
 }

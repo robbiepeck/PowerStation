@@ -176,12 +176,22 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
  * Reconnect/disconnect MCP servers so connections mirror the settings — or,
  * while a project is active, that project's connector selection.
  */
+// The agent the current chat is using (per-chat, not a persisted mode). When it
+// declares connectors, they take precedence over the project/global set while
+// that chat is active. Set by agents:setActive from the renderer.
+let activeAgentId: string | null = null
+
 async function reconcileMcpServers(): Promise<void> {
   const state = await getState()
   const project = await projects.getActiveProject()
+  const agent = activeAgentId ? await customAgents.getAgent(activeAgentId) : null
+  // Precedence: an active agent's connector selection (if it names any) wins
+  // over the project's, which wins over the global enabled set. An agent with
+  // no connectors named inherits rather than silencing everything.
+  const scopeIds = agent?.mcpServerIds.length ? agent.mcpServerIds : project ? project.mcpServerIds : null
   const wanted = new Map(
     state.settings.utilities.mcpServers
-      .filter((server) => (project ? project.mcpServerIds.includes(server.id) : server.enabled))
+      .filter((server) => (scopeIds ? scopeIds.includes(server.id) : server.enabled))
       .map((s) => [s.id, s]),
   )
   const statuses = new Map(mcp.getMcpStatuses().map((status) => [status.id, status.state]))
@@ -212,6 +222,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   agent.setPermissionRequester((request) => send('agent:permissionRequest', request))
   agent.setPermissionExpiredNotifier((promptId) => send('agent:permissionExpired', { promptId }))
   agent.setToolResultReporter((event) => send('chat:toolResult', event))
+  agent.setPlanRequester((request) => send('agent:planRequest', request))
   mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
   void reconcileMcpServers()
 
@@ -377,9 +388,52 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   // --- Custom agents --------------------------------------------------------------
   ipcMain.handle('agents:list', () => customAgents.listAgents())
   ipcMain.handle('agents:get', (_event, id: string) => customAgents.getAgent(id))
-  ipcMain.handle('agents:save', (_event, payload: unknown) => customAgents.saveAgent(payload))
-  ipcMain.handle('agents:delete', (_event, id: string) => customAgents.deleteAgent(id))
+  ipcMain.handle('agents:save', async (_event, payload: unknown) => {
+    const saved = await customAgents.saveAgent(payload)
+    // Editing the active chat's agent can change its connector selection.
+    if (saved && saved.id === activeAgentId) void reconcileMcpServers()
+    return saved
+  })
+  ipcMain.handle('agents:delete', async (_event, id: string) => {
+    const removed = await customAgents.deleteAgent(id)
+    if (removed && id === activeAgentId) {
+      activeAgentId = null
+      void reconcileMcpServers()
+    }
+    return removed
+  })
   ipcMain.handle('agents:reveal', () => customAgents.revealAgentsDir())
+  // Tell the main process which agent the current chat is using, so its
+  // connector selection drives which MCP servers are connected.
+  ipcMain.handle('agents:setActive', async (_event, id: string | null) => {
+    const next = typeof id === 'string' && (await customAgents.getAgent(id)) ? id : null
+    if (next === activeAgentId) return true
+    activeAgentId = next
+    await reconcileMcpServers()
+    return true
+  })
+  ipcMain.handle('agents:export', async (_event, id: string) => {
+    const json = await customAgents.exportAgentShare(id)
+    if (!json) return null
+    const agent = await customAgents.getAgent(id)
+    const result = await dialog.showSaveDialog({
+      defaultPath: `${(agent?.name ?? 'agent').replace(/[\\/:*?"<>|]/g, '-').slice(0, 50)}.agent.json`,
+      filters: [{ name: 'PowerStation agent', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePath) return null
+    await fs.writeFile(result.filePath, json, 'utf8')
+    return result.filePath
+  })
+  ipcMain.handle('agents:import', async () => {
+    const picked = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'PowerStation agent', extensions: ['json'] }],
+    })
+    if (picked.canceled || !picked.filePaths.length) return null
+    const text = await fs.readFile(picked.filePaths[0], 'utf8')
+    // parseAgentShare throws a readable message on a bad file; let it surface.
+    return customAgents.importAgentShare(text)
+  })
 
   // --- Projects (workspaces) ----------------------------------------------------
   ipcMain.handle('projects:list', () => projects.listProjects())
@@ -731,6 +785,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return agent.resolvePermission(payload.promptId, decision)
   })
 
+  ipcMain.handle('agent:planResponse', (_event, payload: { promptId: string; approved: boolean }) => {
+    if (!payload || typeof payload.promptId !== 'string') return false
+    return agent.resolvePlan(payload.promptId, payload.approved === true)
+  })
+
   // --- Settings & device ----------------------------------------------------
   ipcMain.handle('settings:get', async () => (await getState()).settings)
   ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
@@ -852,6 +911,54 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
             }
           } catch {
             /* retrieval is best-effort; the question still goes through */
+          }
+        }
+
+        // Plan preview: when enabled and this turn can use tools, ask the model
+        // for a short plan first (an isolated probe that leaves the conversation
+        // untouched). The user approves the whole turn — every tool call
+        // pre-authorized — or cancels it, one decision instead of many prompts.
+        if (state.settings.agentPlanPreview && toolDefinitions.length > 0) {
+          try {
+            const toolList = toolDefinitions.map((t) => `- ${t.key}: ${t.description}`.slice(0, 200)).join('\n')
+            const planResult = await llm.chat({
+              requestId: `${requestId}-plan`,
+              modelPath,
+              prompt:
+                `You have these tools available:\n${toolList}\n\nThe user asked:\n"""${prompt.slice(0, 2000)}"""\n\n` +
+                'If answering this needs one or more tool calls, reply with a short numbered plan — each step naming the tool it will use and why. Do not call any tools and do not answer the question yet; give only the plan. If no tools are needed, reply with exactly: NO_TOOLS',
+              systemPrompt: effective.prompt,
+              contextTokens,
+              temperature: 0,
+              maxTokens: 260,
+              history: history?.length ? history : undefined,
+              isolated: true,
+              onToken: () => {},
+              onStatus: () => {},
+              onToolCall: () => {},
+              onCompacted: () => {},
+            })
+            const plan = planResult.text.trim()
+            if (plan && !/no_tools/i.test(plan)) {
+              const approved = await agent.requestPlanApproval(requestId, plan)
+              if (!approved) {
+                send('chat:done', {
+                  requestId,
+                  text: '',
+                  tokensPerSec: 0,
+                  elapsedMs: 0,
+                  aborted: true,
+                  toolCallCount: 0,
+                  haltReason: null,
+                  contextUsed: 0,
+                  contextSize: contextTokens,
+                })
+                return
+              }
+              agent.allowTurn(requestId)
+            }
+          } catch {
+            /* planning is best-effort — fall through to a normal turn if it fails */
           }
         }
 

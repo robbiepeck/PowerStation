@@ -3314,6 +3314,26 @@
   margin-right: 0.3rem;
 }
 
+.agents-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.plan-body {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0.4rem 0 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text);
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+}
+
 /* Compare modal */
 
 .compare-modal {

@@ -63,6 +63,9 @@ contextBridge.exposeInMainWorld('powerStation', {
     save: (payload) => ipcRenderer.invoke('agents:save', payload),
     delete: (id) => ipcRenderer.invoke('agents:delete', id),
     reveal: () => ipcRenderer.invoke('agents:reveal'),
+    setActive: (id) => ipcRenderer.invoke('agents:setActive', id),
+    export: (id) => ipcRenderer.invoke('agents:export', id),
+    import: () => ipcRenderer.invoke('agents:import'),
   },
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),
@@ -151,6 +154,8 @@ contextBridge.exposeInMainWorld('powerStation', {
     respondPermission: (payload) => ipcRenderer.invoke('agent:permissionResponse', payload),
     onPermissionRequest: (callback) => subscribe('agent:permissionRequest', callback),
     onPermissionExpired: (callback) => subscribe('agent:permissionExpired', callback),
+    respondPlan: (payload) => ipcRenderer.invoke('agent:planResponse', payload),
+    onPlanRequest: (callback) => subscribe('agent:planRequest', callback),
   },
   mcp: {
     statuses: () => ipcRenderer.invoke('mcp:statuses'),

@@ -26,20 +26,24 @@ model landscape and with what users hit first.
   (v0.14) driving the same guarded tools. See [repair.md](docs/repair.md).
 - **Agent trust profiles** — Trusted vs Cautious (every call asks); turn-scoped grants; per-chat
   audit log.
+- **Agents (workspaces' faster cousin)** — reusable assistants with instructions + multiple
+  knowledge folders + connectors (v0.15–v0.16); export/import as a file; **plan preview** that
+  proposes a turn's steps for one-shot approval. See [agents.md](docs/agents.md).
 
 ## Next
 
 - **macOS Developer ID signing & notarization** — a prerequisite for a friction-free consumer
   release (no Gatekeeper warning). The blocker before any public binary — and the gate in front
-  of the MLX engine pack.
+  of the MLX engine pack. The app is at v0.16 but the last *packaged* release is v0.7.0; cutting a
+  fresh release is the highest-value next step.
 - **Menu-bar quick chat + global hotkey** — summon the local model from anywhere; pure Electron
   work on top of the existing chat stack.
+- **Agent gallery** — a curated, remotely-updatable `catalog/agents.json` (same pattern as skills
+  and connectors) so useful agents install with one click.
 - **Local voice, verified first** — system-voice TTS is nearly free; speech input depends on
   whisper.cpp bindings that will be verified before anything ships (the same discipline as
   vision).
 - **Project templates** — a few starter workspaces so Projects are discoverable.
-- **Agent plan preview** — the model states its intended steps before a multi-tool turn; one
-  approval covers the run.
 
 ## Later
 

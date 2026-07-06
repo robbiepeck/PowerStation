@@ -34,6 +34,12 @@ export type ChatRequest = {
   history?: Array<{ role: 'user' | 'assistant'; text: string }>
   /** Compress older turns automatically when the context nears full (default on). */
   autoCompact?: boolean
+  /**
+   * Plan-preview probe: generate against the live context but restore the
+   * session afterwards, and don't stream tokens into the main chat — so the
+   * conversation is untouched. Used to ask the model for a plan before a turn.
+   */
+  isolated?: boolean
 }
 
 export type BenchmarkRequest = {

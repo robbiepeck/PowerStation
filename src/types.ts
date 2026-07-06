@@ -124,6 +124,7 @@ export type Settings = {
   saveChats: boolean
   autoCompact: boolean
   agentProfile: 'trusted' | 'cautious'
+  agentPlanPreview: boolean
   utilities: UtilitySettings
 }
 
@@ -227,9 +228,12 @@ export type CustomAgent = {
   description: string
   instructions: string
   knowledge: AgentKnowledge[]
+  mcpServerIds: string[]
   createdAt: number
   updatedAt: number
 }
+
+export type PlanRequest = { promptId: string; requestId: string; plan: string }
 
 export type AgentBadge = { id: string; name: string; emoji: string }
 
@@ -628,6 +632,9 @@ export type PowerStationBridge = {
     save: (payload: Partial<CustomAgent> & { name: string }) => Promise<CustomAgent | null>
     delete: (id: string) => Promise<boolean>
     reveal: () => Promise<boolean>
+    setActive: (id: string | null) => Promise<boolean>
+    export: (id: string) => Promise<string | null>
+    import: () => Promise<CustomAgent | null>
   }
   projects: {
     list: () => Promise<Project[]>
@@ -731,6 +738,8 @@ export type PowerStationBridge = {
     respondPermission: (payload: { promptId: string; decision: PermissionDecision }) => Promise<boolean>
     onPermissionRequest: (callback: (payload: PermissionRequest) => void) => Unsubscribe
     onPermissionExpired: (callback: (payload: { promptId: string }) => void) => Unsubscribe
+    respondPlan: (payload: { promptId: string; approved: boolean }) => Promise<boolean>
+    onPlanRequest: (callback: (payload: PlanRequest) => void) => Unsubscribe
   }
   mcp: {
     statuses: () => Promise<McpServerStatus[]>

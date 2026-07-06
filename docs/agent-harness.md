@@ -109,6 +109,13 @@ Settings → **Agent trust** switches how remembered choices behave:
   (it's an explicit, turn-scoped answer), *Never allow* still blocks silently, and every call is
   audit-logged in both modes. A chip in the chat header shows while cautious mode is on.
 
+The same section has **Preview the plan before tool use** (off by default). When on, a tool-capable
+model runs a short planning pass *before* a multi-tool turn — an isolated probe that leaves the
+conversation untouched — and proposes the steps it intends to take. You approve the plan once (every
+tool call in that turn then runs without a per-call prompt) or cancel and nothing runs. Every call
+is still audit-logged; this trades per-call prompts for one up-front decision on multi-step tasks,
+and pairs naturally with an [agent](agents.md) that scopes its own connectors.
+
 ## Built-in repair tools
 
 Beyond MCP servers, PowerStation ships **first-party tools** the model can call — currently the
