@@ -1864,10 +1864,6 @@
   background: color-mix(in srgb, var(--surface) 92%, var(--surface-muted));
 }
 
-.utility-panel.personalisation {
-  grid-row: span 2;
-}
-
 .utility-panel-head {
   display: flex;
   align-items: center;
@@ -2011,10 +2007,6 @@
   .utility-add-row,
   .mcp-add-grid {
     grid-template-columns: 1fr;
-  }
-
-  .utility-panel.personalisation {
-    grid-row: auto;
   }
 }
 
@@ -3968,8 +3960,11 @@
   color: var(--muted);
 }
 
+/* Every utility panel spans the full row so they align with the banner. */
+.utility-panel.personalisation,
 .skills-panel,
-.connector-panel {
+.connector-panel,
+.mcp-panel {
   grid-column: 1 / -1;
 }
 
