@@ -2,7 +2,7 @@
   "name": "powerstation",
   "productName": "PowerStation",
   "private": true,
-  "version": "0.17.0",
+  "version": "0.18.0",
   "description": "Local AI for your Mac: guided model choice, an agent harness built for small models, and honest resource monitoring.",
   "author": "Robbie Peck",
   "license": "MIT",

@@ -134,6 +134,13 @@ planning pass (snapshots/restores the session so the conversation is untouched);
 whole turn with tools pre-authorized, cancelling runs nothing. Reuses the turn-scoped grant and the
 audit log.
 
+### 25. Local API server — *shipped v0.18*
+Robbie's idea: expose the running model as an OpenAI-compatible HTTP endpoint so other local apps
+and scripts can call it. Confirmed design: token-required auth, honour the requested model (fall
+back to selected), raw inference (no app prompt/skills), inference-only (no tools) for v1. Bound to
+127.0.0.1, off by default, serialized through the single worker, admission-controlled per request,
+with a request log. Zero new deps (node:http). See [api-server.md](api-server.md).
+
 ### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
 Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face
 (schema + data + weekly CI verification shipped, plus an honest "vision-capable model" badge) —

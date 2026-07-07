@@ -3506,6 +3506,134 @@
   padding-left: 1rem;
 }
 
+/* Local API server settings */
+
+.api-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.api-status {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.api-status.ok {
+  color: var(--green);
+}
+
+.api-status.bad {
+  color: var(--red);
+}
+
+.api-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.api-field > span {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.api-copy-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.api-copy-row code {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.78rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.api-token {
+  letter-spacing: 0.02em;
+}
+
+.api-port {
+  width: 8rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.api-example pre {
+  margin: 0.3rem 0 0;
+  padding: 0.6rem 0.7rem;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 0.72rem;
+  overflow-x: auto;
+}
+
+.api-example summary {
+  font-size: 0.76rem;
+  color: var(--teal);
+  cursor: pointer;
+}
+
+.api-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.api-log-title {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.api-log-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+}
+
+.api-log-row code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.api-code {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.api-code.ok {
+  color: var(--green);
+}
+
+.api-code.bad {
+  color: var(--red);
+}
+
 /* Repair view */
 
 .repair-view {

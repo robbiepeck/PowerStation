@@ -78,6 +78,9 @@ those three gaps:
 - **Repair without snake oil** — storage intelligence for AI files, cross-app duplicate detection,
   and cleanup strictly limited to PowerStation's own data — as a tab, and as an opt-in **agent
   skill** driving the same guarded tools. → [Repair](docs/repair.md)
+- **Local API server** — serve your running model as an OpenAI-compatible endpoint on
+  `127.0.0.1` so other apps and scripts can call it with the OpenAI SDK; off by default,
+  token-gated. → [API server](docs/api-server.md)
 - **Backup & restore** — one readable JSON archive of settings, permissions, skills, chats,
   projects, and agents.
 - **Truthful telemetry** — live CPU/RAM/VRAM/pressure/battery, every figure labelled measured or
@@ -128,6 +131,7 @@ troubleshooting in the [Setup Guide](docs/setup.md).
 | [Agent harness](docs/agent-harness.md) | MCP tools, permissions, capability gating, loop guards. |
 | [Projects & backup](docs/projects.md) | Workspaces that bundle instructions, knowledge, skills, connectors; one-file backup. |
 | [Agents](docs/agents.md) | Reusable assistants: instructions + multiple knowledge folders, started with one click. |
+| [API server](docs/api-server.md) | Serve your model as a localhost OpenAI-compatible endpoint for other apps. |
 | [Repair](docs/repair.md) | Storage & health for AI workloads — diagnose and reveal, never touch system files. |
 | [Contributing](CONTRIBUTING.md) | Dev setup, how the catalogue works, proposing a model. |
 | [Roadmap](ROADMAP.md) | What's next. |

@@ -2,6 +2,18 @@
 
 The "See what's new" card in the app links here.
 
+## v0.18.0 — Local API server
+
+- **OpenAI-compatible API server** — Settings → *Local API server* turns your running model into an
+  endpoint other apps and scripts on this Mac can call with the standard OpenAI SDK, entirely
+  offline. Off by default, bound to `127.0.0.1` only, and gated by a generated **bearer token** you
+  copy from Settings (Regenerate to revoke). Endpoints: `GET /v1/models`, `POST /v1/chat/completions`
+  (streaming and non-streaming), `POST /v1/embeddings`. Requests are **raw inference** — the caller
+  controls the messages; your app system prompt, skills, and tools are not applied — and they run
+  one at a time (the model loads once). Every request appears in a live log in Settings, and each
+  call still passes admission control, so an over-large request gets an honest error instead of
+  swapping your Mac. See [docs/api-server.md](docs/api-server.md).
+
 ## v0.17.0 — Delete models to reclaim space
 
 - **Delete an installed model from disk** — each model in the Models view now has a clear

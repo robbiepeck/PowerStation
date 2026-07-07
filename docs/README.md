@@ -23,6 +23,8 @@ run on your machine.
   connectors; one-file backup & restore.
 - **[Agents](agents.md)** — reusable assistants: instructions + multiple knowledge folders,
   started with one click.
+- **[API server](api-server.md)** — serve your model as a localhost OpenAI-compatible endpoint
+  for other apps and scripts.
 - **[Repair](repair.md)** — storage & health for AI workloads, as a tab and as an agent skill;
   the diagnose-don't-operate contract.
 

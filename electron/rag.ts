@@ -177,6 +177,20 @@ function toInfo(index: StoredIndex): FolderIndexInfo {
   }
 }
 
+/**
+ * Embeddings for the local API server's /v1/embeddings endpoint, using the same
+ * bundled nomic model as folder retrieval (document-passage mode).
+ */
+export async function embedForApi(texts: string[]): Promise<{ model: string; vectors: number[][] }> {
+  if (!texts.length) return { model: EMBED_MODEL_FILE, vectors: [] }
+  const modelPath = await ensureEmbedModel()
+  const vectors = await embedTexts(
+    modelPath,
+    texts.map((text) => DOC_PREFIX + text),
+  )
+  return { model: EMBED_MODEL_FILE, vectors }
+}
+
 export async function queryFolder(
   folderId: string,
   question: string,

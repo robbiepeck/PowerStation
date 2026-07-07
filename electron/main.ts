@@ -7,6 +7,7 @@ import { registerIpc } from './ipc.js'
 import { startTelemetry, stopTelemetry } from './telemetry.js'
 import { shutdown as shutdownLlm, getActiveRequestIds, stopChat } from './llm.js'
 import { disconnectAll as disconnectMcp } from './mcp.js'
+import { stopApiServer } from './apiServer.js'
 import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
 
 // GUI apps launched from Finder/Dock get launchd's minimal PATH; fix it before
@@ -128,4 +129,5 @@ app.on('before-quit', () => {
   stopTelemetry()
   shutdownLlm()
   void disconnectMcp()
+  void stopApiServer()
 })

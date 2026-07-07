@@ -298,8 +298,10 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
       ...(functions ? { functions } : {}),
       onTextChunk: (chunk: string) => {
         charCount += chunk.length
-        // An isolated probe never streams into the visible turn.
-        if (!request.isolated) post({ event: 'chat:token', requestId: request.requestId, token: chunk })
+        // Always emit tokens; whether they reach the UI is decided host-side by
+        // the per-request onToken callback (a no-op for the plan-preview probe,
+        // an SSE writer for the API server, the renderer stream for in-app chat).
+        post({ event: 'chat:token', requestId: request.requestId, token: chunk })
       },
     } as Parameters<LlamaChatSession['prompt']>[1])
     activeGenerations.add(generation)

@@ -178,20 +178,35 @@ export async function getDeviceInfo(): Promise<WorkerDeviceInfo> {
   return call<WorkerDeviceInfo>({ cmd: 'deviceInfo' })
 }
 
+// One inference at a time. The worker holds a single model + chat sequence, so
+// concurrent generations (e.g. an in-app chat and a local-API-server request)
+// would corrupt each other's session. Every generation acquires this lock, so
+// they queue rather than overlap — the API server surfaces this as "serialized".
+let inferenceChain: Promise<unknown> = Promise.resolve()
+function withInferenceLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = inferenceChain.then(fn, fn)
+  // Swallow settlement on the chain so one failed turn doesn't reject the next.
+  inferenceChain = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
 export async function chat(
   options: Omit<ChatRequest, 'requestId'> & { requestId: string } & ChatCallbacks,
 ): Promise<ChatResult> {
   const { onToken, onStatus, onToolCall, onCompacted, ...request } = options
   chatCallbacks.set(request.requestId, { onToken, onStatus, onToolCall, onCompacted })
   try {
-    return await call<ChatResult>({ cmd: 'chat', payload: request })
+    return await withInferenceLock(() => call<ChatResult>({ cmd: 'chat', payload: request }))
   } finally {
     chatCallbacks.delete(request.requestId)
   }
 }
 
 export async function runBenchmark(payload: BenchmarkRequest): Promise<BenchmarkResult> {
-  return call<BenchmarkResult>({ cmd: 'benchmark', payload })
+  return withInferenceLock(() => call<BenchmarkResult>({ cmd: 'benchmark', payload }))
 }
 
 /** Embed texts with a small local embedding model (loaded lazily in the worker). */

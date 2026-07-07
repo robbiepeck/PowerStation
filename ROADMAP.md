@@ -29,6 +29,9 @@ model landscape and with what users hit first.
 - **Agents (workspaces' faster cousin)** — reusable assistants with instructions + multiple
   knowledge folders + connectors (v0.15–v0.16); export/import as a file; **plan preview** that
   proposes a turn's steps for one-shot approval. See [agents.md](docs/agents.md).
+- **Local API server** — serve your model as a localhost OpenAI-compatible endpoint (v0.18);
+  off by default, token-gated, raw inference. See [api-server.md](docs/api-server.md).
+- **Delete installed models** to reclaim disk space (v0.17), including every part of a split GGUF.
 
 ## Next
 

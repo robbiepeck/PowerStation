@@ -57,6 +57,15 @@ contextBridge.exposeInMainWorld('powerStation', {
     export: (id) => ipcRenderer.invoke('chats:export', id),
     exportAudit: (id) => ipcRenderer.invoke('chats:exportAudit', id),
   },
+  api: {
+    status: () => ipcRenderer.invoke('api:status'),
+    log: () => ipcRenderer.invoke('api:log'),
+    setEnabled: (enabled) => ipcRenderer.invoke('api:setEnabled', enabled),
+    setPort: (port) => ipcRenderer.invoke('api:setPort', port),
+    regenerateToken: () => ipcRenderer.invoke('api:regenerateToken'),
+    onStatus: (callback) => subscribe('api:status', callback),
+    onRequest: (callback) => subscribe('api:request', callback),
+  },
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
     get: (id) => ipcRenderer.invoke('agents:get', id),

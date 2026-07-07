@@ -237,6 +237,27 @@ export type PlanRequest = { promptId: string; requestId: string; plan: string }
 
 export type AgentBadge = { id: string; name: string; emoji: string }
 
+export type ApiServerStatus = {
+  enabled: boolean
+  running: boolean
+  port: number
+  url: string
+  token: string
+  requestCount: number
+  lastError: string | null
+}
+
+export type ApiRequestLog = {
+  id: number
+  timestamp: number
+  method: string
+  path: string
+  model: string | null
+  status: number
+  durationMs: number
+  error?: string
+}
+
 export type StorageLocation = {
   id: string
   label: string
@@ -625,6 +646,15 @@ export type PowerStationBridge = {
     search: (query: string, scope?: ChatScope) => Promise<ChatSummary[]>
     export: (id: string) => Promise<string | null>
     exportAudit: (id: string) => Promise<string | null>
+  }
+  api: {
+    status: () => Promise<ApiServerStatus>
+    log: () => Promise<ApiRequestLog[]>
+    setEnabled: (enabled: boolean) => Promise<ApiServerStatus>
+    setPort: (port: number) => Promise<ApiServerStatus>
+    regenerateToken: () => Promise<ApiServerStatus>
+    onStatus: (callback: (status: ApiServerStatus) => void) => Unsubscribe
+    onRequest: (callback: (entry: ApiRequestLog) => void) => Unsubscribe
   }
   agents: {
     list: () => Promise<CustomAgent[]>

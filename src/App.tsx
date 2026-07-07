@@ -41,6 +41,8 @@ import { CopyButton, formatBytes, formatNumber } from './ui'
 import type {
   AgentBadge,
   AgentKnowledge,
+  ApiRequestLog,
+  ApiServerStatus,
   BenchmarkRecord,
   CustomAgent,
   Catalog,
@@ -443,6 +445,30 @@ function useOllama() {
   return { status, refresh }
 }
 
+function useApiServer() {
+  const [status, setStatus] = useState<ApiServerStatus | null>(null)
+  const [log, setLog] = useState<ApiRequestLog[]>([])
+  const refresh = useCallback(async () => {
+    const [s, l] = await Promise.all([bridge.api.status().catch(() => null), bridge.api.log().catch(() => [])])
+    setStatus(s)
+    setLog(l)
+  }, [])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void refresh()
+    const offStatus = bridge.api.onStatus(setStatus)
+    const offRequest = bridge.api.onRequest((entry) => setLog((prev) => [...prev.slice(-59), entry]))
+    return () => {
+      offStatus()
+      offRequest()
+    }
+  }, [refresh])
+  const setEnabled = useCallback(async (enabled: boolean) => setStatus(await bridge.api.setEnabled(enabled)), [])
+  const setPort = useCallback(async (port: number) => setStatus(await bridge.api.setPort(port)), [])
+  const regenerate = useCallback(async () => setStatus(await bridge.api.regenerateToken()), [])
+  return { status, log, setEnabled, setPort, regenerate }
+}
+
 function useLmStudio() {
   const [status, setStatus] = useState<LmStudioStatus | null>(null)
   const refresh = useCallback(async () => {
@@ -748,6 +774,7 @@ function App() {
   const refreshBenchmarks = benchmarks.refresh
   const ollama = useOllama()
   const lmstudio = useLmStudio()
+  const apiServer = useApiServer()
   const [renamingChat, setRenamingChat] = useState<{ id: string; value: string } | null>(null)
   const [projectMenuOpen, setProjectMenuOpen] = useState(false)
   const [projectModal, setProjectModal] = useState<{ project: Project | null } | null>(null)
@@ -1563,6 +1590,7 @@ function App() {
           <div className="scroll-view">
             {settings ? (
               <SettingsView
+                apiServer={apiServer}
                 onChange={updateSettings}
                 onDeleteAllChats={() => void handleDeleteAllChats()}
                 onExportBackup={() => void handleExportBackup()}

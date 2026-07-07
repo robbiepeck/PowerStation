@@ -73,6 +73,8 @@ flowchart LR
 | `electron/rag.ts` + `ragUtil.ts` | Chat-with-a-folder: local embedding index per folder, retrieval with sources. |
 | `electron/repair.ts` + `repairUtil.ts` | Storage scans (read-only), reclaimables, the containment guard, integrity checks. |
 | `electron/backup.ts` + `backupFormat.ts` | One-file backup archive; restore through the same sanitizers as config reads. |
+| `electron/apiServer.ts` + `apiFormat.ts` | Localhost OpenAI-compatible HTTP server (off by default, token-gated); pure request/response mapping. |
+| `electron/admitModel.ts` | Shared fit check reused by in-app chat and the API server. |
 | `electron/ollama.ts` / `electron/lmstudio.ts` | Detect models already on disk in other apps; register in place. |
 | `electron/models.ts` | Indexes local GGUFs; reads header geometry; sums split parts. |
 | `electron/recommend.ts` | (hardware × intent) → ranked recommendations with reasons and versus-primary rationale. |

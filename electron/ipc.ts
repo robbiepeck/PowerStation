@@ -12,6 +12,7 @@ import * as projects from './projects.js'
 import * as backup from './backup.js'
 import * as repair from './repair.js'
 import * as customAgents from './customAgents.js'
+import * as apiServer from './apiServer.js'
 import { REPAIR_SKILL_SLUG } from './builtinTools.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
@@ -223,6 +224,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   agent.setPermissionExpiredNotifier((promptId) => send('agent:permissionExpired', { promptId }))
   agent.setToolResultReporter((event) => send('chat:toolResult', event))
   agent.setPlanRequester((request) => send('agent:planRequest', request))
+  apiServer.setApiLogListener((entry) => send('api:request', entry))
+  apiServer.setApiStatusListener(() => void apiServer.getApiStatus().then((s) => send('api:status', s)))
+  // Start the local API server if it was left enabled (off by default).
+  void apiServer.syncApiServer()
   mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
   void reconcileMcpServers()
 
@@ -391,6 +396,24 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     await chats.exportChatMarkdown(chat, result.filePath)
     return result.filePath
   })
+
+  // --- Local API server -----------------------------------------------------------
+  ipcMain.handle('api:status', () => apiServer.getApiStatus())
+  ipcMain.handle('api:log', () => apiServer.getApiLog())
+  ipcMain.handle('api:setEnabled', async (_event, enabled: boolean) => {
+    await mutate((s) => {
+      s.apiServer.enabled = enabled === true
+    })
+    return apiServer.syncApiServer()
+  })
+  ipcMain.handle('api:setPort', async (_event, port: number) => {
+    const clamped = Math.min(65535, Math.max(1024, Math.round(Number(port) || 0)))
+    await mutate((s) => {
+      s.apiServer.port = clamped
+    })
+    return apiServer.syncApiServer()
+  })
+  ipcMain.handle('api:regenerateToken', () => apiServer.regenerateApiToken())
 
   // --- Custom agents --------------------------------------------------------------
   ipcMain.handle('agents:list', () => customAgents.listAgents())

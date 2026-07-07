@@ -37,6 +37,8 @@ import type {
   Catalog,
   CatalogModel,
   ConnectorCatalog,
+  ApiRequestLog,
+  ApiServerStatus,
   ConnectorEntry,
   CustomAgent,
   DeviceInfo,
@@ -1726,7 +1728,16 @@ function KnowledgeFoldersSection() {
 
 // --- Settings ---------------------------------------------------------------------
 
+type ApiServerControls = {
+  status: ApiServerStatus | null
+  log: ApiRequestLog[]
+  setEnabled: (enabled: boolean) => Promise<void> | void
+  setPort: (port: number) => Promise<void> | void
+  regenerate: () => Promise<void> | void
+}
+
 export function SettingsView({
+  apiServer,
   onChange,
   onDeleteAllChats,
   onExportBackup,
@@ -1734,6 +1745,7 @@ export function SettingsView({
   onRevealChats,
   settings,
 }: {
+  apiServer: ApiServerControls
   onChange: (patch: Partial<Settings>) => void
   onDeleteAllChats: () => void
   onExportBackup: () => void
@@ -1867,6 +1879,92 @@ export function SettingsView({
             Restoring replaces settings and permissions with the backup's; chats, skills and projects from the backup
             overwrite items with the same id and everything else stays.
           </p>
+        </section>
+
+        <section className="settings-section">
+          <h3>Local API server</h3>
+          <p className="policy-note subtle">
+            Serve your running model as an <strong>OpenAI-compatible endpoint</strong> so other apps and scripts on
+            this Mac can call it with the standard OpenAI SDK — bound to <code>127.0.0.1</code> only, nothing leaves
+            your computer.
+          </p>
+          <ToggleControl
+            label="Enable local API server"
+            checked={apiServer.status?.enabled ?? false}
+            onChange={(value) => void apiServer.setEnabled(value)}
+          />
+          {apiServer.status?.enabled ? (
+            <div className="api-panel">
+              {apiServer.status.running ? (
+                <p className="api-status ok">
+                  Running · {apiServer.status.requestCount} request{apiServer.status.requestCount === 1 ? '' : 's'} this session
+                </p>
+              ) : (
+                <p className="api-status bad">
+                  Not running{apiServer.status.lastError ? ` — ${apiServer.status.lastError}` : '…'}
+                </p>
+              )}
+              <div className="api-field">
+                <span>Base URL</span>
+                <div className="api-copy-row">
+                  <code>{apiServer.status.url}</code>
+                  <button className="secondary-button compact" type="button" onClick={() => void navigator.clipboard.writeText(apiServer.status!.url)}>
+                    Copy
+                  </button>
+                </div>
+              </div>
+              <div className="api-field">
+                <span>API key (send as <code>Authorization: Bearer …</code>)</span>
+                <div className="api-copy-row">
+                  <code className="api-token">{apiServer.status.token || '(generating…)'}</code>
+                  <button className="secondary-button compact" type="button" onClick={() => void navigator.clipboard.writeText(apiServer.status!.token)}>
+                    Copy
+                  </button>
+                  <button className="ghost-button" type="button" onClick={() => void apiServer.regenerate()}>
+                    Regenerate
+                  </button>
+                </div>
+              </div>
+              <div className="api-field">
+                <span>Port</span>
+                <input
+                  className="api-port"
+                  type="number"
+                  min={1024}
+                  max={65535}
+                  defaultValue={apiServer.status.port}
+                  onBlur={(event) => {
+                    const port = Number(event.target.value)
+                    if (port !== apiServer.status?.port) void apiServer.setPort(port)
+                  }}
+                />
+              </div>
+              <details className="api-example">
+                <summary>Example call</summary>
+                <pre>{`curl ${apiServer.status.url}/chat/completions \\
+  -H "Authorization: Bearer ${apiServer.status.token}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"...","messages":[{"role":"user","content":"Hi"}]}'`}</pre>
+              </details>
+              {apiServer.log.length ? (
+                <div className="api-log">
+                  <span className="api-log-title">Recent requests</span>
+                  {[...apiServer.log].reverse().slice(0, 8).map((entry) => (
+                    <div className="api-log-row" key={entry.id}>
+                      <code>{entry.method} {entry.path}</code>
+                      <span className={entry.status < 400 ? 'api-code ok' : 'api-code bad'}>{entry.status}</span>
+                      <span className="muted">{[entry.model, `${entry.durationMs}ms`].filter(Boolean).join(' · ')}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <p className="policy-note subtle">
+                Any app on this Mac with the key can use your model, so keep it private — <strong>Regenerate</strong> revokes
+                the old one. Requests are <strong>raw inference</strong>: your system prompt, skills, and tools are not applied
+                (the caller controls the messages), and calls run one at a time.
+              </p>
+            </div>
+          ) : null}
         </section>
 
         <section className="settings-section">

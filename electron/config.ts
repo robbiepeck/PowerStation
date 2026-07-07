@@ -75,6 +75,15 @@ export type PersistedState = {
    * for existing users, while a deliberately-deleted one never resurrects.
    */
   seededSkillSlugs: string[]
+  /** Local OpenAI-compatible API server: off by default, localhost-only, token-gated. */
+  apiServer: ApiServerConfig
+}
+
+export type ApiServerConfig = {
+  enabled: boolean
+  port: number
+  /** Bearer token callers must present; generated when the server is first enabled. */
+  token: string
 }
 
 const defaultUtilities: UtilitySettings = {
@@ -248,6 +257,17 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
     seededSkillSlugs: Array.isArray(parsed?.seededSkillSlugs)
       ? parsed!.seededSkillSlugs.filter((s): s is string => typeof s === 'string').slice(0, 200)
       : [],
+    apiServer: sanitizeApiServer(parsed?.apiServer),
+  }
+}
+
+function sanitizeApiServer(value: unknown): ApiServerConfig {
+  const r = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  return {
+    enabled: r.enabled === true,
+    port: clampNumber(r.port, 1024, 65535, 4141),
+    // Keep a valid stored token; otherwise leave empty (generated on first enable).
+    token: typeof r.token === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test(r.token) ? r.token : '',
   }
 }
 
