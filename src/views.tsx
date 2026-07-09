@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import {
   AlertTriangle,
   BadgeCheck,
@@ -9,6 +10,7 @@ import {
   Database,
   Download,
   ExternalLink,
+  Factory,
   FileDown,
   FlaskConical,
   FolderOpen,
@@ -16,6 +18,7 @@ import {
   Gauge,
   Globe,
   HardDrive,
+  Leaf,
   ListOrdered,
   Microchip,
   Plug,
@@ -43,6 +46,7 @@ import type {
   CustomAgent,
   DeviceInfo,
   FitReport,
+  ImpactReport,
   McpServerConfig,
   McpServerStatus,
   McpToolInfoResponse,
@@ -64,6 +68,19 @@ import type {
   ToolPermission,
   UtilitySettings,
 } from './types'
+import {
+  IMPACT_ASSUMPTIONS,
+  estimateModelCreation,
+  formatCo2,
+  formatDuration,
+  formatEnergy,
+  kgFromKwh,
+  localUsageKg,
+  matchCatalogModel,
+  modelStorageAnnualKg,
+  selectedModelTrackedUsage,
+  storageImpact,
+} from './impact'
 import {
   Badge,
   MetricTile,
@@ -503,6 +520,324 @@ export function MonitorView({
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function ImpactMetricCard({
+  badge,
+  detail,
+  icon: Icon,
+  label,
+  value,
+}: {
+  badge?: ReactNode
+  detail: string
+  icon: LucideIconType
+  label: string
+  value: string
+}) {
+  return (
+    <article className="impact-metric-card">
+      <div className="impact-metric-head">
+        <span className="impact-metric-icon">
+          <Icon size={16} />
+        </span>
+        {badge}
+      </div>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
+  )
+}
+
+function ImpactSourceRows({ report }: { report: ImpactReport | null }) {
+  const rows = [
+    { key: 'chat' as const, label: 'App chat' },
+    { key: 'api' as const, label: 'Local API' },
+    { key: 'compare' as const, label: 'Model compare' },
+  ]
+  return (
+    <div className="impact-source-table">
+      <div className="impact-source-head">
+        <span>Source</span>
+        <span>Runs</span>
+        <span>Energy</span>
+        <span>CO2e</span>
+      </div>
+      {rows.map((row) => {
+        const bucket = report?.tracked.bySource[row.key]
+        const kwh = (bucket?.energyWh ?? 0) / 1000
+        return (
+          <div className="impact-source-row" key={row.key}>
+            <span>{row.label}</span>
+            <strong>{(bucket?.generationCount ?? 0).toLocaleString()}</strong>
+            <span>{formatEnergy(kwh)}</span>
+            <span>{formatCo2(kgFromKwh(kwh))}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function ImpactView({
+  catalog,
+  selectedModel,
+  snapshot,
+}: {
+  catalog: Catalog | null
+  selectedModel: ModelInfo | null
+  snapshot: TelemetrySnapshot | null
+}) {
+  const [report, setReport] = useState<ImpactReport | null>(null)
+  const [storage, setStorage] = useState<StorageReport | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const refresh = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [impactReport, storageReport] = await Promise.all([
+        bridge.impact.report().catch(() => null),
+        bridge.repair.report().catch(() => null),
+      ])
+      setReport(impactReport)
+      setStorage(storageReport)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  const catalogEntry = matchCatalogModel(catalog, selectedModel)
+  const creation = estimateModelCreation(selectedModel, catalogEntry)
+  const usageKg = localUsageKg(report)
+  const selectedUsage = selectedModelTrackedUsage(report, selectedModel)
+  const storageStats = storageImpact(storage, selectedModel)
+  const selectedStorageKgYear = modelStorageAnnualKg(storageStats.selectedModelBytes)
+  const appDataStorageKgYear = modelStorageAnnualKg(storageStats.appDataBytes)
+  const duplicateStorageKgYear = modelStorageAnnualKg(storageStats.duplicateBytes)
+
+  return (
+    <div className="impact-view">
+      <PanelHeader
+        eyebrow="Impact"
+        title="Environmental impact"
+        action={
+          <button className="secondary-button compact" type="button" onClick={() => void refresh()} disabled={loading}>
+            <RefreshCw size={14} className={loading ? 'spin-icon' : undefined} />
+            {loading ? 'Updating' : 'Refresh'}
+          </button>
+        }
+      />
+
+      <section className="impact-banner">
+        <span className="impact-banner-emoji" aria-hidden="true">
+          🍃
+        </span>
+        <div>
+          <h3>Transparent estimates for local AI</h3>
+          <p>
+            PowerStation separates measured local inference from rough upstream estimates. Local energy uses the Monitor
+            power estimate; model creation is a scenario based on parameters, training compute, and download size.
+          </p>
+        </div>
+      </section>
+
+      {!selectedModel ? (
+        <div className="empty-models impact-empty">
+          <Leaf size={28} />
+          <h3>No model selected</h3>
+          <p>Select or download a model to estimate creation, download, storage, and local inference impact.</p>
+        </div>
+      ) : (
+        <>
+          <section className="impact-section">
+            <div className="impact-section-head">
+              <span>1</span>
+              <div>
+                <h3>Current model creation and download</h3>
+                <p>{selectedModel.name} · {selectedModel.fileName}</p>
+              </div>
+              <Badge tone={creation?.confidence === 'catalog' ? 'real' : 'estimated'}>
+                {creation?.confidence === 'catalog' ? 'catalog metadata' : creation?.confidence === 'metadata' ? 'GGUF metadata' : 'file-size estimate'}
+              </Badge>
+            </div>
+
+            <div className="impact-metric-grid">
+              <ImpactMetricCard
+                icon={Factory}
+                label="Training footprint"
+                value={
+                  creation?.lowKgCo2e != null && creation.highKgCo2e != null
+                    ? `${formatCo2(creation.lowKgCo2e)} - ${formatCo2(creation.highKgCo2e)}`
+                    : 'Unknown'
+                }
+                detail="Broad upstream range for the original model training run, not all assigned to this install."
+                badge={<Badge tone="estimated">scenario</Badge>}
+              />
+              <ImpactMetricCard
+                icon={Gauge}
+                label="Allocated creation share"
+                value={formatCo2(creation?.allocatedKgCo2e)}
+                detail={`If the open model is amortised across ${IMPACT_ASSUMPTIONS.allocationDownloads.toLocaleString()} installs.`}
+                badge={<Badge tone="estimated">allocation</Badge>}
+              />
+              <ImpactMetricCard
+                icon={Download}
+                label="Download transfer"
+                value={formatCo2(creation?.downloadKgCo2e)}
+                detail={`${formatEnergy(creation?.downloadEnergyKwh)} for ${formatBytes(selectedModel.sizeBytes)} over the network.`}
+                badge={<Badge tone="estimated">network</Badge>}
+              />
+              <ImpactMetricCard
+                icon={HardDrive}
+                label="Model file"
+                value={formatBytes(selectedModel.sizeBytes)}
+                detail={`${creation?.totalParamsB ? `${formatNumber(creation.totalParamsB, 1)}B parameters` : 'Parameter count inferred'}${creation?.activeParamsB ? ` · ${formatNumber(creation.activeParamsB, 1)}B active` : ''}.`}
+                badge={<Badge tone="real">local file</Badge>}
+              />
+            </div>
+
+            <div className="impact-formula">
+              <Leaf size={16} />
+              <span>
+                Creation estimate: <strong>6 x active parameters x training tokens</strong>, with training tokens set to{' '}
+                {IMPACT_ASSUMPTIONS.trainingTokensPerParameter}x total parameters, {IMPACT_ASSUMPTIONS.datacenterPue} PUE,
+                and {IMPACT_ASSUMPTIONS.sustainedTrainingTflopsPerWatt} sustained TFLOP/s/W. The range expands this base
+                estimate for unknown dataset size, hardware utilisation, datacentre energy mix, and duplicated experiment runs.
+              </span>
+            </div>
+          </section>
+
+          <section className="impact-section">
+            <div className="impact-section-head">
+              <span>2</span>
+              <div>
+                <h3>Local use on this computer</h3>
+                <p>Tracked from completed app, API, and comparison generations on this install.</p>
+              </div>
+            </div>
+
+            <div className="impact-metric-grid local">
+              <ImpactMetricCard
+                icon={Leaf}
+                label="Tracked local CO2e"
+                value={formatCo2(usageKg)}
+                detail="From cumulative watt-hours multiplied by the default electricity carbon factor."
+                badge={<Badge tone={report?.tracked.generationCount ? 'real' : 'neutral'}>{report?.tracked.generationCount ? 'tracked' : 'no runs yet'}</Badge>}
+              />
+              <ImpactMetricCard
+                icon={Zap}
+                label="Inference energy"
+                value={formatEnergy((report?.tracked.energyWh ?? 0) / 1000)}
+                detail={`${formatDuration(report?.tracked.elapsedMs ?? 0)} generating across ${(report?.tracked.generationCount ?? 0).toLocaleString()} runs.`}
+                badge={<Badge tone="estimated">power estimate</Badge>}
+              />
+              <ImpactMetricCard
+                icon={ListOrdered}
+                label="Output tokens"
+                value={(report?.tracked.outputTokenEstimate ?? 0).toLocaleString()}
+                detail="Approximate generated tokens, based on model output text length."
+                badge={<Badge tone="estimated">token estimate</Badge>}
+              />
+              <ImpactMetricCard
+                icon={Microchip}
+                label="Live draw"
+                value={snapshot ? `${formatNumber(snapshot.power.watts, 1)} W` : 'Waiting'}
+                detail={snapshot?.model.loaded ? 'Model is currently loaded in memory.' : 'No model is currently loaded.'}
+                badge={<Badge tone={snapshot && !snapshot.power.estimated ? 'real' : 'estimated'}>{snapshot && !snapshot.power.estimated ? 'sensor' : 'estimated'}</Badge>}
+              />
+            </div>
+
+            <div className="impact-local-detail">
+              <div className="impact-current-model">
+                <strong>This model in tracked usage</strong>
+                <span>
+                  {selectedUsage
+                    ? `${selectedUsage.generationCount.toLocaleString()} runs · ${formatEnergy(selectedUsage.energyWh / 1000)} · ${formatCo2((selectedUsage.energyWh / 1000) * IMPACT_ASSUMPTIONS.electricityKgCo2ePerKwh)}`
+                    : 'No tracked generations for this selected model yet.'}
+                </span>
+              </div>
+              <ImpactSourceRows report={report} />
+            </div>
+          </section>
+
+          <section className="impact-section">
+            <div className="impact-section-head">
+              <span>3</span>
+              <div>
+                <h3>Install and app overhead</h3>
+                <p>Other impacts from model storage, app data, duplicate files, and local supporting assets.</p>
+              </div>
+            </div>
+
+            <div className="impact-metric-grid">
+              <ImpactMetricCard
+                icon={Database}
+                label="Selected model storage"
+                value={`${formatCo2(selectedStorageKgYear)} / year`}
+                detail={`${formatBytes(storageStats.selectedModelBytes)} kept on disk. Storage power is tiny compared with inference.`}
+                badge={<Badge tone="estimated">storage</Badge>}
+              />
+              <ImpactMetricCard
+                icon={FolderOpen}
+                label="PowerStation data"
+                value={`${formatCo2(appDataStorageKgYear)} / year`}
+                detail={`${formatBytes(storageStats.appDataBytes)} for chats, skills, indexes, logs, and metadata outside managed models.`}
+                badge={<Badge tone="estimated">storage</Badge>}
+              />
+              <ImpactMetricCard
+                icon={HardDrive}
+                label="Managed model library"
+                value={formatBytes(storageStats.managedModelBytes)}
+                detail="Total disk footprint of models downloaded into PowerStation's managed model folder."
+                badge={<Badge tone="real">local scan</Badge>}
+              />
+              <ImpactMetricCard
+                icon={Trash2}
+                label="Duplicate model waste"
+                value={storageStats.duplicateBytes ? `${formatBytes(storageStats.duplicateBytes)} duplicated` : 'None found'}
+                detail={
+                  storageStats.duplicateBytes
+                    ? `${formatCo2(duplicateStorageKgYear)} / year in avoidable storage, plus any duplicate download transfer.`
+                    : 'No duplicate PowerStation/LM Studio model files were found in the repair scan.'
+                }
+                badge={<Badge tone={storageStats.duplicateBytes ? 'estimated' : 'real'}>{storageStats.duplicateBytes ? 'avoidable' : 'clean'}</Badge>}
+              />
+            </div>
+          </section>
+
+          <section className="impact-assumptions">
+            <div>
+              <h3>Assumptions</h3>
+              <p>These are intentionally visible because carbon estimates vary by grid, hardware, datacentre, and model lineage.</p>
+            </div>
+            <dl>
+              <div>
+                <dt>Electricity</dt>
+                <dd>{formatNumber(IMPACT_ASSUMPTIONS.electricityKgCo2ePerKwh * 1000, 0)} g CO2e/kWh</dd>
+              </div>
+              <div>
+                <dt>Network transfer</dt>
+                <dd>{IMPACT_ASSUMPTIONS.networkKwhPerGb} kWh/GB</dd>
+              </div>
+              <div>
+                <dt>Storage</dt>
+                <dd>{IMPACT_ASSUMPTIONS.storageKwhPerGbYear} kWh/GB/year</dd>
+              </div>
+              <div>
+                <dt>Training</dt>
+                <dd>{IMPACT_ASSUMPTIONS.trainingTokensPerParameter} tokens per parameter baseline</dd>
+              </div>
+            </dl>
+          </section>
+        </>
+      )}
     </div>
   )
 }

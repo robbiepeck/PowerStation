@@ -34,7 +34,7 @@ import type { LucideIcon } from 'lucide-react'
 import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
 import { artifactSrcDoc, extractArtifacts, type Artifact } from './artifacts'
-import { AgentsView, ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
+import { AgentsView, ImpactView, ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
 import { CopyButton, formatBytes, formatNumber } from './ui'
@@ -77,16 +77,21 @@ import type {
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'settings' | 'repair'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'impact' | 'settings' | 'repair'
 
 const bridge = getDesktop()
 
-const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
+type NavItem =
+  | { id: ViewId; label: string; icon: LucideIcon; emoji?: never }
+  | { id: ViewId; label: string; emoji: string; icon?: never }
+
+const navItems: NavItem[] = [
   { id: 'chat', label: 'Chat', icon: MessageSquareText },
   { id: 'monitor', label: 'Monitor', icon: Activity },
   { id: 'models', label: 'Models', icon: BrainCircuit },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'impact', label: 'Impact', emoji: '🍃' },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
   { id: 'repair', label: 'Repair', icon: LifeBuoy },
 ]
@@ -1341,7 +1346,13 @@ function App() {
                   if (!disabled) setActiveView(item.id)
                 }}
               >
-                <Icon size={19} strokeWidth={2.1} />
+                {Icon ? (
+                  <Icon size={19} strokeWidth={2.1} />
+                ) : (
+                  <span className="nav-emoji" aria-hidden="true">
+                    {item.emoji}
+                  </span>
+                )}
                 <span>{item.label}</span>
               </button>
             )
@@ -1527,6 +1538,11 @@ function App() {
               onSelect={(model) => void handleSelectModel(model.path)}
               selectedPath={selectedPath}
             />
+          </div>
+        )}
+        {visibleView === 'impact' && (
+          <div className="scroll-view">
+            <ImpactView catalog={catalog} selectedModel={selectedModel} snapshot={snapshot} />
           </div>
         )}
         {visibleView === 'utilities' && (

@@ -11,6 +11,7 @@ import * as lmstudio from './lmstudio.js'
 import * as projects from './projects.js'
 import * as backup from './backup.js'
 import * as repair from './repair.js'
+import * as impact from './impact.js'
 import * as customAgents from './customAgents.js'
 import * as apiServer from './apiServer.js'
 import { REPAIR_SKILL_SLUG } from './builtinTools.js'
@@ -446,6 +447,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('repair:reveal', (_event, id: string) => repair.revealLocation(id))
   ipcMain.handle('repair:integrity', () => repair.checkModelIntegrity())
   ipcMain.handle('repair:log', () => repair.getRepairLog())
+  ipcMain.handle('impact:report', () => impact.getImpactReport())
 
   ipcMain.handle('backup:export', async (_event, payload?: { filePath?: string }) => {
     let filePath = typeof payload?.filePath === 'string' ? payload.filePath : null
@@ -938,6 +940,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           contextUsed: result.contextUsed,
           contextSize: result.contextSize,
         })
+        void impact.recordGeneration({
+          source: 'chat',
+          modelPath,
+          elapsedMs: result.elapsedMs,
+          outputText: result.text,
+          tokensPerSec: result.tokensPerSec,
+        }).catch(() => undefined)
       } catch (error) {
         send('chat:error', { requestId, message: error instanceof Error ? error.message : String(error) })
       } finally {
@@ -1014,6 +1023,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
               elapsedMs: result.elapsedMs,
               aborted: result.aborted,
             })
+            void impact.recordGeneration({
+              source: 'compare',
+              modelPath,
+              elapsedMs: result.elapsedMs,
+              outputText: result.text,
+              tokensPerSec: result.tokensPerSec,
+            }).catch(() => undefined)
           } catch (error) {
             send('compare:status', {
               requestId,

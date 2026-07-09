@@ -105,6 +105,9 @@ contextBridge.exposeInMainWorld('powerStation', {
     integrity: () => ipcRenderer.invoke('repair:integrity'),
     log: () => ipcRenderer.invoke('repair:log'),
   },
+  impact: {
+    report: () => ipcRenderer.invoke('impact:report'),
+  },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
     save: (payload) => ipcRenderer.invoke('skills:save', payload),

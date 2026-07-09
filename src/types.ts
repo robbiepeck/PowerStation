@@ -587,6 +587,34 @@ export type UpdateState = {
   lastCheckedAt?: number
 }
 
+export type ImpactSource = 'chat' | 'api' | 'compare'
+
+export type ImpactUsageBucket = {
+  generationCount: number
+  elapsedMs: number
+  energyWh: number
+  outputTokenEstimate: number
+}
+
+export type ImpactModelUsage = ImpactUsageBucket & {
+  modelName: string
+  fileName: string
+  lastUsedAt: number
+}
+
+export type ImpactUsageStats = ImpactUsageBucket & {
+  schemaVersion: 1
+  startedAt: number
+  updatedAt: number
+  byModel: Record<string, ImpactModelUsage>
+  bySource: Record<ImpactSource, ImpactUsageBucket>
+}
+
+export type ImpactReport = {
+  generatedAt: number
+  tracked: ImpactUsageStats
+}
+
 export type Unsubscribe = () => void
 
 export type PowerStationBridge = {
@@ -686,6 +714,9 @@ export type PowerStationBridge = {
     reveal: (id: string) => Promise<boolean>
     integrity: () => Promise<IntegrityResult[]>
     log: () => Promise<RepairLogEntry[]>
+  }
+  impact: {
+    report: () => Promise<ImpactReport>
   }
   compare: {
     run: (payload: { requestId: string; prompt: string; modelPaths: string[] }) => Promise<{ ok: boolean }>
