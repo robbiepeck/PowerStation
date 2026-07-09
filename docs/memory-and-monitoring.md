@@ -1,7 +1,7 @@
 # Memory & monitoring
 
-PowerStation's promise is that it won't let a model take your Mac down, and that the numbers it shows
-you are honest. This is how both work.
+PowerStation's promise is that it won't let a model take your machine down, and that the numbers it
+shows you are honest. This is how both work.
 
 ## Admission control: decide before you load
 
@@ -24,7 +24,9 @@ total ≈ weights + KV-cache(context) + compute buffers
 
 This total is compared against your **usable budget** — the accelerator memory the backend that
 will run inference actually reports (the Metal working-set limit on Apple Silicon; discrete VRAM
-under CUDA/Vulkan on Windows) — minus ~10% OS headroom.
+under CUDA/Vulkan on Windows/Linux) — minus ~10% OS headroom. On Windows/Linux, before the runtime
+has reported backend memory, PowerStation uses the OS GPU inventory as a fallback and prefers the
+largest discrete NVIDIA/AMD adapter over integrated GPUs.
 
 The result is one of three verdicts:
 
@@ -43,9 +45,9 @@ real-world figures (for example, ~128 KB/token and ~4 GB of KV cache at 32K cont
 ## Runtime protection: memory-pressure auto-pause
 
 Admission control handles the load; the memory-pressure signal handles the session. On macOS the
-kernel exposes a memory-pressure level without any elevated privileges; on Windows there is no single
-kernel pressure number without a driver, so PowerStation derives the level from available physical
-memory and labels it as derived. PowerStation samples it in the
+kernel exposes a memory-pressure level without any elevated privileges; on Windows and Linux there
+is no single cross-distro kernel pressure number without deeper integration, so PowerStation derives
+the level from available physical memory and labels it as derived. PowerStation samples it in the
 telemetry loop, and on the transition into **critical** pressure it **auto-pauses generation** and
 offers a one-tap choice — free up memory, switch to a smaller model, or continue anyway. The pause
 latches on the transition, so a sustained episode fires once, not once per telemetry tick.
@@ -63,9 +65,9 @@ trying to build.
 | Signal | Source |
 | --- | --- |
 | CPU load, RAM used/total | Measured (live). |
-| GPU-usable memory (VRAM budget) | Measured from the inference backend. |
+| GPU-usable memory (VRAM budget) | Measured from the inference backend; Windows/Linux fall back to detected OS VRAM until backend memory is available. |
 | Storage used/free | Measured. |
-| **Memory pressure** | macOS: measured kernel signal, no privileges needed. Windows: derived from available memory (labelled as such). |
+| **Memory pressure** | macOS: measured kernel signal, no privileges needed. Windows/Linux: derived from available memory (labelled as such). |
 | Tokens per second | Measured during generation. |
 | GPU utilisation | Not available without elevated access on macOS — shown as n/a. |
 | **Power draw (watts)** | **Estimated** — real wattage isn't readable on macOS without elevated access, so this is a labelled estimate derived from load, never presented as a sensor reading. |

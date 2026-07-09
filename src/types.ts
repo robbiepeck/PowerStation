@@ -358,6 +358,8 @@ export type DeviceInfo = {
   gpuType: string | false
   gpuNames: string[]
   vram: { total: number; used: number; free: number; unifiedSize: number } | null
+  gpuBudgetSource: 'backend' | 'detected-vram' | 'estimated'
+  gpuDevices: GpuDeviceInfo[]
   health: {
     modelName: string | null
     introducedYear: number | null
@@ -369,6 +371,16 @@ export type DeviceInfo = {
   }
 }
 
+export type GpuDeviceInfo = {
+  name: string
+  vendor: string | null
+  bus: string | null
+  vramBytes: number | null
+  vramIsDynamic: boolean
+  dedicated: boolean
+  driverVersion: string | null
+}
+
 export type HardwareProfile = {
   platform: string
   isAppleSilicon: boolean
@@ -378,7 +390,9 @@ export type HardwareProfile = {
   totalRamBytes: number
   gpuBudgetBytes: number
   gpuBudgetIsMeasured: boolean
-
+  gpuBudgetSource: 'backend' | 'detected-vram' | 'estimated'
+  gpuDevices: GpuDeviceInfo[]
+  /** The canonical "usable for AI" figure — same number the fit math uses. */
   usableBudgetBytes: number
   freeDiskBytes: number | null
   meetsFloor: boolean

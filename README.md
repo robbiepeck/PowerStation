@@ -4,7 +4,7 @@
 
 # PowerStation
 
-**Local AI for your Mac — the agent harness built for small models.**
+**Local AI for your computer — the agent harness built for small models.**
 
 Created and maintained by Robbie Peck.
 
@@ -17,7 +17,7 @@ on open-weight models, entirely on your machine.
 [Contributing](CONTRIBUTING.md) ·
 [Roadmap](ROADMAP.md)
 
-![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon%20·%20Windows%20x64-111111?logo=apple&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon%20·%20Windows%20x64%20·%20Linux%20x64-111111?logo=linux&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-008476)
 ![Status](https://img.shields.io/badge/status-beta-b17018)
 [![CI](https://github.com/robbiepeck/PowerStation/actions/workflows/ci.yml/badge.svg)](https://github.com/robbiepeck/PowerStation/actions/workflows/ci.yml)
@@ -50,7 +50,7 @@ those three gaps:
 
 2. **Admission control, not an OOM dashboard.** Before any model loads, PowerStation computes
    weights + context cache + buffers against your real memory budget and refuses or shrinks
-   the context *before* your Mac starts swapping. At runtime it watches the macOS
+   the context *before* your machine starts swapping. At runtime it watches the operating system's
    memory-pressure signal and auto-pauses generation if the system gets into trouble.
    → [Memory & monitoring](docs/memory-and-monitoring.md)
 
@@ -88,22 +88,23 @@ those three gaps:
 
 ## Requirements
 
-- **macOS on Apple Silicon** (M-series) — the primary platform — or **Windows 10/11 x64** (beta).
+- **macOS on Apple Silicon** (M-series) — the primary platform — **Windows 10/11 x64** (beta), or
+  **Linux x64** (beta; AppImage or Debian package).
 - **16 GB memory or more.** Below that, PowerStation tells you honestly that local AI isn't
   realistic on the machine rather than degrade silently. On a Mac, 24–32 GB unified memory is the
-  sweet spot for agents and coding; on Windows, a discrete GPU (8 GB+ VRAM) makes the same
-  difference — models larger than your GPU still run via CPU offload, just slower, and the app
-  says so up front.
+  sweet spot for agents and coding; on Windows/Linux, a discrete GPU (8 GB+ VRAM) makes the same
+  difference when the native runtime can use it — models larger than your GPU still run via CPU
+  offload, just slower, and the app says so up front. Multi-GPU Windows/Linux machines are ranked
+  by detected discrete NVIDIA/AMD VRAM until the runtime reports its exact backend memory.
 
-Windows support is new and CI-built but less battle-tested than macOS — issues welcome. Linux is
-on the [Roadmap](ROADMAP.md).
+Windows and Linux support are CI-built but less battle-tested than macOS — issues welcome.
 
 ## Download
 
 Grab the latest installer from **[Releases](https://github.com/robbiepeck/PowerStation/releases/latest)** —
-macOS (Apple Silicon `.dmg`) and Windows x64 (installer or portable). Builds are not yet
-code-signed, so Gatekeeper/SmartScreen will warn on first launch (right-click → Open on macOS;
-"More info → Run anyway" on Windows).
+macOS (Apple Silicon `.dmg`), Windows x64 (installer or portable), and Linux x64 (`.AppImage` or
+`.deb`). Consumer macOS releases still require Developer ID signing and notarization; tagged
+Windows releases are configured to require code signing credentials before publishing.
 
 ## Quick Start (from source)
 
@@ -114,7 +115,7 @@ npm install
 npm run desktop:dev
 ```
 
-On first launch PowerStation scans your Mac, asks two questions, recommends models, and
+On first launch PowerStation scans your machine, asks two questions, recommends models, and
 downloads your pick straight into a working chat. Full walkthrough in the
 [Quick Start guide](docs/quick-start.md); native-build prerequisites, packaging and
 troubleshooting in the [Setup Guide](docs/setup.md).
@@ -126,7 +127,7 @@ troubleshooting in the [Setup Guide](docs/setup.md).
 | [Quick Start](docs/quick-start.md) | From clone to first local chat in a few minutes. |
 | [Setup Guide](docs/setup.md) | Prerequisites, building, packaging, data locations, troubleshooting. |
 | [Architecture](docs/architecture.md) | How the app works: processes, the isolated inference worker, IPC, data flow. |
-| [Models & devices](docs/models-and-devices.md) | The full model catalogue and which Mac each model needs. |
+| [Models & devices](docs/models-and-devices.md) | The full model catalogue and what hardware each model needs. |
 | [Memory & monitoring](docs/memory-and-monitoring.md) | The admission-control math, auto-pause, and honest telemetry. |
 | [Agent harness](docs/agent-harness.md) | MCP tools, permissions, capability gating, loop guards. |
 | [Projects & backup](docs/projects.md) | Workspaces that bundle instructions, knowledge, skills, connectors; one-file backup. |

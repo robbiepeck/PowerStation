@@ -2015,6 +2015,51 @@
   font-size: 0.96rem;
 }
 
+.device-grid small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.device-gpu-list {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border);
+}
+
+.device-gpu-title {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.device-gpu-row {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.device-gpu-row strong {
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.device-gpu-row span {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+/* ---------------------------------------------------------------- Settings */
+
 .settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

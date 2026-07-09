@@ -5,14 +5,16 @@ From a clean checkout to your first local chat in a few minutes.
 ## 1. Requirements
 
 - **macOS on Apple Silicon** (M-series) with **16 GB unified memory or more**, or
-  **Windows 10/11 x64** (beta) with **16 GB RAM** — ideally with a discrete GPU (8 GB+ VRAM).
+  **Windows 10/11 x64** / **Linux x64** (beta) with **16 GB RAM** — ideally with a discrete GPU
+  (8 GB+ VRAM).
 - **Node.js 20+** and **npm**.
 - macOS only: Xcode Command Line Tools (`xcode-select --install`) — the native runtime ships
   prebuilt, but the CLT are handy if a source build is ever needed.
 
 Prefer an installer over building from source? Grab the latest from
-[Releases](https://github.com/robbiepeck/PowerStation/releases/latest) — macOS `.dmg` or Windows
-installer/portable. See the [Setup Guide](setup.md) if you hit anything native-build related.
+[Releases](https://github.com/robbiepeck/PowerStation/releases/latest) — macOS `.dmg`, Windows
+installer/portable, or Linux `.AppImage` / `.deb`. See the [Setup Guide](setup.md) if you hit
+anything native-build related.
 
 ## 2. Get it running
 
@@ -37,7 +39,7 @@ budget and free disk. Then:
 3. PowerStation shows up to **three recommended models** with honest capability cards and expected
    speed for your machine. Pick one and hit **Download & set up** — it downloads into the app's
    managed models folder and loads automatically.
-4. You land in a working **chat**, running entirely on your Mac.
+4. You land in a working **chat**, running entirely on your machine.
 
 Prefer to choose yourself? Every card in the **Models** tab shows a *fits comfortably / tight /
 won't fit* badge computed from real memory math, plus what each model is honestly good and bad at.
@@ -74,8 +76,8 @@ headroom, each labelled as measured or estimated.
 
 ## Troubleshooting
 
-- **"Won't fit this Mac" on every big model** — expected; your memory tier can't hold them. Stick to
-  the models marked *fits comfortably*. See [Models & devices](models-and-devices.md).
+- **"Won't fit" on every big model** — expected; your memory tier can't hold them. Stick to the
+  models marked *fits comfortably*. See [Models & devices](models-and-devices.md).
 - **A dev server is already on port 5173** — another project may be holding it, which can show the
   wrong app. Stop that server, or run the app pointed at a free port (see the [Setup Guide](setup.md)).
 - **Gatekeeper warning on a packaged build** — the macOS build isn't notarized yet; see the

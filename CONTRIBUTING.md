@@ -14,8 +14,9 @@ npm install
 npm run desktop:dev
 ```
 
-Requirements: macOS on Apple Silicon or Windows 10/11 x64 (16 GB+), Node.js 20+; on macOS the
-Xcode Command Line Tools. CI runs lint, tests and builds on both platforms for every PR.
+Requirements: macOS on Apple Silicon, Windows 10/11 x64, or Linux x64 (16 GB+), Node.js 20+; on
+macOS the Xcode Command Line Tools. CI runs lint, tests and builds on all supported platforms for
+every PR.
 
 ## Before you open a PR
 
@@ -79,5 +80,5 @@ verification bar. In your PR, note how you verified the URL and the geometry.
 
 ## Reporting bugs and security issues
 
-- **Bugs / features:** open a GitHub issue with steps to reproduce and your macOS + chip + memory.
+- **Bugs / features:** open a GitHub issue with steps to reproduce and your OS + chip/GPU + memory.
 - **Security:** please don't file a public issue — see [SECURITY.md](SECURITY.md).

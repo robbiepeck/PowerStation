@@ -35,7 +35,7 @@ verifiable. Runs automatically after a catalogue download and on demand per mode
 
 ### 3. Conversation persistence — *shipped v0.2*
 Chats survive restarts: a sidebar of recent conversations, stored as plain JSON files in the app's
-user-data folder (revealable in Finder/Explorer — goal #4 transparency), with a Settings toggle,
+user-data folder (revealable in the OS file manager — goal #4 transparency), with a Settings toggle,
 "delete all", and model-side history replay so a resumed chat actually remembers its context.
 
 ### 4. Catalogue freshness CI — *shipped v0.4*
@@ -159,10 +159,12 @@ signing/notarization rather than half-shipped.
 The onboarding questionnaire as a free static web page (same catalogue JSON, browser-detectable
 hints) that funnels visitors to the app download. Marketing surface more than product.
 
-### 10. Signing & notarization — *blocked on accounts*
-The one item code can't solve: needs an Apple Developer account (~US$99/yr) and a Windows
-code-signing certificate. Once credentials exist, CI is wired to sign every release automatically.
-Gates public distribution more than any feature.
+### 10. Signing & notarization — *release gates wired, blocked on accounts*
+The release path now refuses to publish tagged macOS builds unless Developer ID signing succeeds,
+and tagged Windows builds unless code signing succeeds. The packaging config is ready for macOS
+Developer ID + notarization credentials and Windows certificate secrets; public distribution still
+needs those accounts/certificates, and Windows SmartScreen reputation still has to accrue from
+signed releases.
 
 ## Still excluded, by decision
 
@@ -170,4 +172,5 @@ Gates public distribution more than any feature.
   that decision changes.
 - **Fine-tuning** — from the earliest project notes; heavy scope, niche audience, and the product's
   wedge is elsewhere. Consciously not planned.
-- **Linux** — next platform after Windows stabilises (see [Roadmap](../ROADMAP.md)).
+- **Additional Linux package formats** — AppImage and deb are the supported beta artifacts; rpm,
+  tarballs, and distro-specific packaging stay demand-driven.

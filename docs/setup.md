@@ -17,9 +17,20 @@ running app, see the [Quick Start](quick-start.md).
 
 - Windows 10/11 x64, 16 GB RAM or more. A discrete GPU (NVIDIA/AMD, 8 GB+ VRAM) is strongly
   recommended — models run on CUDA/Vulkan when available and fall back to CPU otherwise.
+- Multi-GPU laptops and desktops are supported: PowerStation lists detected adapters and uses the
+  largest discrete NVIDIA/AMD VRAM budget until the runtime reports its exact backend memory.
 - **Node.js 20+** and **npm**. Prebuilt `node-llama-cpp` binaries (CPU, CUDA and Vulkan variants)
   install automatically; Visual Studio Build Tools are only needed if a source build is ever forced.
 - Keep your GPU drivers current — the CUDA/Vulkan runtimes use them directly.
+
+**Linux (beta)**
+
+- Linux x64 on a desktop distribution with 16 GB RAM or more. Ubuntu/Debian derivatives are the
+  tested packaging target; the AppImage should also run on many other mainstream desktop distros.
+- **Node.js 20+** and **npm**. Prebuilt `node-llama-cpp` Linux binaries install automatically; a
+  system compiler toolchain is only needed if a source build is ever forced.
+- Keep NVIDIA/AMD GPU drivers current when using GPU acceleration. Without a supported discrete
+  GPU, inference runs on CPU from system RAM.
 
 ## Install and run
 
@@ -59,6 +70,9 @@ VITE_DEV_SERVER_URL=http://127.0.0.1:5180 npx electron .
 | `npm test` | Run the unit tests (admission-control math, via Vitest). |
 | `npm run lint` | ESLint. |
 | `npm run package:mac` | Package the macOS app with electron-builder. |
+| `npm run package:win` | Package the Windows NSIS installer and portable exe on Windows. |
+| `npm run package:win:signed` | Package Windows artifacts and fail if code signing credentials are missing. |
+| `npm run package:linux` | Package the Linux x64 AppImage and deb on Linux. |
 
 ## Building a distributable
 
@@ -66,22 +80,36 @@ VITE_DEV_SERVER_URL=http://127.0.0.1:5180 npx electron .
 npm run package:mac        # universal macOS build
 npm run package:mac:dir    # unpacked .app directory (faster, for local testing)
 npm run package:win        # Windows NSIS installer + portable exe (run on Windows)
+npm run package:win:signed # Windows release build, requires signing credentials
+npm run package:linux      # Linux AppImage + deb (run on Linux)
+npm run package:linux:dir  # unpacked Linux app directory
 ```
 
 Artifacts land in `release/`.
 
 **Build on the target platform.** The native llama.cpp binaries are platform-specific, so a working
-Windows build must be produced on Windows (and macOS on macOS). That's exactly what CI does: the
-[GitHub Actions workflow](../.github/workflows/ci.yml) lint/tests/builds on both platforms for every
-push to `main`, uploads a Windows installer and a macOS app as build artifacts, and publishes both
-to the GitHub Release when a `v*` tag is pushed. To grab the latest Windows installer without a
-release: repo → **Actions** → newest CI run → **Artifacts** → `PowerStation-windows-x64`.
+Windows build must be produced on Windows, macOS on macOS, and Linux on Linux. That's exactly what
+CI does: the [GitHub Actions workflow](../.github/workflows/ci.yml) lint/tests/builds on all three
+platforms for every push to `main`, uploads a Windows installer, macOS app, and Linux AppImage/deb
+as build artifacts, and publishes all of them to the GitHub Release when a `v*` tag is pushed. To
+grab the latest Linux package without a release: repo → **Actions** → newest CI run → **Artifacts**
+→ `PowerStation-linux-x64`.
 
-**Signing & notarization.** The macOS build is ad-hoc signed, not Developer ID signed or notarized,
-so Gatekeeper will warn on first open (right-click → Open, or allow it in *System Settings → Privacy
-& Security*). The Windows build is unsigned, so SmartScreen will show "Windows protected your PC" —
-click *More info → Run anyway*. Proper signing for both platforms is on the [Roadmap](../ROADMAP.md)
-and is a prerequisite before any consumer release.
+**Signing & notarization.** The macOS build is currently ad-hoc signed, not Developer ID signed or
+notarized, so Gatekeeper can warn on first open (right-click → Open, or allow it in *System Settings
+→ Privacy & Security*). Tagged macOS CI releases are configured to fail instead of publishing an
+unsigned app when Developer ID credentials are required. Configure `MACOS_CSC_LINK`,
+`MACOS_CSC_KEY_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` before tagging
+a public macOS release.
+
+Tagged Windows CI releases also run with `forceCodeSigning=true`. Configure `WINDOWS_CSC_LINK` and
+`WINDOWS_CSC_KEY_PASSWORD` with a Windows code-signing certificate before tagging a public Windows
+release. Non-tag Windows CI artifacts remain unsigned for testing; use `npm run package:win:signed`
+locally when you want the same fail-if-unsigned behavior.
+
+**Linux updates.** The AppImage build includes Electron Builder update metadata and can use
+PowerStation's in-app updater when it is launched from the AppImage. The deb package follows normal
+package replacement: download and install the newer `.deb` from Releases.
 
 **Native module packaging.** `node-llama-cpp` ships native binaries that must be unpacked from the
 asar archive at build time — this is already configured under `build.asarUnpack` in `package.json`.
@@ -90,9 +118,10 @@ The model catalogue (`catalog/**`) is also included in the packaged app as the o
 ## Where data lives
 
 Everything PowerStation writes stays on your machine, under the app's user-data directory
-(`~/Library/Application Support/PowerStation/` on macOS, `%APPDATA%\PowerStation\` on Windows):
+(`~/Library/Application Support/PowerStation/` on macOS, `%APPDATA%\PowerStation\` on Windows, and
+`~/.config/PowerStation/` on Linux):
 
-- **Models** — the managed models folder (each model is revealable in Finder from the Models view).
+- **Models** — the managed models folder (each model is revealable in the OS file manager from the Models view).
 - **`powerstation-config.json`** — settings, tool permissions, onboarding state, benchmark results.
 - **`catalog-cache.json`** — the last validated catalogue fetched from the repo.
 - **`chats/`** — saved conversations, one plain JSON file each (including any attached-file text,

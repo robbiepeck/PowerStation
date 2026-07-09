@@ -43,6 +43,7 @@ import type {
   CustomAgent,
   DeviceInfo,
   FitReport,
+  GpuDeviceInfo,
   McpServerConfig,
   McpServerStatus,
   McpToolInfoResponse,
@@ -77,6 +78,21 @@ import {
 import type { MetricInfo } from './ui'
 
 const bridge = getDesktop()
+
+function gpuBudgetSourceLabel(source: DeviceInfo['gpuBudgetSource'] | undefined): string {
+  if (source === 'backend') return 'backend measured'
+  if (source === 'detected-vram') return 'VRAM detected'
+  return 'estimated'
+}
+
+function gpuVramLabel(gpu: GpuDeviceInfo): string {
+  if (gpu.vramBytes) return formatBytes(gpu.vramBytes)
+  return gpu.vramIsDynamic ? 'shared memory' : 'VRAM n/a'
+}
+
+function primaryGpuName(device: DeviceInfo | null, fallback = 'GPU'): string {
+  return device?.gpuNames?.[0] ?? device?.gpuDevices?.[0]?.name ?? device?.health.modelName ?? fallback
+}
 
 export type MetricKey = 'cpu' | 'ram' | 'gpu' | 'vram' | 'storage' | 'power' | 'thermal'
 export type MetricSeries = Record<MetricKey, number[]>
@@ -381,7 +397,7 @@ export function MonitorView({
           <div className="device-chip">
             <div className="device-chip-main">
               <Microchip size={15} />
-              <span>{device?.gpuNames?.[0] ?? device?.health.modelName ?? snapshot.gpu.name ?? 'GPU'}</span>
+              <span>{primaryGpuName(device, snapshot.gpu.name ?? 'GPU')}</span>
               <Badge tone="neutral">{typeof device?.gpuType === 'string' ? device.gpuType : 'cpu'}</Badge>
             </div>
             <div className="device-chip-health" title={device?.health.estimateNote}>
@@ -723,7 +739,7 @@ export function ModelsView({
 
       <section className="starter-catalog">
         <div className="starter-catalog-head">
-          <span>Matched to this Mac</span>
+          <span>Matched to this machine</span>
           <h2>Model catalog</h2>
           <p>
             Every card shows whether the model fits this machine's memory and what it's honestly good at. Downloads
@@ -969,14 +985,38 @@ export function ModelsView({
             <strong>{typeof device?.gpuType === 'string' ? device.gpuType.toUpperCase() : 'CPU'}</strong>
           </div>
           <div>
-            <span>Device</span>
-            <strong>{device?.gpuNames?.[0] ?? 'Unknown'}</strong>
+            <span>Runtime device</span>
+            <strong>{primaryGpuName(device, 'Unknown')}</strong>
           </div>
           <div>
-            <span>VRAM</span>
-            <strong>{device?.vram ? formatBytes(device.vram.total) : 'n/a'}</strong>
+            <span>Fast budget</span>
+            <strong>
+              {device?.vram
+                ? formatBytes(device.vram.total)
+                : device?.gpuDevices?.[0]?.vramBytes
+                  ? formatBytes(device.gpuDevices[0].vramBytes)
+                  : 'n/a'}
+            </strong>
+            <small>{gpuBudgetSourceLabel(device?.gpuBudgetSource)}</small>
           </div>
         </div>
+        {device?.gpuDevices?.length ? (
+          <div className="device-gpu-list" aria-label="Detected GPUs">
+            <span className="device-gpu-title">
+              Detected GPUs{device.gpuDevices.length > 1 ? ` (${device.gpuDevices.length})` : ''}
+            </span>
+            {device.gpuDevices.slice(0, 4).map((gpu) => (
+              <div className="device-gpu-row" key={`${gpu.name}-${gpu.vendor ?? 'vendor'}-${gpu.bus ?? 'bus'}`}>
+                <strong>{gpu.name}</strong>
+                <span>
+                  {[gpu.vendor, gpu.dedicated ? 'discrete' : 'integrated/shared', gpuVramLabel(gpu), gpu.driverVersion ? `driver ${gpu.driverVersion}` : null]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   )

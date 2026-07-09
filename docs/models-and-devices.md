@@ -5,8 +5,8 @@ it recommends and installs. It is generated from [`catalog/models.json`](../cata
 — the same manifest the app fetches at launch — so treat that file as the source of truth if
 this page ever drifts.
 
-> **At a glance:** macOS on Apple Silicon (primary) and Windows x64 (beta), **16 GB memory
-> minimum**. 12 curated open-weight models spanning the 16 GB → 64 GB tiers, all verified
+> **At a glance:** macOS on Apple Silicon (primary), Windows x64 (beta), and Linux x64 (beta),
+> **16 GB memory minimum**. 12 curated open-weight models spanning the 16 GB → 64 GB tiers, all verified
 > against Hugging Face.
 
 ---
@@ -14,8 +14,9 @@ this page ever drifts.
 ## Devices PowerStation supports
 
 PowerStation's primary platform is **macOS on Apple Silicon (M-series)**, with **Windows 10/11
-x64** supported in beta. On a Mac the CPU and GPU share one pool of **unified memory**, so there
-is no separate VRAM number — what matters is how much of that pool the GPU may use for a model.
+x64** and **Linux x64** supported in beta. On a Mac the CPU and GPU share one pool of **unified
+memory**, so there is no separate VRAM number — what matters is how much of that pool the GPU may
+use for a model.
 
 - **Detected, never asked.** PowerStation reads your chip, total unified memory, the usable GPU
   budget (from the actual Metal backend that will run inference) and free disk on first launch.
@@ -39,12 +40,15 @@ is no separate VRAM number — what matters is how much of that pool the GPU may
 Apple Silicon is the cheapest way to run 70B–120B-class models locally, because unified memory
 doubles as GPU memory.
 
-### Windows PCs (beta)
+### Windows and Linux PCs (beta)
 
-On Windows the picture splits in two:
+On Windows and Linux the picture splits in two:
 
 - **Discrete GPU (NVIDIA/AMD).** The fast budget is your **VRAM**, measured from the CUDA/Vulkan
-  backend that will actually run inference. Models that fit entirely in VRAM run at full speed.
+  backend that will actually run inference. Before the runtime has reported backend memory,
+  PowerStation also reads the OS GPU inventory and prefers the largest discrete NVIDIA/AMD adapter,
+  so multi-GPU laptops do not get judged by the integrated GPU. Models that fit entirely in VRAM
+  run at full speed.
   Models larger than VRAM but within ~80% of your system RAM still run — llama.cpp offloads the
   overflow layers to the CPU — and PowerStation marks these honestly as **"Runs on CPU · slower"**
   rather than pretending they're fast or blocking them outright.
@@ -54,8 +58,23 @@ On Windows the picture splits in two:
 The same 16 GB system-RAM floor applies. Rough guidance: 16 GB RAM + 8 GB VRAM handles the 16 GB
 tier at full speed and the 24 GB tier via offload; 32 GB RAM + 12–16 GB VRAM makes the 24–32 GB
 tiers practical. One honest caveat: the per-model notes below are written for Apple Silicon's
-unified memory — on Windows, trust the app's live fit badges, which are computed from your actual
-measured VRAM and RAM.
+unified memory — on Windows/Linux, trust the app's live fit badges, which are computed from your
+actual measured VRAM and RAM.
+
+### PC VRAM tiers
+
+Treat VRAM as the fast lane, and system RAM as the slower safety net for CPU offload:
+
+| GPU VRAM | Fast-path guidance |
+| --- | --- |
+| **4–6 GB** | Small 4–8B models. Larger models usually run mostly on CPU and feel much slower. |
+| **8 GB** | Good for compact 4–8B models at full speed; 20B-class models are usually tight or offloaded. |
+| **12 GB** | Practical for the 16 GB catalogue tier and some 20B-class models with modest context. |
+| **16 GB** | Strong Windows/Linux sweet spot: 20B-class models and some 24B-class models without heavy offload. |
+| **24 GB+** | Comfortable for many 24–32 GB catalogue-tier models, with enough room for longer contexts. |
+
+The app's fit badge is still the authority because it includes the exact GGUF size, KV-cache cost,
+context setting, and the backend-reported memory when available.
 
 ### Speed, honestly
 

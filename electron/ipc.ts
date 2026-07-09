@@ -764,8 +764,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return settings
   })
   ipcMain.handle('device:info', async () => {
-    const info = await llm.getDeviceInfo()
-    return { ...info, health: await getDeviceHealthProfile(info.gpuNames) }
+    const info = await llm.getDeviceInfo().catch(() => null)
+    const profile = await getHardwareProfile(info?.vram?.total ?? null)
+    const gpuNames = info?.gpuNames?.length ? info.gpuNames : profile.gpuDevices.map((gpu) => gpu.name)
+    return {
+      gpuType: info?.gpuType ?? false,
+      gpuNames,
+      vram: info?.vram ?? null,
+      gpuBudgetSource: profile.gpuBudgetSource,
+      gpuDevices: profile.gpuDevices,
+      health: await getDeviceHealthProfile(gpuNames),
+    }
   })
 
   ipcMain.handle(

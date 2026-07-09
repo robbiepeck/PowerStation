@@ -12,8 +12,12 @@ model landscape and with what users hit first.
 - Agent harness: MCP tools over stdio, allow/ask/deny permissions, context metering, loop guards.
 - Capability gating by model tier; memory-pressure auto-pause; ambient status pill + full monitor.
 - MIT licence; local-first data posture.
-- **Windows x64 support (beta)** — platform-aware hardware detection and memory pressure, a
-  CPU-offload fit tier for discrete-GPU machines, and a CI-built NSIS installer + portable exe.
+- **Windows x64 support (beta)** — platform-aware hardware detection and memory pressure, ranked
+  multi-GPU NVIDIA/AMD VRAM detection, a CPU-offload fit tier for discrete-GPU machines, VRAM-tier
+  catalogue guidance, tagged-release code-signing enforcement, and a CI-built NSIS installer +
+  portable exe.
+- **Linux x64 support (beta)** — AppImage and deb packaging on native Linux CI, derived
+  memory-pressure monitoring, and AppImage update metadata.
 - **Ollama & LM Studio import** — one click registers models you already have on disk, no
   re-download; inference stays in PowerStation's own runtime with the same admission checks.
 - **Turn-scoped tool approval** — "Allow rest of turn" in the permission dialog; battery-aware
@@ -57,9 +61,8 @@ model landscape and with what users hit first.
   A CI watchdog flags every new runtime release so the unblock is caught immediately.
 - ~~**Optional detected Ollama backend**~~ — shipped in v0.4: Ollama models import with one click
   (no re-download); chatting through the daemon itself remains out of scope.
-- **Windows polish** — deeper GPU detection (multi-GPU, AMD), Windows code signing (SmartScreen),
-  and catalogue guidance written for VRAM tiers rather than unified memory.
-- **Linux support** — hardware detection and runtime variants per distro.
+- **Linux polish** — broader distro validation, GPU-runtime notes per driver stack, and optional
+  package formats beyond AppImage/deb if demand appears.
 
 ## Explicitly out of scope (for now)
 

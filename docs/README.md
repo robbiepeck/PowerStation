@@ -31,7 +31,8 @@ run on your machine.
 ## Models & hardware
 
 - **[Models & devices](models-and-devices.md)** — the full model catalogue, which Mac each model
-  needs, imports from Ollama/LM Studio, benchmarks and side-by-side compare.
+  needs, Windows/Linux VRAM tiers, imports from Ollama/LM Studio, benchmarks and side-by-side
+  compare.
 
 ## Project
 

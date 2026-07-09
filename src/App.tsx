@@ -80,6 +80,7 @@ import './App.css'
 type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'settings' | 'repair'
 
 const bridge = getDesktop()
+const hostNoun = bridge.platform === 'darwin' ? 'Mac' : 'PC'
 
 const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'chat', label: 'Chat', icon: MessageSquareText },
@@ -1911,7 +1912,7 @@ function ChatView({
                 <BrainCircuit size={26} />
               </div>
               <h1>No model installed yet</h1>
-              <p>Pick a model matched to this Mac from the catalog to get started.</p>
+              <p>Pick a model matched to this {hostNoun} from the catalog to get started.</p>
               <button className="primary-button" type="button" onClick={onManageModels}>
                 Browse models
               </button>

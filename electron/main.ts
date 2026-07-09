@@ -57,7 +57,7 @@ function createMainWindow() {
             mainWindow.webContents.send('runtime:event', {
               type: 'autopaused',
               message:
-                'Generation was paused because your Mac hit critical memory pressure. Close some apps, switch to a smaller model, or continue anyway.',
+                'Generation was paused because your machine hit critical memory pressure. Close some apps, switch to a smaller model, or continue anyway.',
             })
           }
         }

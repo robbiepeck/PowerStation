@@ -12,11 +12,15 @@ const require = createRequire(import.meta.url)
 const { autoUpdater } = require('electron-updater') as typeof import('electron-updater')
 
 const macAutoUpdatesSupported = false
-const builtInUpdatesSupported = app.isPackaged && (process.platform !== 'darwin' || macAutoUpdatesSupported)
+const linuxAppImageUpdatesSupported = process.platform === 'linux' && Boolean(process.env.APPIMAGE)
+const builtInUpdatesSupported =
+  app.isPackaged && (process.platform === 'win32' || linuxAppImageUpdatesSupported || (process.platform === 'darwin' && macAutoUpdatesSupported))
 const manualMacUpdatesSupported = app.isPackaged && process.platform === 'darwin' && !macAutoUpdatesSupported
 const updatesSupported = builtInUpdatesSupported || manualMacUpdatesSupported
 const unsupportedUpdateMessage = app.isPackaged
-  ? 'Updates are not available for this platform.'
+  ? process.platform === 'linux'
+    ? 'In-app updates are available for Linux AppImage builds. Download the latest package manually when running from a deb install.'
+    : 'Updates are not available for this platform.'
   : 'Updates are only available in packaged desktop builds.'
 
 type GitHubReleaseAsset = {
@@ -80,6 +84,9 @@ function formatUpdateError(error: unknown): string {
   }
   if (message.includes('latest-mac.yml') && message.includes('404')) {
     return 'PowerStation found a release, but the macOS update metadata is missing. Upload latest-mac.yml from Electron Builder to the GitHub Release.'
+  }
+  if (message.includes('latest-linux.yml') && message.includes('404')) {
+    return 'PowerStation found a release, but the Linux update metadata is missing. Upload latest-linux.yml from Electron Builder to the GitHub Release.'
   }
   return message.split('\n')[0] || 'Update check failed.'
 }

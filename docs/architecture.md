@@ -59,7 +59,7 @@ flowchart LR
 | `electron/llmWorker.ts` | The isolated inference process: model load, chat, tool-call handling, loop guards. |
 | `electron/llmProtocol.ts` | The typed message protocol shared by host and worker. |
 | `electron/admission.ts` | Pure fit math (weights + KV cache + buffers vs budget). Unit-tested. |
-| `electron/hardware.ts` | Hardware detection (Apple Silicon unified memory; Windows VRAM/RAM) and memory-pressure reads. |
+| `electron/hardware.ts` | Hardware detection (Apple Silicon unified memory; ranked Windows/Linux GPU inventory, VRAM/RAM) and memory-pressure reads. |
 | `electron/catalog.ts` | Fetches/validates `catalog/models.json`; bundled offline fallback. |
 | `electron/recommend.ts` | (hardware × intent) → ranked recommendations with reasons. |
 | `electron/mcp.ts` | MCP client manager: connect servers, list/call tools. |

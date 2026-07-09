@@ -1,6 +1,6 @@
-# Lint, test and build on both supported platforms, and package the Windows
-# installer on a real Windows runner (native llama.cpp binaries are
-# platform-specific, so cross-building from macOS would ship the wrong ones).
+# Lint, test and build on supported platforms, and package installers on real
+# target-platform runners. Native llama.cpp binaries are platform-specific, so
+# cross-building from another OS would ship the wrong ones.
 # Pushing a v* tag publishes the installers to that tag's GitHub Release.
 
 name: CI
@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-latest, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -57,15 +57,46 @@ jobs:
         run: npx electron-builder --win --x64 --publish never
       - name: Build installer and publish to the tag's release
         if: ${{ startsWith(github.ref, 'refs/tags/') }}
-        run: npx electron-builder --win --x64 --publish always
+        run: npx electron-builder --win --x64 --publish always -c.forceCodeSigning=true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIN_CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
       - uses: actions/upload-artifact@v4
         with:
           name: PowerStation-windows-x64
           path: |
             release/*.exe
             release/latest.yml
+          if-no-files-found: error
+
+  package-linux:
+    name: Package Linux app
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Build AppImage and deb
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npx electron-builder --linux --x64 --publish never
+      - name: Build AppImage and deb, then publish to the tag's release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: npx electron-builder --linux --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PowerStation-linux-x64
+          path: |
+            release/*.AppImage
+            release/*.deb
+            release/latest-linux.yml
           if-no-files-found: error
 
   package-macos:

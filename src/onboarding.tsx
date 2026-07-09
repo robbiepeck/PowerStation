@@ -55,7 +55,7 @@ const USE_CASE_OPTIONS: Array<{ id: UseCase; label: string; body: string; icon: 
   {
     id: 'documents',
     label: 'Private documents',
-    body: 'Long documents and files that must never leave this Mac.',
+    body: `Long documents and files that must never leave this ${machineNoun}.`,
     icon: FileText,
   },
   {
@@ -82,7 +82,7 @@ const PRIORITY_OPTIONS: Array<{ id: Priority; label: string; body: string; icon:
   {
     id: 'quality',
     label: 'Smartest',
-    body: 'The most capable model your Mac can run. Replies take longer.',
+    body: `The most capable model your ${machineNoun} can run. Replies take longer.`,
     icon: Sparkles,
   },
 ]
@@ -148,6 +148,12 @@ export function OnboardingFlow({
   const ramGb = profile ? profile.totalRamBytes / 1024 ** 3 : 0
 
   const budgetGb = profile ? profile.usableBudgetBytes / 1e9 : 0
+  const budgetSourceLabel =
+    profile?.gpuBudgetSource === 'backend'
+      ? 'usable for AI (backend measured)'
+      : profile?.gpuBudgetSource === 'detected-vram'
+        ? 'usable for AI (VRAM detected)'
+        : 'usable for AI (estimated)'
 
   const chipLabel = useMemo(() => {
     if (!profile) return ''
@@ -184,7 +190,7 @@ export function OnboardingFlow({
                 <div className="ob-hw-card">
                   <Microchip size={17} />
                   <strong>~{formatNumber(budgetGb, 0)} GB</strong>
-                  <span>{profile.gpuBudgetIsMeasured ? 'usable for AI (measured)' : 'usable for AI (estimated)'}</span>
+                  <span>{budgetSourceLabel}</span>
                 </div>
                 <div className="ob-hw-card">
                   <HardDrive size={17} />
