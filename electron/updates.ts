@@ -75,6 +75,9 @@ function setState(patch: Partial<UpdateState>, getWindow?: () => BrowserWindow |
 
 function formatUpdateError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
+  if (message.includes('Update request failed with HTTP 404')) {
+    return 'No public PowerStation GitHub release is ready yet. Publish a release with a macOS update asset, then use this button to install it.'
+  }
   if (message.includes('releases.atom') && message.includes('404')) {
     return 'PowerStation could not reach the GitHub release feed. This usually means the update repository or release assets are private. Publish releases from a public repository or configure an authenticated updater.'
   }

@@ -162,6 +162,11 @@
   opacity: 0.78;
 }
 
+.update-button.checking {
+  cursor: progress;
+  opacity: 0.78;
+}
+
 .update-button.downloaded {
   color: #f9fbfa;
   background: var(--teal);
@@ -172,6 +177,11 @@
   color: var(--red);
   background: rgba(181, 72, 62, 0.08);
   border-color: rgba(181, 72, 62, 0.28);
+}
+
+.update-button.unsupported,
+.update-button:disabled {
+  cursor: not-allowed;
 }
 
 .spin-icon {

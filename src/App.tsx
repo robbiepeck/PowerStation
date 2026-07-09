@@ -1642,42 +1642,52 @@ function App() {
 function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: UpdateState | null }) {
   if (!state) return null
 
+  const checking = state.phase === 'checking'
   const downloading = state.phase === 'downloading'
-  const configurationError =
-    state.phase === 'error' && Boolean(state.message?.match(/private|release feed|update metadata/i))
-  const shouldShow =
-    state.phase === 'available' ||
-    state.phase === 'downloading' ||
-    state.phase === 'downloaded' ||
-    (state.phase === 'error' && Boolean(state.latestVersion) && !configurationError)
+  const unsupported = state.phase === 'unsupported'
+  const busy = checking || downloading
 
-  if (!shouldShow) return null
+  let label: string
+  switch (state.phase) {
+    case 'idle':
+      label = state.lastCheckedAt && state.latestVersion ? 'Up to date' : 'Check updates'
+      break
+    case 'checking':
+      label = 'Checking updates'
+      break
+    case 'available':
+      label = state.latestVersion ? `Update ${state.latestVersion}` : 'Update'
+      break
+    case 'downloaded':
+      label = 'Restart to update'
+      break
+    case 'error':
+      label = 'Check updates'
+      break
+    case 'unsupported':
+      label = 'Updates unavailable'
+      break
+    default:
+      label = `Updating ${Math.round(state.progressPct ?? 0)}%`
+      break
+  }
 
-  const label =
-    state.phase === 'available'
-      ? state.latestVersion
-        ? `Update ${state.latestVersion}`
-        : 'Update'
-      : state.phase === 'downloaded'
-        ? 'Restart to update'
-        : state.phase === 'error'
-          ? configurationError
-            ? 'Updates unavailable'
-            : 'Retry update'
-          : `Updating ${Math.round(state.progressPct ?? 0)}%`
+  const Icon = state.phase === 'downloaded' ? RotateCcw : busy ? LoaderCircle : Download
+  const title =
+    state.message ??
+    (state.latestVersion
+      ? `Latest PowerStation version ${state.latestVersion}`
+      : 'Check GitHub for the latest PowerStation update')
 
   return (
     <button
       className={`update-button ${state.phase}`}
       type="button"
       onClick={onUpdate}
-      disabled={downloading || configurationError}
-      title={
-        state.message ??
-        (state.latestVersion ? `Latest version ${state.latestVersion}` : 'Check for PowerStation updates')
-      }
+      disabled={busy || unsupported}
+      title={title}
     >
-      {downloading ? <LoaderCircle className="spin-icon" size={15} /> : <Download size={15} />}
+      <Icon className={busy ? 'spin-icon' : undefined} size={15} />
       <span>{label}</span>
     </button>
   )
