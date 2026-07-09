@@ -1,15 +1,10 @@
-// Recommendation engine: (detected hardware × stated intent) → ranked models
-// with honest reasons. The user is never asked what computer they have — that
-// is detected; the questionnaire only covers what can't be: what they want to
-// do and how they trade speed against quality.
-
 import { checkFit, OFFLOAD_RAM_FRACTION, type FitReport } from './admission.js'
 import type { CatalogModel, UseCase } from './catalog.js'
 
 export type Intent = {
   useCase: UseCase
   priority: 'speed' | 'balanced' | 'quality'
-  /** Optional cap on download size, in GB (decimal). */
+
   maxDownloadGb?: number | null
 }
 
@@ -19,7 +14,7 @@ export type Recommendation = {
   defaultContextTokens: number
   score: number
   reasons: string[]
-  /** For non-primary picks: how this model compares to the top pick, honestly both ways. */
+
   versusPrimary?: string[]
 }
 
@@ -47,7 +42,7 @@ export function recommendModels(options: {
   totalRamBytes: number
   gpuBudgetBytes: number
   freeDiskBytes: number | null
-  /** Measured on-device speeds keyed by lowercase fileName, when available. */
+
   measuredTpsByFile?: Record<string, number>
   limit?: number
 }): Recommendation[] {
@@ -59,7 +54,7 @@ export function recommendModels(options: {
     if (model.minRamGb > ramGb + 0.5) continue
     if (intent.maxDownloadGb && model.sizeBytes > intent.maxDownloadGb * 1e9) continue
     if (freeDiskBytes !== null && model.sizeBytes > freeDiskBytes * 0.8) continue
-    // An agent-focused pick without tool training would be present-and-broken.
+
     if (intent.useCase === 'agents' && model.toolCalling === 'none') continue
 
     const requestedContext = Math.min(defaultContextFor(intent.useCase), model.maxContext ?? Infinity)
@@ -105,7 +100,7 @@ export function recommendModels(options: {
       score += 15
       reasons.push(`Fits your machine comfortably — needs ~${(fit.totalBytes / 1e9).toFixed(0)} GB of the ~${(fit.budgetBytes / 1e9).toFixed(0)} GB available to models.`)
     } else if (fit.offload) {
-      // Runs via partial CPU offload — real, but a much slower experience.
+
       score -= 25
       reasons.push(fit.summary)
     } else {
@@ -137,12 +132,6 @@ export function recommendModels(options: {
   return top
 }
 
-/**
- * "Why this over that": compare an alternate against the primary pick on the
- * axes that actually differ — fit, speed, capacity, tool training. Honest in
- * both directions: an alternate is allowed to win an axis (that's exactly the
- * information a chooser needs). Pure and unit-tested.
- */
 export function explainVersusPrimary(
   primary: Recommendation,
   alternate: Recommendation,

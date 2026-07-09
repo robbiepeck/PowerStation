@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- tests reach into the OpenAI wire shape */
 import { describe, expect, it } from 'vitest'
 import {
   chatChunk,

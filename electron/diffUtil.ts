@@ -1,7 +1,3 @@
-// Line diffs for tool-call previews. Pure — no Electron imports, unit-tested.
-// Classic LCS on lines with hard caps, compacted to changed hunks with a few
-// lines of context so the permission modal shows what actually changes.
-
 export type DiffLine = {
   type: 'same' | 'add' | 'del' | 'skip'
   text: string
@@ -22,7 +18,6 @@ function lcsTable(a: string[], b: string[]): Uint32Array {
   return table
 }
 
-/** Full line diff (uncompacted). */
 export function diffLines(oldText: string, newText: string): DiffLine[] {
   const a = oldText === '' ? [] : oldText.replace(/\r\n/g, '\n').split('\n').slice(0, MAX_LINES)
   const b = newText === '' ? [] : newText.replace(/\r\n/g, '\n').split('\n').slice(0, MAX_LINES)
@@ -49,7 +44,6 @@ export function diffLines(oldText: string, newText: string): DiffLine[] {
   return out
 }
 
-/** Collapse long unchanged runs to a "⋯ N unchanged lines" marker. */
 export function compactDiff(lines: DiffLine[], context: number = CONTEXT): DiffLine[] {
   const keep = new Array<boolean>(lines.length).fill(false)
   for (let i = 0; i < lines.length; i++) {
@@ -86,17 +80,11 @@ export function summarizeDiff(lines: DiffLine[]): DiffSummary {
   return { added, removed }
 }
 
-/** Compact diff between two texts, plus counts — the modal's whole payload. */
 export function previewDiff(oldText: string, newText: string): { lines: DiffLine[]; summary: DiffSummary } {
   const full = diffLines(oldText, newText)
   return { lines: compactDiff(full), summary: summarizeDiff(full) }
 }
 
-/**
- * Apply filesystem-server-style edits ({oldText, newText} replacing the first
- * occurrence) so edit_file calls can be previewed exactly as they will land.
- * Returns null when an edit's oldText is not present (the server would error).
- */
 export function applyTextEdits(
   content: string,
   edits: Array<{ oldText: string; newText: string }>,

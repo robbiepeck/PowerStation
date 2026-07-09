@@ -1,8 +1,3 @@
-// First-run onboarding: scan-and-reveal (never ask what the machine is —
-// detect it), a short intent questionnaire (the only things that can't be
-// detected), honest ranked recommendations, in-app download, straight into
-// chat. Below the 16GB floor, say so honestly instead of degrading silently.
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
@@ -103,7 +98,7 @@ export function OnboardingFlow({
   download: DownloadState
   onDownload: (uri: string) => void
   onComplete: (payload: { useCase: string; priority: string }) => void
-  /** Persisting completion is the parent's job — every exit path goes through it. */
+
   onSkipToModels: (payload?: { useCase?: string; priority?: string }) => void
 }) {
   const [step, setStep] = useState<Step>('scan')
@@ -120,7 +115,7 @@ export function OnboardingFlow({
     const started = Date.now()
     void bridge.hardware.profile().then((result) => {
       if (cancelled) return
-      // Keep the scan moment on screen long enough to register as a reveal.
+
       const wait = Math.max(0, 1400 - (Date.now() - started))
       window.setTimeout(() => {
         if (cancelled) return
@@ -133,8 +128,6 @@ export function OnboardingFlow({
     }
   }, [])
 
-  // When the download we started finishes (App clears the download state and
-  // selects the model), onboarding is done — drop straight into chat.
   useEffect(() => {
     if (startedDownload.current && download === null && useCase) {
       onComplete({ useCase, priority })
@@ -153,8 +146,7 @@ export function OnboardingFlow({
   )
 
   const ramGb = profile ? profile.totalRamBytes / 1024 ** 3 : 0
-  // The same post-headroom figure the fit math quotes, so onboarding and fit
-  // summaries never show two different "usable" numbers.
+
   const budgetGb = profile ? profile.usableBudgetBytes / 1e9 : 0
 
   const chipLabel = useMemo(() => {

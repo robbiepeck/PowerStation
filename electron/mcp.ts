@@ -1,15 +1,10 @@
-// MCP client manager. Connects the user's configured stdio MCP servers,
-// caches their tool lists, and executes tool calls with timeouts. Runs in the
-// main process only — servers are child processes and must never be reachable
-// from the renderer directly.
-
 import { app } from 'electron'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { McpServerConfig } from './config.js'
 
 export type McpToolInfo = {
-  /** Stable key used for permissions and the model-facing registry. */
+
   key: string
   serverId: string
   serverName: string
@@ -59,7 +54,6 @@ function setStatus(config: McpServerConfig, state: McpServerStatus['state'], err
   publishStatus()
 }
 
-// Split a user-entered command line into command + args, honouring quotes.
 export function splitCommand(command: string): string[] {
   const parts: string[] = []
   const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g
@@ -74,9 +68,6 @@ function toolKey(serverName: string, toolName: string): string {
   return `${serverName}:${toolName}`
 }
 
-// One connect attempt per server at a time — overlapping calls (e.g. from
-// settings reconciliation) would each spawn a child process and orphan the
-// losers without ever closing them.
 const inFlightConnects = new Map<string, Promise<McpServerStatus>>()
 
 export function connectServer(config: McpServerConfig): Promise<McpServerStatus> {
@@ -102,11 +93,9 @@ async function doConnectServer(config: McpServerConfig): Promise<McpServerStatus
     const transport = new StdioClientTransport({
       command,
       args,
-      // GUI apps on macOS don't inherit the shell PATH; main.ts runs fixPath()
-      // at startup so the default environment here carries the corrected PATH.
+
       env: getDefaultEnvironment(),
-      // Servers that write relative files (e.g. the memory server's store)
-      // land in the app's data folder, not wherever the app happened to start.
+
       cwd: app.getPath('userData'),
       stderr: 'pipe',
     })
@@ -144,7 +133,7 @@ export async function disconnectServer(serverId: string): Promise<void> {
   try {
     await connection.client.close()
   } catch {
-    /* ignore */
+    void 0
   }
   setStatus(connection.config, 'disconnected')
 }
@@ -161,10 +150,6 @@ export function findTool(key: string): McpToolInfo | null {
   return getConnectedTools().find((tool) => tool.key === key) ?? null
 }
 
-/**
- * Best-effort base directory for a server's relative paths: the last argument
- * of a filesystem-style server command. Used only to render diff previews.
- */
 export function getServerBaseDir(serverId: string): string | null {
   const connection = connections.get(serverId)
   if (!connection) return null
@@ -188,7 +173,7 @@ export async function callTool(tool: McpToolInfo, args: unknown): Promise<{ ok: 
       .map((item: { type?: string; text?: string }) => (item.type === 'text' && typeof item.text === 'string' ? item.text : ''))
       .filter(Boolean)
       .join('\n')
-      .slice(0, 20000) // cap what flows back into a small model's context
+      .slice(0, 20000)
     if (result.isError) return { ok: false, text: text || 'Tool reported an error.' }
     return { ok: true, text: text || '(tool returned no text output)' }
   } catch (error) {

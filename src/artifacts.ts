@@ -1,6 +1,3 @@
-// Artifact detection: fenced html/svg/markdown blocks in assistant replies
-// become openable side-pane artifacts. Pure module — unit-tested.
-
 export type Artifact = {
   id: string
   kind: 'html' | 'svg' | 'markdown'
@@ -33,7 +30,6 @@ function titleFor(kind: Artifact['kind'], code: string, index: number): string {
   return index > 0 ? `${label} ${index + 1}` : label
 }
 
-/** Extract artifacts from a completed assistant message. */
 export function extractArtifacts(messageId: string, content: string): Artifact[] {
   const artifacts: Artifact[] = []
   let match: RegExpExecArray | null
@@ -54,13 +50,12 @@ export function extractArtifacts(messageId: string, content: string): Artifact[]
   return artifacts
 }
 
-/** Wrap artifact code as a standalone HTML document for the sandboxed iframe. */
 export function artifactSrcDoc(artifact: Artifact): string {
   if (artifact.kind === 'html') {
     const head = artifact.code.trimStart().slice(0, 200).toLowerCase()
     if (head.startsWith('<!doctype') || head.startsWith('<html')) return artifact.code
     return `<!doctype html><html><head><meta charset="utf-8"></head><body>${artifact.code}</body></html>`
   }
-  // SVG: center it on a neutral background.
+
   return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;display:grid;place-items:center;min-height:100vh;background:#fff}svg{max-width:96vw;max-height:96vh}</style></head><body>${artifact.code}</body></html>`
 }

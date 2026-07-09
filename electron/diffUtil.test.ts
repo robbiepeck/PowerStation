@@ -38,7 +38,7 @@ describe('compactDiff', () => {
     const compact = compactDiff(lines)
     const skips = compact.filter((l) => l.type === 'skip')
     expect(skips).toHaveLength(2)
-    expect(compact.filter((l) => l.type === 'same')).toHaveLength(6) // 3 context each side
+    expect(compact.filter((l) => l.type === 'same')).toHaveLength(6)
     expect(compact.some((l) => l.text === 'NEW')).toBe(true)
   })
 })

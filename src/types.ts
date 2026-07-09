@@ -9,7 +9,7 @@ export type SkillMode = 'off' | 'auto' | 'always'
 
 export type UtilitySettings = {
   systemPrompt: string
-  /** Per-skill activation: absent = off, 'always' = every turn, 'auto' = when triggers match. */
+
   skillModes: Record<string, 'auto' | 'always'>
   mcpServers: McpServerConfig[]
 }
@@ -102,14 +102,14 @@ export type ModelInfo = {
   parameters: string | null
   quantization: string | null
   contextLength: number | null
-  /** Total size including sibling split parts. */
+
   sizeBytes: number
   source: 'folder' | 'imported'
   geometry: KvGeometry | null
   templateSupportsTools: boolean | null
-  /** Capability tier resolved by the main process (catalog or template heuristic). */
+
   toolCalling: ToolCallingTier
-  /** Measured tokens/sec on this machine, when a benchmark has run. */
+
   measuredTps: number | null
 }
 
@@ -329,9 +329,9 @@ export type IndexProgress = { phase: 'scanning' | 'embedding-model' | 'embedding
 
 export type RagIndexListing = FolderIndexInfo & {
   sizeBytes: number
-  /** Folder contents changed since the index was built. */
+
   stale: boolean
-  /** Folder no longer exists on disk. */
+
   missing: boolean
 }
 
@@ -378,7 +378,7 @@ export type HardwareProfile = {
   totalRamBytes: number
   gpuBudgetBytes: number
   gpuBudgetIsMeasured: boolean
-  /** The canonical "usable for AI" figure — same number the fit math uses. */
+
   usableBudgetBytes: number
   freeDiskBytes: number | null
   meetsFloor: boolean
@@ -424,7 +424,7 @@ export type FitVerdict = 'comfortable' | 'tight' | 'wont-fit'
 export type FitReport = {
   verdict: FitVerdict
   fits: boolean
-  /** True when the model only fits by offloading layers to the CPU (slower). */
+
   offload: boolean
   weightsBytes: number
   kvCacheBytes: number
@@ -541,7 +541,7 @@ export type ChatAdmissionPayload = {
   summary: string
   toolCount: number
   schemaTokens: number
-  /** Names of skills applied to this turn (always-on + trigger-matched). */
+
   activeSkills: string[]
 }
 
@@ -561,7 +561,7 @@ export type ChatDonePayload = {
   requestId: string
   text: string
   tokensPerSec: number
-  /** Wall-clock generation time in the worker — the basis of the energy estimate. */
+
   elapsedMs: number
   aborted: boolean
   toolCallCount: number
@@ -825,6 +825,6 @@ export type ChatTurn = {
   admission?: ChatAdmissionPayload
   attachments?: StoredAttachment[]
   sources?: string[]
-  /** Inline notice (e.g. auto-compaction) rendered as a slim chip, not a bubble. */
+
   notice?: { summary: string; beforeTokens: number; afterTokensEstimate: number }
 }

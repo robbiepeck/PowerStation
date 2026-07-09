@@ -1,8 +1,3 @@
-// Skills: reusable instruction packs stored as plain markdown files in the
-// user-data directory — readable, hand-editable, shareable. The app seeds a
-// small set of starters on first run; which skills are *enabled* lives in
-// config, so deleting or adding files by hand always does the obvious thing.
-
 import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -40,21 +35,12 @@ function isValidSlug(slug: unknown): slug is string {
 
 let seeded = false
 
-// The starters that shipped before seeding was tracked in config — installs
-// that predate the tracking field are assumed to have been offered these.
 const ORIGINAL_STARTERS = ['action-items', 'code-reviewer', 'concise-answers', 'step-by-step-tutor', 'writing-editor']
 
-/**
- * Copy bundled skills the user has never been offered into the skills folder.
- * Tracked per-slug in config, so a NEW bundled skill seeds once for existing
- * installs while a deliberately-deleted one never resurrects.
- */
 async function ensureSeeded(): Promise<void> {
   if (seeded) return
   seeded = true
-  // A missing folder means a genuinely fresh install (seed everything); an
-  // existing folder with no tracking field means a pre-tracking install
-  // (assume the original starters were offered).
+
   const hadFolder = await fs.access(skillsDir()).then(
     () => true,
     () => false,
@@ -81,7 +67,7 @@ async function ensureSeeded(): Promise<void> {
       try {
         await fs.copyFile(path.join(bundledSkillsDir(), file), dest)
       } catch {
-        continue // unreadable starter — retry next launch, don't mark offered
+        continue
       }
     }
     newlyOffered.push(slug)
@@ -156,7 +142,7 @@ export async function saveSkill(payload: {
           .slice(0, 20)
       : []
   let slug = isValidSlug(payload.slug) ? payload.slug : slugifySkillName(name)
-  // New skill with a colliding name: pick a free slug rather than overwrite.
+
   if (!isValidSlug(payload.slug)) {
     const existing = new Set((await listSkills()).map((s) => s.slug))
     let candidate = slug
@@ -204,13 +190,9 @@ export async function revealSkillsDir(): Promise<boolean> {
   return true
 }
 
-/**
- * Skills active for a given message: always-on skills plus auto skills whose
- * triggers match. Without a message (e.g. benchmarks), only always-on apply.
- */
 export async function getActiveSkills(
   message?: string,
-  // Per-project modes win over the global setting for the slugs they name.
+
   modeOverrides?: Record<string, SkillMode>,
 ): Promise<SkillInfo[]> {
   const skills = await listSkills()

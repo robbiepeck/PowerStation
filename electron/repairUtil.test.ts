@@ -12,8 +12,7 @@ beforeAll(async () => {
   outside = await fs.mkdtemp(path.join(os.tmpdir(), 'ps-repair-outside-'))
   await fs.writeFile(path.join(base, 'inside.json'), '{}')
   await fs.writeFile(path.join(outside, 'victim.txt'), 'precious')
-  // The attack the guard exists for: a symlink INSIDE the data folder that
-  // points OUTSIDE it.
+
   await fs.symlink(outside, path.join(base, 'escape-dir'))
   await fs.symlink(path.join(outside, 'victim.txt'), path.join(base, 'escape-file'))
 })
@@ -61,7 +60,7 @@ describe('isWithin', () => {
 describe('walkSize', () => {
   it('sums files without following symlinks', async () => {
     const result = await walkSize(base)
-    // inside.json (2 bytes) only — the symlinks must not be followed.
+
     expect(result.fileCount).toBe(1)
     expect(result.sizeBytes).toBe(2)
     expect(result.approximate).toBe(false)

@@ -1,8 +1,3 @@
-// Chat-with-a-folder: index a folder's text into local embeddings, retrieve
-// the most relevant chunks per question. Everything is local — the embedding
-// model is a small GGUF running in the same isolated worker as chat, and each
-// folder's index is a plain JSON file in the app's data directory.
-
 import { app } from 'electron'
 import { createHash } from 'node:crypto'
 import { promises as fs } from 'node:fs'
@@ -11,8 +6,6 @@ import { downloadModel, embedTexts } from './llm.js'
 import { extractFile, isSupportedFile } from './files.js'
 import { buildRetrievalBlock, chunkText, sourceFiles, topKChunks, type Chunk } from './ragUtil.js'
 
-// nomic-embed-text is small (~84MB), strong, Apache-2.0, and needs task
-// prefixes on both sides of the retrieval (search_document / search_query).
 const EMBED_MODEL_URL =
   'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf'
 const EMBED_MODEL_FILE = 'nomic-embed-text-v1.5.Q8_0.gguf'
@@ -98,11 +91,6 @@ async function readIndex(folderId: string): Promise<StoredIndex | null> {
   }
 }
 
-/**
- * Build (or reuse) the index for a folder. Reuse is safe when the file list
- * length and the newest mtime are unchanged — cheap and right nearly always;
- * "re-attach the folder" is the manual refresh.
- */
 export async function ensureFolderIndex(
   folder: string,
   onProgress?: (p: IndexProgress) => void,
@@ -129,7 +117,6 @@ export async function ensureFolderIndex(
 
   const modelPath = await ensureEmbedModel(onProgress)
 
-  // Extract + chunk
   const chunks: Chunk[] = []
   for (const file of files) {
     if (chunks.length >= MAX_CHUNKS) break
@@ -137,12 +124,11 @@ export async function ensureFolderIndex(
       const extracted = await extractFile(file)
       chunks.push(...chunkText(path.relative(resolved, file), extracted.text))
     } catch {
-      /* unreadable file — skip */
+      void 0
     }
   }
   const capped = chunks.slice(0, MAX_CHUNKS)
 
-  // Embed in batches
   const vectors: number[][] = []
   for (let i = 0; i < capped.length; i += EMBED_BATCH) {
     const batch = capped.slice(i, i + EMBED_BATCH)
@@ -177,10 +163,6 @@ function toInfo(index: StoredIndex): FolderIndexInfo {
   }
 }
 
-/**
- * Embeddings for the local API server's /v1/embeddings endpoint, using the same
- * bundled nomic model as folder retrieval (document-passage mode).
- */
 export async function embedForApi(texts: string[]): Promise<{ model: string; vectors: number[][] }> {
   if (!texts.length) return { model: EMBED_MODEL_FILE, vectors: [] }
   const modelPath = await ensureEmbedModel()
@@ -205,13 +187,6 @@ export async function queryFolder(
   return { block: buildRetrievalBlock(top), sources: sourceFiles(top) }
 }
 
-/**
- * Retrieval across several folder indexes at once (custom agents reference
- * multiple knowledge folders). The query is embedded once; chunks from all
- * folders compete for the same top-k slots, so the best evidence wins no
- * matter which folder it lives in. With more than one folder, sources are
- * prefixed with the folder name so citations stay unambiguous.
- */
 export async function queryFolders(
   folderIds: string[],
   question: string,
@@ -244,7 +219,7 @@ async function assessIndex(index: StoredIndex): Promise<RagIndexListing> {
   try {
     sizeBytes = (await fs.stat(path.join(ragDir(), `${index.folderId}.json`))).size
   } catch {
-    /* listing best-effort */
+    void 0
   }
   const folderStat = await fs.stat(index.folder).catch(() => null)
   if (!folderStat?.isDirectory()) {
@@ -292,7 +267,6 @@ export async function deleteFolderIndex(folderId: unknown): Promise<boolean> {
   }
 }
 
-/** Force a rebuild regardless of the freshness check. */
 export async function reindexFolder(
   folderId: string,
   onProgress?: (p: IndexProgress) => void,

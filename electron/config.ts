@@ -11,24 +11,18 @@ export type Settings = {
   temperature: number
   maxTokens: number
   saveChats: boolean
-  /** Compress older turns automatically when a chat nears the context limit. */
+
   autoCompact: boolean
-  /**
-   * Agent trust profile. 'trusted' honours remembered per-tool allows;
-   * 'cautious' asks on every call regardless (denies still block silently).
-   */
+
   agentProfile: 'trusted' | 'cautious'
-  /**
-   * When on, a tool-capable model first proposes a plan before a multi-tool
-   * turn; approving it runs the whole turn without per-call prompts.
-   */
+
   agentPlanPreview: boolean
   utilities: UtilitySettings
 }
 
 export type BenchmarkRecord = {
   tokensPerSec: number
-  /** Prompt-ingestion (reading) speed; 0 = not measured. */
+
   promptTokensPerSec: number
   outputTokens: number
   contextTokens: number
@@ -52,7 +46,7 @@ export type OnboardingState = {
 
 export type UtilitySettings = {
   systemPrompt: string
-  /** Per-skill activation: absent = off, 'always' = every turn, 'auto' = when triggers match. */
+
   skillModes: Record<string, 'auto' | 'always'>
   mcpServers: McpServerConfig[]
 }
@@ -64,25 +58,22 @@ export type PersistedState = {
   settings: Settings
   toolPermissions: Record<string, ToolPermission>
   onboarding: OnboardingState
-  /** Measured on-device speed per model file (keyed by lowercase fileName). */
+
   benchmarks: Record<string, BenchmarkRecord>
-  /** App version last acknowledged by the user — drives the what's-new card. */
+
   lastSeenVersion: string
-  /** Workspace currently applied to chat, skills, and connectors; null = Personal. */
+
   activeProjectId: string | null
-  /**
-   * Bundled skills ever offered to this install — new bundled skills seed once
-   * for existing users, while a deliberately-deleted one never resurrects.
-   */
+
   seededSkillSlugs: string[]
-  /** Local OpenAI-compatible API server: off by default, localhost-only, token-gated. */
+
   apiServer: ApiServerConfig
 }
 
 export type ApiServerConfig = {
   enabled: boolean
   port: number
-  /** Bearer token callers must present; generated when the server is first enabled. */
+
   token: string
 }
 
@@ -125,8 +116,7 @@ function cleanString(value: unknown, maxLength: number): string {
 
 function sanitizeMcpServers(value: unknown): McpServerConfig[] {
   if (!Array.isArray(value)) return []
-  // Server names must be unique: tool keys (permissions, the model-facing
-  // function registry) are derived from them, and duplicates would collide.
+
   const seenNames = new Set<string>()
   return value
     .slice(0, 40)
@@ -175,7 +165,7 @@ function sanitizeUtilities(value: unknown): UtilitySettings {
       if (/^[a-z0-9-]+$/.test(slug) && (mode === 'auto' || mode === 'always')) skillModes[slug] = mode
     }
   }
-  // Migration: the pre-v0.6 enabledSkills list maps to always-on.
+
   if (Array.isArray(record.enabledSkills)) {
     for (const raw of record.enabledSkills.slice(0, 100)) {
       const slug = cleanString(raw, 60).toLowerCase()
@@ -189,9 +179,6 @@ function sanitizeUtilities(value: unknown): UtilitySettings {
   }
 }
 
-// Settings arrive from the renderer (settings:update) and from a possibly
-// corrupted on-disk config, so every field is coerced and range-clamped here
-// before it can reach llama.cpp (a NaN context size would otherwise crash it).
 function sanitizeSettings(patch: Partial<Settings> | null | undefined, base: Settings): Settings {
   const s = { ...base, ...(patch ?? {}) }
   const utilities = { ...base.utilities, ...((patch?.utilities as Partial<UtilitySettings> | undefined) ?? {}) }
@@ -266,7 +253,7 @@ function sanitizeApiServer(value: unknown): ApiServerConfig {
   return {
     enabled: r.enabled === true,
     port: clampNumber(r.port, 1024, 65535, 4141),
-    // Keep a valid stored token; otherwise leave empty (generated on first enable).
+
     token: typeof r.token === 'string' && /^[A-Za-z0-9_-]{16,100}$/.test(r.token) ? r.token : '',
   }
 }
@@ -299,12 +286,6 @@ export async function patchSettings(patch: Partial<Settings>): Promise<Settings>
   return current.settings
 }
 
-/**
- * Backup restore: archive fields win, then everything passes through the same
- * normalize() as a config-file read — a hand-edited archive can't smuggle in
- * values the app would never write. lastSeenVersion stays local so restoring
- * on a newer build still shows that build's what's-new card.
- */
 export async function applyRestoredState(restored: Partial<PersistedState>): Promise<void> {
   const current = await getState()
   state = normalize({ ...current, ...restored, lastSeenVersion: current.lastSeenVersion })

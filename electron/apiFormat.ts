@@ -1,8 +1,3 @@
-// Pure OpenAI-shape mapping for the local API server — no I/O, no Electron, so
-// every wire-format decision is unit-tested. The server (apiServer.ts) does the
-// HTTP and inference; this file only translates between OpenAI JSON and the
-// worker's request/result shapes.
-
 export type OpenAiMessage = { role: string; content: unknown }
 
 export type ParsedChatBody = {
@@ -15,7 +10,6 @@ export type ParsedChatBody = {
   maxTokens: number | undefined
 }
 
-/** Coerce OpenAI content (string, or an array of content parts) to plain text. */
 function contentToText(content: unknown): string {
   if (typeof content === 'string') return content
   if (Array.isArray(content)) {
@@ -26,12 +20,6 @@ function contentToText(content: unknown): string {
   return ''
 }
 
-/**
- * Split OpenAI chat messages into the worker's shape: system messages become
- * the system prompt (raw — only the caller's, never the app's), the last
- * message becomes the prompt, everything between becomes replayed history.
- * Throws a readable message when the request can't produce a prompt.
- */
 export function parseChatBody(body: unknown): ParsedChatBody {
   const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   if (!record) throw new Error('Request body must be a JSON object.')
@@ -48,7 +36,7 @@ export function parseChatBody(body: unknown): ParsedChatBody {
     } else if (role === 'assistant') {
       turns.push({ role: 'assistant', text })
     } else {
-      // user (and anything unrecognised) is treated as a user turn.
+
       turns.push({ role: 'user', text })
     }
   }
@@ -133,7 +121,6 @@ export function apiError(message: string, type = 'invalid_request_error', code: 
   return { error: { message, type, code } }
 }
 
-/** OpenAI `input` can be a string or an array of strings. Normalise to string[]. */
 export function embeddingInputs(body: unknown): string[] {
   const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   const input = record?.input

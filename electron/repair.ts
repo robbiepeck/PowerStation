@@ -1,18 +1,3 @@
-// Repair tab service. The contract, enforced structurally:
-//
-//   1. Everything outside the app's data folder is READ-ONLY. The only action
-//      offered on external paths is "reveal in Finder" — the human deletes
-//      with their own hands, through the OS, recoverably (Trash).
-//   2. Deletes exist only for data PowerStation itself created, resolve their
-//      targets server-side from an allowlist of ids (the renderer never sends
-//      a path), and every one must pass assertWithinDir(userData) — the
-//      realpath containment guard unit-tested against traversal and symlink
-//      escapes.
-//   3. No shell commands, no elevation, no system files. Ever.
-//
-// Every delete is appended to a repair log (also in the data folder), so the
-// tab can show exactly what it has ever removed.
-
 import os from 'node:os'
 import path from 'node:path'
 import { app, shell } from 'electron'
@@ -32,11 +17,11 @@ export type StorageLocation = {
   exists: boolean
   sizeBytes: number
   fileCount: number
-  /** True when the size walk hit its cap — the figure is a floor. */
+
   approximate: boolean
-  /** Why this location is on the curated list. */
+
   note: string
-  /** Everything here is reveal-only; kept explicit so the UI can say so. */
+
   action: 'reveal-only'
 }
 
@@ -52,7 +37,7 @@ export type Reclaimable = {
   label: string
   detail: string
   sizeBytes: number
-  /** What happens after removal — every entry must be rebuildable or re-downloadable. */
+
   consequence: string
 }
 
@@ -69,8 +54,6 @@ export type RepairLogEntry = {
   sizeBytes: number
   timestamp: number
 }
-
-// --- Curated read-only scan list ----------------------------------------------
 
 function curatedLocations(): Array<{ id: string; label: string; path: string; note: string }> {
   const home = os.homedir()
@@ -117,9 +100,7 @@ async function collectModelRefs(): Promise<ModelFileRef[]> {
     getLmStudioStatus().catch(() => ({ models: [] as Array<{ name: string; fileName: string; path: string; sizeBytes: number }> })),
   ])
   for (const m of ours) refs.push({ app: 'PowerStation', name: m.fileName, path: m.path, sizeBytes: m.sizeBytes })
-  // Ollama blobs are content-addressed (no file name), so pair them with our
-  // models by exact size only when the tag name matches nothing — skip: size-only
-  // matching would be guesswork, and the duplicate list must never guess.
+
   for (const m of lmstudio.models) refs.push({ app: 'LM Studio', name: m.fileName, path: m.path, sizeBytes: m.sizeBytes })
   void ollama
   return refs
@@ -132,7 +113,7 @@ export async function getStorageReport(): Promise<StorageReport> {
     try {
       exists = (await fs.stat(loc.path)).isDirectory()
     } catch {
-      /* stays false */
+      void 0
     }
     const walk = exists ? await walkSize(loc.path) : { sizeBytes: 0, fileCount: 0, approximate: false }
     locations.push({ ...loc, exists, ...walk, action: 'reveal-only' })
@@ -141,7 +122,6 @@ export async function getStorageReport(): Promise<StorageReport> {
   return { disk: await getDisk(), locations, duplicates, scannedAt: Date.now() }
 }
 
-/** Reveal a curated location in the OS file manager. Ids only — never paths. */
 export async function revealLocation(id: unknown): Promise<boolean> {
   const loc = curatedLocations().find((l) => l.id === id)
   if (!loc) return false
@@ -154,8 +134,6 @@ export async function revealLocation(id: unknown): Promise<boolean> {
   return true
 }
 
-// --- Reclaimables (app-owned data only) -----------------------------------------
-
 const EMBED_MODEL_FILE = 'nomic-embed-text-v1.5.Q8_0.gguf'
 
 async function sizeOf(target: string): Promise<number> {
@@ -167,7 +145,6 @@ async function sizeOf(target: string): Promise<number> {
   }
 }
 
-/** Resolve a reclaimable id to concrete paths — server-side, allowlisted. */
 async function reclaimableTargets(id: string): Promise<{ label: string; paths: string[] } | null> {
   const userData = app.getPath('userData')
   if (id.startsWith('rag-orphan-')) {
@@ -243,11 +220,6 @@ async function appendRepairLog(entry: RepairLogEntry): Promise<void> {
   await fs.writeFile(repairLogFile(), JSON.stringify(log, null, 1), 'utf8')
 }
 
-/**
- * Remove one reclaimable. The id is resolved to paths here, and every path
- * must pass the containment guard — belt and braces, since the allowlist
- * above already only produces userData paths.
- */
 export async function cleanReclaimable(id: unknown): Promise<{ removed: boolean; freedBytes: number }> {
   if (typeof id !== 'string') return { removed: false, freedBytes: 0 }
   const target = await reclaimableTargets(id)
@@ -261,7 +233,7 @@ export async function cleanReclaimable(id: unknown): Promise<{ removed: boolean;
       await fs.rm(safePath, { force: true })
       freedBytes += bytes
     } catch {
-      /* already gone or unreadable — fine */
+      void 0
     }
   }
   if (freedBytes > 0) {
@@ -269,8 +241,6 @@ export async function cleanReclaimable(id: unknown): Promise<{ removed: boolean;
   }
   return { removed: freedBytes > 0, freedBytes }
 }
-
-// --- Model integrity (read-only) -------------------------------------------------
 
 export async function checkModelIntegrity(): Promise<IntegrityResult[]> {
   const list = await models.listModels().catch(() => [])

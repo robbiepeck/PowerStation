@@ -1,8 +1,3 @@
-// Project (workspace) persistence. Like chats: one JSON file per project in
-// the user-data directory, sanitized on the way back in, revealable on disk.
-// The *active* project id lives in the main config so it survives restarts
-// and is readable synchronously wherever prompts and connections are built.
-
 import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -63,7 +58,6 @@ export async function saveProject(payload: unknown): Promise<Project | null> {
   return project
 }
 
-/** Used by backup restore — accepts a full raw project, keeps its id. */
 export async function importProject(raw: unknown): Promise<boolean> {
   const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
   if (!isValidProjectId(record.id)) return false
@@ -89,7 +83,6 @@ export async function deleteProject(id: unknown): Promise<boolean> {
   return true
 }
 
-/** Persist the active workspace; pass null to return to Personal. */
 export async function setActiveProject(id: unknown): Promise<Project | null> {
   const project = id === null ? null : await getProject(id)
   await mutate((current) => {
@@ -102,7 +95,7 @@ export async function getActiveProject(): Promise<Project | null> {
   const state = await getState()
   if (!state.activeProjectId) return null
   const project = await readProject(state.activeProjectId)
-  // A deleted or corrupt file must not leave the app pointing at a ghost.
+
   if (!project) {
     await mutate((current) => {
       current.activeProjectId = null

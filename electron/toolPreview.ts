@@ -1,7 +1,3 @@
-// Human-readable previews for side-effecting tool calls, computed before the
-// permission prompt so the user approves what will actually happen — a real
-// diff, not raw JSON. Recognises the de-facto filesystem MCP tool shapes.
-
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { applyTextEdits, previewDiff, type DiffLine, type DiffSummary } from './diffUtil.js'
@@ -29,18 +25,13 @@ async function readTextIfSmall(filePath: string): Promise<{ text: string; note: 
     if (stat.size > MAX_PREVIEW_BYTES) return { text: '', note: 'File too large to preview — showing the new content only.' }
     return { text: await fs.readFile(filePath, 'utf8'), note: null }
   } catch {
-    return null // does not exist → new file
+    return null
   }
 }
 
-/**
- * Build a preview for known write-shaped tools; null means "no preview" and
- * the modal falls back to showing the raw arguments.
- */
 export async function buildToolPreview(tool: McpToolInfo, args: unknown): Promise<ToolPreview | null> {
   const record = typeof args === 'object' && args !== null ? (args as Record<string, unknown>) : {}
-  // Built-in repair delete: show exactly what would be removed and what
-  // happens afterwards — the same honesty as a file diff.
+
   if (tool.key === 'powerstation:clean_reclaimable') {
     const id = typeof record.id === 'string' ? record.id : null
     const item = id ? (await getReclaimables().catch(() => [])).find((r) => r.id === id) : null
@@ -56,8 +47,7 @@ export async function buildToolPreview(tool: McpToolInfo, args: unknown): Promis
           body: 'This id is not on the reclaimable list, so the call will fail safely — only PowerStation-created data can be removed.',
         }
   }
-  // Models often pass paths relative to the server's allowed folder — resolve
-  // the same way the filesystem server will, or the preview reads the wrong file.
+
   const baseDir = getServerBaseDir(tool.serverId)
   const resolvePath = (p: string) => (path.isAbsolute(p) || !baseDir ? p : path.join(baseDir, p))
   try {
@@ -104,7 +94,7 @@ export async function buildToolPreview(tool: McpToolInfo, args: unknown): Promis
       return { kind: 'move', from: record.source, to: record.destination }
     }
   } catch {
-    /* preview is best-effort; the permission prompt still shows raw args */
+    void 0
   }
   return null
 }

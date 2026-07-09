@@ -1,9 +1,3 @@
-// Backup archive shape — pure build/parse so the format is unit-testable.
-// One JSON file holds everything that makes a PowerStation install *yours*:
-// settings, tool permissions, benchmarks, skills, chats, and projects.
-// Model weights are deliberately NOT included (multi-GB, re-downloadable);
-// their paths travel along and simply dangle until the files exist again.
-
 export const BACKUP_FORMAT = 'powerstation-backup'
 export const BACKUP_VERSION = 1
 
@@ -14,16 +8,16 @@ export type BackupArchive = {
   version: number
   exportedAt: string
   appVersion: string
-  /** The persisted config state (settings, permissions, benchmarks, …). */
+
   state: Record<string, unknown>
   skills: BackupSkill[]
   chats: unknown[]
   projects: unknown[]
-  /** Custom agents; absent in pre-v0.15 archives (parses to []). */
+
   agents: unknown[]
 }
 
-const MAX_INPUT_CHARS = 300 * 1024 * 1024 // chats dominate; generous but bounded
+const MAX_INPUT_CHARS = 300 * 1024 * 1024
 const MAX_SKILLS = 200
 const MAX_CHATS = 500
 const MAX_PROJECTS = 50
@@ -51,7 +45,6 @@ export function buildBackupJson(parts: {
   return JSON.stringify(archive, null, 1)
 }
 
-/** Throws with a user-readable message on anything that is not a valid archive. */
 export function parseBackupJson(text: string): BackupArchive {
   if (typeof text !== 'string' || !text.trim()) throw new Error('The file is empty.')
   if (text.length > MAX_INPUT_CHARS) throw new Error('The file is too large to be a PowerStation backup.')

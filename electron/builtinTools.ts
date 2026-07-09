@@ -1,14 +1,3 @@
-// First-party tools the model can call WITHOUT any MCP server — currently the
-// Repair toolset. They ride the exact same rails as external tools: the same
-// ask/allow/deny permissions, the same previews, the same audit log. The only
-// mutating tool resolves its target through repair.ts's id allowlist and
-// containment guard, so the model cannot express an out-of-contract delete no
-// matter what it generates.
-//
-// Registration is gated on the "Storage repair" skill being active for the
-// message — the skill teaches the workflow, and its Off/Auto/Always modes
-// double as the feature switch (no tool-schema tokens spent otherwise).
-
 import type { McpToolInfo } from './mcp.js'
 import * as repair from './repair.js'
 

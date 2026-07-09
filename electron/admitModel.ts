@@ -1,8 +1,3 @@
-// Shared "will this model fit, and at what context?" helper. The in-app chat
-// path does this inline; the local API server reuses it so an API request can
-// never load a model that would blow past the machine's memory budget — it
-// gets an honest error instead.
-
 import { getState } from './config.js'
 import * as llm from './llm.js'
 import * as models from './models.js'

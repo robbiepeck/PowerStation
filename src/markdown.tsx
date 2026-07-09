@@ -1,20 +1,8 @@
 import type { ReactNode } from 'react'
 import { CopyButton } from './ui'
 
-/**
- * A deliberately small, dependency-free Markdown renderer for assistant replies.
- * Builds React nodes (never raw HTML) so model output cannot inject markup.
- * Handles fenced code blocks, headings, lists, blockquotes, paragraphs, and the
- * common inline marks (code, bold, italic, links).
- */
-
 const INLINE = /(\*\*([^*]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_|\[([^\]]+)\]\(([^)\s]+)\))/g
 
-/**
- * Only allow links that resolve to a safe web scheme. Model output is untrusted,
- * so `javascript:`, `file:`, `data:` and unknown custom schemes are rejected and
- * the link is rendered as plain text instead of a clickable anchor.
- */
 function safeHref(raw: string): string | null {
   try {
     const protocol = new URL(raw, 'https://invalid.local').protocol
@@ -26,7 +14,7 @@ function safeHref(raw: string): string | null {
 
 function renderInline(text: string, keyPrefix: string): ReactNode[] {
   const nodes: ReactNode[] = []
-  // Split on inline code first so its contents are never re-parsed.
+
   const codeSplit = text.split(/(`[^`]+`)/g)
   codeSplit.forEach((segment, segmentIndex) => {
     if (segment.startsWith('`') && segment.endsWith('`') && segment.length > 1) {

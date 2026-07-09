@@ -1,8 +1,3 @@
-// Conversation persistence. Chats are plain JSON files — one per conversation
-// — in the app's user-data directory, so "where is my data" has a concrete,
-// revealable answer. Files are written only while the save-chats setting is
-// on, and everything on disk is sanitised on the way back in.
-
 import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -10,7 +5,7 @@ import path from 'node:path'
 export type StoredAttachment = {
   name: string
   tokenEstimate: number
-  /** Full extracted text — kept so resuming a chat can replay it into the model. */
+
   text: string
 }
 
@@ -37,12 +32,12 @@ export type StoredChatMessage = {
 export type StoredChat = {
   id: string
   title: string
-  /** True once the user renamed the chat — saves stop re-deriving the title. */
+
   titleLocked: boolean
   pinned: boolean
-  /** Workspace this chat belongs to; null = Personal. */
+
   projectId: string | null
-  /** Custom agent this chat was started with — denormalized so the badge survives agent deletion. */
+
   agent: { id: string; name: string; emoji: string } | null
   createdAt: number
   updatedAt: number
@@ -62,7 +57,6 @@ export type ChatSummary = {
   snippet?: string
 }
 
-/** Sidebar scope: a project id for that workspace, or null for Personal (unassigned). */
 export type ChatScope = { projectId: string | null } | undefined
 
 const MAX_CHATS = 200
@@ -262,11 +256,11 @@ export async function saveChat(payload: {
     title: existing?.titleLocked ? existing.title : deriveTitle(messages),
     titleLocked: existing?.titleLocked ?? false,
     pinned: existing?.pinned ?? false,
-    // A chat's workspace is set at creation and never migrates on later saves.
+
     projectId:
       existing?.projectId ??
       (typeof payload.projectId === 'string' && /^proj-[a-z0-9-]{4,60}$/.test(payload.projectId) ? payload.projectId : null),
-    // Same for its agent badge.
+
     agent: existing?.agent ?? sanitizeAgentBadge(payload.agent),
     createdAt: existing?.createdAt ?? Date.now(),
     updatedAt: Date.now(),
@@ -283,7 +277,6 @@ async function writeChat(chat: StoredChat): Promise<void> {
   await fs.writeFile(chatFile(chat.id), JSON.stringify(chat, null, 1), 'utf8')
 }
 
-/** Rename keeps updatedAt untouched so the list does not reorder under the user. */
 export async function renameChat(id: unknown, title: unknown): Promise<boolean> {
   if (!isValidId(id) || typeof title !== 'string') return false
   const chat = await readChat(id)
@@ -293,7 +286,7 @@ export async function renameChat(id: unknown, title: unknown): Promise<boolean> 
     chat.title = trimmed
     chat.titleLocked = true
   } else {
-    // Clearing the name hands the title back to auto-derivation.
+
     chat.title = deriveTitle(chat.messages)
     chat.titleLocked = false
   }
@@ -310,7 +303,6 @@ export async function setChatPinned(id: unknown, pinned: unknown): Promise<boole
   return true
 }
 
-/** Used by backup restore — sanitizes a full raw chat and writes it under its own id. */
 export async function importChat(raw: unknown): Promise<boolean> {
   const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
   if (!isValidId(record.id)) return false
@@ -387,7 +379,6 @@ export async function exportChatMarkdown(chat: StoredChat, filePath: string): Pr
   await fs.writeFile(filePath, lines.join('\n'), 'utf8')
 }
 
-/** Flatten a chat's tool activity for the exportable audit log. */
 export function collectAuditLog(chat: StoredChat): Array<StoredToolCall & { messageIndex: number }> {
   const records: Array<StoredToolCall & { messageIndex: number }> = []
   chat.messages.forEach((message, messageIndex) => {

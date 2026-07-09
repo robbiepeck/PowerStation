@@ -1,8 +1,3 @@
-// Message protocol between the main process (llm.ts host) and the isolated
-// inference worker (llmWorker.ts). The worker runs node-llama-cpp in an
-// Electron utilityProcess so a native crash is a restartable event instead of
-// taking down the whole app.
-
 export type ChatStatus =
   | { phase: 'loading-model'; modelPath: string }
   | { phase: 'creating-context'; modelPath: string }
@@ -23,22 +18,15 @@ export type ChatRequest = {
   contextTokens: number
   temperature: number
   maxTokens: number
-  /** JSON-schema tool definitions the model may call (agent mode). */
+
   tools?: ToolDefinition[]
-  /** Hard cap on tool calls in a single turn (loop guard). */
+
   maxToolCalls?: number
-  /**
-   * Prior conversation to replay into the session before prompting — sent once
-   * when resuming a persisted chat, so the model actually remembers it.
-   */
+
   history?: Array<{ role: 'user' | 'assistant'; text: string }>
-  /** Compress older turns automatically when the context nears full (default on). */
+
   autoCompact?: boolean
-  /**
-   * Plan-preview probe: generate against the live context but restore the
-   * session afterwards, and don't stream tokens into the main chat — so the
-   * conversation is untouched. Used to ask the model for a plan before a turn.
-   */
+
   isolated?: boolean
 }
 
@@ -52,20 +40,20 @@ export type BenchmarkResult = {
   tokensPerSec: number
   outputTokens: number
   elapsedMs: number
-  /** Prompt-ingestion (reading) speed; 0 when it could not be measured. */
+
   promptTokensPerSec: number
 }
 
 export type ChatResult = {
   text: string
   tokensPerSec: number
-  /** Wall-clock generation time, including any tool calls made mid-turn. */
+
   elapsedMs: number
   aborted: boolean
   toolCallCount: number
-  /** Set when the turn was halted by a loop guard. */
+
   haltReason: 'repeated-call' | 'call-budget' | null
-  /** Tokens currently held in the session context, and its total size. */
+
   contextUsed: number
   contextSize: number
 }
@@ -76,10 +64,10 @@ export type EmbedRequest = {
 }
 
 export type ToolDefinition = {
-  /** Unique key, e.g. "filesystem:read_file". */
+
   key: string
   description: string
-  /** JSON Schema for the tool parameters. */
+
   parameters: Record<string, unknown> | null
 }
 

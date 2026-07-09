@@ -1,13 +1,3 @@
-// Local, OpenAI-compatible HTTP API for the running model. Off by default,
-// bound strictly to 127.0.0.1, and gated by a bearer token — so other apps and
-// scripts on THIS machine can call your local model with the standard OpenAI
-// SDK, but nothing off-machine can reach it and nothing on-machine can use it
-// without the token you copy from Settings.
-//
-// Design (confirmed): token-required auth, honour the requested model (fall
-// back to the app's selected model), RAW inference (no app system prompt or
-// skills — the caller controls the messages), and no tool calling in v1.
-
 import http from 'node:http'
 import crypto from 'node:crypto'
 import { getState, mutate } from './config.js'
@@ -73,7 +63,6 @@ function generateToken(): string {
   return crypto.randomBytes(24).toString('base64url')
 }
 
-/** A token is created lazily the first time the server is enabled. */
 async function ensureToken(): Promise<string> {
   const state = await getState()
   if (state.apiServer.token) return state.apiServer.token
@@ -105,8 +94,6 @@ function record(entry: Omit<ApiRequestLog, 'id' | 'timestamp'>): void {
   logListener?.(full)
 }
 
-// --- request helpers ------------------------------------------------------------
-
 function cors(res: http.ServerResponse): void {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type')
@@ -137,7 +124,6 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   })
 }
 
-/** Resolve an OpenAI `model` string to an installed model path, else the selected one. */
 async function resolveModelPath(requested: string | null): Promise<{ path: string; id: string } | null> {
   const list = await models.listModels()
   if (requested) {
@@ -181,13 +167,13 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
     requestId,
     modelPath: resolved.path,
     prompt: parsed.prompt,
-    systemPrompt: parsed.systemPrompt, // raw: only the caller's system message
+    systemPrompt: parsed.systemPrompt,
     contextTokens: admission.contextTokens,
     temperature: parsed.temperature ?? state.settings.temperature,
     maxTokens: parsed.maxTokens ?? DEFAULT_MAX_TOKENS,
     history: parsed.history.length ? parsed.history : undefined,
     autoCompact: false,
-    isolated: true, // never disturb the app's in-chat session
+    isolated: true,
   }
 
   if (parsed.stream) {
@@ -236,7 +222,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     return
   }
 
-  // Auth: constant-ish check against the configured bearer token.
   const state = await getState()
   const auth = req.headers.authorization ?? ''
   const presented = auth.startsWith('Bearer ') ? auth.slice(7) : ''
@@ -282,8 +267,6 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   }
 }
 
-// --- lifecycle ------------------------------------------------------------------
-
 export async function startApiServer(): Promise<void> {
   if (server) return
   const token = await ensureToken()
@@ -298,7 +281,7 @@ export async function startApiServer(): Promise<void> {
     statusListener?.()
   })
   await new Promise<void>((resolve) => {
-    // Bind to loopback ONLY — never 0.0.0.0. Off-machine clients cannot reach it.
+
     server!.listen(apiServer.port, '127.0.0.1', () => {
       running = true
       statusListener?.()
@@ -319,7 +302,6 @@ export async function stopApiServer(): Promise<void> {
   statusListener?.()
 }
 
-/** Bring the running server in line with config (called after any api:* change and on boot). */
 export async function syncApiServer(): Promise<ApiServerStatus> {
   const { apiServer } = await getState()
   if (apiServer.enabled && !running) {
@@ -329,7 +311,7 @@ export async function syncApiServer(): Promise<ApiServerStatus> {
   } else if (!apiServer.enabled && running) {
     await stopApiServer()
   } else if (apiServer.enabled && running) {
-    // Port may have changed — restart onto the new one.
+
     await stopApiServer()
     await startApiServer().catch((err) => {
       lastError = err instanceof Error ? err.message : String(err)

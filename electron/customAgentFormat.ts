@@ -1,16 +1,7 @@
-// Custom agent shape and sanitization — pure, unit-tested, reused by backup
-// restore and agent export/import. An agent is a reusable assistant in the
-// Microsoft-365 agent-builder sense, scoped to what a local app can honestly
-// deliver: a name and face, instructions appended to the system prompt, the
-// indexed knowledge folders it retrieves across, and the connectors (MCP
-// servers) it may use. Deliberately NOT part of an agent (per product
-// decision): model binding — an agent shapes the conversation, not which
-// weights answer it.
-
 export type AgentKnowledge = {
-  /** Folder-index id (rag.ts derives it from the path). */
+
   folderId: string
-  /** Absolute path — kept so a restored agent can re-index on a new machine. */
+
   folder: string
   name: string
 }
@@ -18,17 +9,13 @@ export type AgentKnowledge = {
 export type CustomAgent = {
   id: string
   name: string
-  /** 1–4 chars shown as the agent's face (usually an emoji). */
+
   emoji: string
   description: string
-  /** Appended to the system prompt after the global prompt and any project instructions. */
+
   instructions: string
   knowledge: AgentKnowledge[]
-  /**
-   * Configured MCP servers this agent may use. Empty means "inherit" (whatever
-   * the project or global settings already enable) — an agent only *scopes*
-   * connectors when it names some, so an empty list never silences tools.
-   */
+
   mcpServerIds: string[]
   createdAt: number
   updatedAt: number
@@ -72,7 +59,6 @@ function sanitizeKnowledge(value: unknown): AgentKnowledge[] {
   return out
 }
 
-/** Returns null when the input is not salvageable (no usable name). */
 export function sanitizeCustomAgent(raw: unknown, id: string): CustomAgent | null {
   if (typeof raw !== 'object' || raw === null || !isValidAgentId(id)) return null
   const record = raw as Record<string, unknown>
@@ -96,17 +82,10 @@ export function sanitizeCustomAgent(raw: unknown, id: string): CustomAgent | nul
   }
 }
 
-/**
- * Wrap an agent as a portable share file. Knowledge folders travel by path and
- * index id; on another machine the index won't exist until the folder is
- * re-indexed, and connector ids may not resolve — both degrade gracefully
- * (retrieve nothing / connect nothing) rather than error.
- */
 export function buildAgentShare(agent: CustomAgent): string {
   return JSON.stringify({ format: AGENT_SHARE_FORMAT, version: AGENT_SHARE_VERSION, agent }, null, 1)
 }
 
-/** Parse a share file to a raw agent object (still un-sanitized). Throws with a readable message. */
 export function parseAgentShare(text: string): Record<string, unknown> {
   if (typeof text !== 'string' || !text.trim()) throw new Error('The file is empty.')
   if (text.length > 2_000_000) throw new Error('The file is too large to be a PowerStation agent.')

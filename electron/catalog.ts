@@ -1,10 +1,3 @@
-// Model catalog service. The catalog is the product's editorial heart — it
-// must be updatable without shipping a new app build, so the source of truth
-// is catalog/models.json in the GitHub repo, fetched at launch and on demand
-// ("Update catalog"), with the copy bundled at build time as offline fallback.
-// Remote JSON is untrusted input: every field is validated and download URLs
-// are pinned to huggingface.co before anything reaches the renderer.
-
 import { app } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -41,11 +34,7 @@ export type CatalogModel = {
   useCases: UseCase[]
   goodAt: string[]
   strugglesWith: string[]
-  /**
-   * The model's vision variant files, when they exist. Metadata only for now:
-   * the bundled runtime has no multimodal support yet (docs/vision-plan.md),
-   * so nothing downloads or gates on this until it does.
-   */
+
   vision: VisionSupport | null
 }
 
@@ -189,8 +178,7 @@ export async function getCatalog(): Promise<Catalog> {
   if (current) return current
   const cached = await readCatalogFile(cachedCatalogPath(), 'cached')
   const bundled = await readCatalogFile(bundledCatalogPath(), 'bundled')
-  // Prefer whichever is newer; the cache is only ever written from a validated
-  // remote fetch, so a stale bundled copy loses to a fresher cache.
+
   if (cached && bundled) {
     current = cached.updatedAt >= bundled.updatedAt ? cached : bundled
   } else {
@@ -213,25 +201,19 @@ export async function refreshCatalog(): Promise<Catalog> {
     current = parsed
     return parsed
   } catch {
-    // Offline or invalid remote data — keep whatever we already had.
+
     return base
   }
 }
-
-// --- Connector gallery -------------------------------------------------------
-// Curated MCP servers, one click to add. Same remote/cache/bundled lifecycle
-// as the model catalog — and stricter validation, because these entries become
-// spawned child processes: only `npx -y <validated-npm-package> <safe-args>`
-// can ever be constructed from this data.
 
 export type ConnectorEntry = {
   id: string
   name: string
   tagline: string
-  /** What the model concretely gets — shown on the card. */
+
   detail: string
   npmPackage: string
-  /** Literal args; the string "{folder}" is replaced by a user-picked folder. */
+
   args: string[]
   needsFolder: boolean
   maintainer: 'official' | 'community'
@@ -248,7 +230,7 @@ export type ConnectorCatalog = {
 
 const REMOTE_CONNECTORS_URL = 'https://raw.githubusercontent.com/robbiepeck/PowerStation/main/catalog/connectors.json'
 const NPM_PACKAGE_RE = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/
-// No leading dash (no flag injection), conservative charset, or the folder token.
+
 const SAFE_ARG_RE = /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,119}$/
 
 function cachedConnectorsPath(): string {
@@ -335,16 +317,12 @@ export async function refreshConnectorCatalog(): Promise<ConnectorCatalog> {
   }
 }
 
-// --- Skills gallery ------------------------------------------------------------
-// Curated skills, one click to install as a local markdown file. Same
-// remote/cache/bundled lifecycle; bodies are plain instructions, never code.
-
 export type SkillGalleryEntry = {
   id: string
   name: string
   description: string
   category: string
-  /** Comma-separated trigger phrases, same format as skill frontmatter. */
+
   triggers: string
   body: string
 }

@@ -1,19 +1,13 @@
-// Ollama detection. Many people already have models in Ollama; PowerStation
-// can use those GGUF blobs directly — no re-download — by reading Ollama's
-// manifest store and registering the blob file as an imported model. Ollama is
-// optional and never a dependency: inference always runs in PowerStation's own
-// runtime, we only borrow the files.
-
 import os from 'node:os'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
 
 export type OllamaModel = {
-  /** Ollama tag, e.g. "llama3:latest". */
+
   name: string
   blobPath: string
   sizeBytes: number
-  /** From the daemon's /api/tags when it is running. */
+
   parameterSize: string | null
   quantization: string | null
 }
@@ -60,16 +54,11 @@ async function daemonTagDetails(): Promise<Map<string, { parameterSize: string |
       }
     }
   } catch {
-    /* daemon not reachable — manifest data still works */
+    void 0
   }
   return details
 }
 
-/**
- * Walk the manifest store: manifests/<registry>/<namespace>/<model>/<tag> is a
- * JSON file whose model layer digest names the GGUF blob. Works whether or not
- * the daemon is running.
- */
 async function listFromManifests(): Promise<OllamaModel[]> {
   const root = modelsRoot()
   const manifestsDir = path.join(root, 'manifests')
@@ -88,7 +77,7 @@ async function listFromManifests(): Promise<OllamaModel[]> {
       if (entry.isDirectory()) {
         await walk(full, [...segments, entry.name])
       } else if (entry.isFile() && segments.length >= 3) {
-        // segments: [registry, namespace, model], file name = tag
+
         try {
           const manifest = JSON.parse(await fs.readFile(full, 'utf8')) as {
             layers?: Array<{ mediaType?: string; digest?: string; size?: number }>
@@ -110,7 +99,7 @@ async function listFromManifests(): Promise<OllamaModel[]> {
             quantization: null,
           })
         } catch {
-          /* unreadable manifest — skip */
+          void 0
         }
       }
     }
@@ -140,7 +129,6 @@ export async function getOllamaStatus(): Promise<OllamaStatus> {
   }
 }
 
-/** Resolve an Ollama tag to its blob path — server-side, from our own listing. */
 export async function resolveOllamaModel(name: unknown): Promise<OllamaModel | null> {
   if (typeof name !== 'string') return null
   const models = await listFromManifests()

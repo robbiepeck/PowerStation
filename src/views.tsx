@@ -135,8 +135,6 @@ function isCurrentCatalogModel(model: CatalogModel, selectedModel?: ModelInfo | 
   return selectedModel.fileName.toLowerCase() === model.fileName.toLowerCase()
 }
 
-// --- Catalog ------------------------------------------------------------------
-
 function FitBadge({ fit }: { fit: FitReport | null | undefined }) {
   if (fit === undefined) return null
   if (fit === null) return <Badge tone="neutral">fit unknown</Badge>
@@ -300,8 +298,6 @@ export function CatalogGrid({
     </div>
   )
 }
-
-// --- Monitor ------------------------------------------------------------------
 
 export function MonitorView({
   device,
@@ -511,8 +507,6 @@ export function MonitorView({
   )
 }
 
-// --- Recommendation panel ---------------------------------------------------------
-
 const REC_USE_CASES: Array<{ id: string; label: string }> = [
   { id: 'everyday', label: 'Everyday assistant' },
   { id: 'coding', label: 'Coding' },
@@ -537,7 +531,7 @@ function RecommendPanel({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    // Prefill from the onboarding answers.
+
     void bridge.onboarding.get().then((state) => {
       if (state.useCase) setUseCase(state.useCase)
       if (state.priority === 'speed' || state.priority === 'balanced' || state.priority === 'quality') {
@@ -649,8 +643,6 @@ function RecommendPanel({
     </section>
   )
 }
-
-// --- Models ---------------------------------------------------------------------
 
 export function ModelsView({
   benchBusyPath,
@@ -990,8 +982,6 @@ export function ModelsView({
   )
 }
 
-// --- Utilities --------------------------------------------------------------------
-
 export function UtilitiesView({
   enabled,
   mcpStatuses,
@@ -1245,8 +1235,6 @@ export function UtilitiesView({
   )
 }
 
-// --- Skills -----------------------------------------------------------------------
-
 const EMPTY_SKILL_DRAFT = { name: '', description: '', body: '', triggers: '' }
 
 function SkillsPanel({ contextTokens }: { contextTokens: number }) {
@@ -1264,8 +1252,7 @@ function SkillsPanel({ contextTokens }: { contextTokens: number }) {
   }, [])
 
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
 
@@ -1521,8 +1508,6 @@ function SkillEditor({
   )
 }
 
-// --- Connector gallery ---------------------------------------------------------
-
 const CONNECTOR_ICONS: Record<string, LucideIconType> = {
   filesystem: FolderOpen,
   memory: Brain,
@@ -1632,8 +1617,6 @@ function ConnectorGallery({
   )
 }
 
-// --- Knowledge folders (RAG index manager) --------------------------------------
-
 function KnowledgeFoldersSection() {
   const [indexes, setIndexes] = useState<RagIndexListing[] | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -1645,8 +1628,7 @@ function KnowledgeFoldersSection() {
   }, [])
 
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
     return bridge.rag.onIndexProgress(setProgress)
   }, [refresh])
@@ -1725,8 +1707,6 @@ function KnowledgeFoldersSection() {
     </section>
   )
 }
-
-// --- Settings ---------------------------------------------------------------------
 
 type ApiServerControls = {
   status: ApiServerStatus | null
@@ -1993,13 +1973,6 @@ export function SettingsView({
   )
 }
 
-// --- Repair view --------------------------------------------------------------
-//
-// The whole tab obeys one contract, stated in the banner and enforced in the
-// main process: nothing outside PowerStation's own data folder is ever
-// deleted or edited. External locations are measured and *revealed*; the
-// user acts in Finder, where deletes go to the recoverable Trash.
-
 export function RepairView() {
   const [report, setReport] = useState<StorageReport | null>(null)
   const [reclaimables, setReclaimables] = useState<Reclaimable[] | null>(null)
@@ -2021,15 +1994,14 @@ export function RepairView() {
       setIntegrity(nextIntegrity)
       setRepairLog(nextLog)
     } catch {
-      /* individual sections stay in their loading state */
+      void 0
     } finally {
       setScanning(false)
     }
   }, [])
 
   useEffect(() => {
-    // One-shot scan on open (the sync setScanning(true) is the loading flag).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
 
@@ -2246,13 +2218,6 @@ export function RepairView() {
     </div>
   )
 }
-
-// --- Agents view ---------------------------------------------------------------
-//
-// Reusable assistants in the Microsoft-365 agent-builder sense, scoped to what
-// a local app can honestly deliver: instructions + knowledge folders, started
-// from here with one click. Deliberately separate from Projects (workspaces):
-// an agent shapes a chat; a project scopes your workspace.
 
 export function AgentsView({
   agents,

@@ -1,8 +1,3 @@
-// Backup & restore. Everything that makes an install personal — settings,
-// tool permissions, benchmarks, skills, chats, projects — in one JSON file
-// the user can read. Restore replaces settings and overwrites content by id
-// (backup wins); model weights never travel, only their paths.
-
 import { app } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -38,7 +33,7 @@ async function collectSkillFiles(): Promise<Array<{ slug: string; content: strin
     try {
       out.push({ slug, content: await fs.readFile(path.join(skillsDir(), file), 'utf8') })
     } catch {
-      /* unreadable file — leave it out rather than fail the whole backup */
+      void 0
     }
   }
   return out
@@ -52,8 +47,6 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
   const projectList = await projects.listProjects()
   const agentList = await customAgents.listAgents()
 
-  // lastSeenVersion stays out: restoring on a newer build should still show
-  // that build's what's-new card, not suppress it with the old machine's value.
   const portableState: Partial<PersistedState> = { ...state }
   delete portableState.lastSeenVersion
   const json = buildBackupJson({
@@ -99,8 +92,6 @@ export async function restoreBackup(filePath: string): Promise<BackupSummary> {
     if (await customAgents.importAgent(agent)) agentCount += 1
   }
 
-  // Archive fields win, then the whole thing is re-normalized exactly like a
-  // config-file read (clamps, unknown-field drops, sanitizers).
   await applyRestoredState(archive.state as Partial<PersistedState>)
 
   return { chats: chatCount, skills: skillCount, projects: projectCount, agents: agentCount, settingsApplied: true }

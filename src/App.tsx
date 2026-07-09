@@ -91,9 +91,6 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'repair', label: 'Repair', icon: LifeBuoy },
 ]
 
-// First-run demo moment: prompts curated to be squarely within small-model
-// competence — no factual traps, no hard math — so the first impression is
-// what the model does well.
 const STARTER_PROMPTS: Array<{ label: string; prompt: string }> = [
   { label: '✍️ Write a tiny poem', prompt: 'Write a three-line poem about morning coffee.' },
   { label: '🧒 Explain something simply', prompt: "Explain what RAM does — like I'm ten years old." },
@@ -103,9 +100,6 @@ const STARTER_PROMPTS: Array<{ label: string; prompt: string }> = [
 
 type RagFolderState = { id: string; name: string; fileCount?: number; stale?: boolean }
 
-// Attachment contents are woven into the model-facing prompt with explicit
-// data framing; the UI only ever shows the chips. The same framing is used
-// when replaying a saved chat so resumed conversations keep their documents.
 function frameAttachments(attachments: StoredAttachment[] | undefined): string {
   if (!attachments?.length) return ''
   const blocks = attachments.map((a) => `[Attached file: ${a.name}]\n${a.text}`)
@@ -137,8 +131,6 @@ const statusText = (payload: ChatStatusPayload): string =>
     generating: 'Generating…',
   })[payload.phase] ?? 'Working…'
 
-// --- Data hooks -------------------------------------------------------------
-
 function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null)
   useEffect(() => {
@@ -151,8 +143,6 @@ function useSettings() {
   return { settings, update }
 }
 
-// The single owner of onboarding completion: updates renderer state AND
-// persists in one place, so no exit path can leave the flag unwritten.
 function useOnboarding() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
   useEffect(() => {
@@ -181,7 +171,7 @@ function useCatalog() {
     void bridge.catalog.get().then((result) => {
       setCatalog(result)
       void loadFits(result.models)
-      // Quietly look for a newer catalog in the background on every launch.
+
       void bridge.catalog.refresh().then((fresh) => {
         if (fresh.updatedAt !== result.updatedAt) {
           setCatalog(fresh)
@@ -224,8 +214,7 @@ function useModels() {
   }, [])
 
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
 
@@ -287,8 +276,7 @@ function usePermissionPrompt() {
         return payload
       })
     })
-    // The main process auto-denies prompts after a timeout — dismiss the modal
-    // so a late "Allow" click can't appear to grant something already denied.
+
     const offExpired = bridge.agent.onPermissionExpired(({ promptId }) => {
       queue.current = queue.current.filter((item) => item.promptId !== promptId)
       setRequest((current) => (current?.promptId === promptId ? queue.current.shift() ?? null : current))
@@ -309,7 +297,7 @@ function usePlanPrompt() {
   const [request, setRequest] = useState<PlanRequest | null>(null)
   useEffect(() => {
     const offRequest = bridge.agent.onPlanRequest((payload) => setRequest(payload))
-    // A plan prompt also expires via the permission-expired channel.
+
     const offExpired = bridge.agent.onPermissionExpired(({ promptId }) => {
       setRequest((current) => (current?.promptId === promptId ? null : current))
     })
@@ -362,7 +350,6 @@ function useUpdates() {
   return { installLatest, updateState }
 }
 
-/** Sidebar chats, scoped to the active workspace (null = Personal). */
 function useChatHistory(projectId: string | null) {
   const [summaries, setSummaries] = useState<ChatSummary[]>([])
   const refresh = useCallback(async () => {
@@ -377,8 +364,7 @@ function useChatHistory(projectId: string | null) {
     [projectId],
   )
   useEffect(() => {
-    // Load on mount and whenever the workspace changes.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
   return { summaries, refresh, search }
@@ -391,8 +377,7 @@ function useAgents() {
     setAgents(list)
   }, [])
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
   return { agents, refresh }
@@ -410,8 +395,7 @@ function useProjects() {
     setActive(current)
   }, [])
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
   return { projects, active, setActive, refresh }
@@ -424,8 +408,7 @@ function useBenchmarks() {
     setResults(map)
   }, [])
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
   return { results, refresh }
@@ -438,8 +421,7 @@ function useOllama() {
     setStatus(result)
   }, [])
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
   return { status, refresh }
@@ -454,7 +436,7 @@ function useApiServer() {
     setLog(l)
   }, [])
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
     const offStatus = bridge.api.onStatus(setStatus)
     const offRequest = bridge.api.onRequest((entry) => setLog((prev) => [...prev.slice(-59), entry]))
@@ -476,8 +458,7 @@ function useLmStudio() {
     setStatus(result)
   }, [])
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
+
     void refresh()
   }, [refresh])
   return { status, refresh }
@@ -488,18 +469,15 @@ function useChat(getWatts: () => number) {
   const [streaming, setStreaming] = useState(false)
   const [chatId, setChatId] = useState<string | null>(null)
   const [contextUsage, setContextUsage] = useState<{ used: number; total: number } | null>(null)
-  // Estimated watt-hours spent generating in this session's chat — power draw
-  // is itself an estimate, so this is a labelled ballpark, not a meter.
+
   const [energyWh, setEnergyWh] = useState(0)
   const activeRef = useRef<string | null>(null)
-  // Committed-messages mirror so click handlers (regenerate/edit) can read the
-  // conversation synchronously without relying on setState updater timing.
+
   const messagesRef = useRef<ChatTurn[]>([])
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
-  // Set when a persisted chat is loaded; sent once with the next message so
-  // the worker replays the conversation into the model's context.
+
   const replayRef = useRef<Array<{ role: 'user' | 'assistant'; text: string }> | null>(null)
 
   const patchAssistant = useCallback((requestId: string, patch: (turn: ChatTurn) => ChatTurn) => {
@@ -545,8 +523,7 @@ function useChat(getWatts: () => number) {
       patchAssistant(requestId, (turn) => ({ ...turn, sources }))
     })
     const offCompacted = bridge.chat.onCompacted(({ requestId, summary, beforeTokens, afterTokensEstimate }) => {
-      // Insert a slim notice just before the in-flight assistant turn. The
-      // visible transcript is untouched — only the model-side memory shrank.
+
       setMessages((prev) => {
         const index = prev.findIndex((m) => m.requestId === requestId && m.role === 'assistant')
         if (index < 0) return prev
@@ -664,13 +641,10 @@ function useChat(getWatts: () => number) {
         })),
       })),
     )
-    // Fresh worker session; the saved turns replay with the next message.
+
     void bridge.chat.reset()
   }, [])
 
-  // Rewind to just before the last user message: reset the worker session,
-  // arm a replay of the earlier turns, and return that message. Shared by
-  // regenerate (which resends it) and edit (which seeds the composer).
   const rewindLastExchange = useCallback((): ChatTurn | null => {
     const snapshot = messagesRef.current
     let lastUserIndex = -1
@@ -745,8 +719,6 @@ function safeJson(value: unknown, cap: number): string {
   }
 }
 
-// --- App shell --------------------------------------------------------------
-
 function App() {
   const [activeView, setActiveView] = useState<ViewId>('chat')
   const { settings, update: updateSettings } = useSettings()
@@ -760,7 +732,7 @@ function App() {
   const planPrompt = usePlanPrompt()
   const runtimeEvents = useRuntimeEvents()
   const { installLatest, updateState } = useUpdates()
-  // Latest power estimate, readable synchronously when a generation finishes.
+
   const wattsRef = useRef(0)
   useEffect(() => {
     wattsRef.current = snapshot?.power.watts ?? 0
@@ -797,8 +769,7 @@ function App() {
   const resetChat = chat.reset
 
   const selectedModel = useMemo(() => models.find((model) => model.path === selectedPath) ?? null, [models, selectedPath])
-  // The capability tier is resolved by the main process on models:list — one
-  // heuristic, one home.
+
   const selectedTier: ToolCallingTier = selectedModel?.toolCalling ?? 'none'
   const utilitiesDisabled = !selectedModel
   const visibleView = activeView === 'utilities' && utilitiesDisabled ? 'models' : activeView
@@ -841,8 +812,6 @@ function App() {
     return bridge.rag.onIndexProgress(setRagIndexing)
   }, [])
 
-  // Auto-open the artifact pane when a reply finishes with a renderable
-  // artifact (html/svg/markdown) — once per artifact, dismissible.
   useEffect(() => {
     const last = [...chat.messages].reverse().find((m) => m.role === 'assistant' && !m.streaming && m.content)
     if (!last) return
@@ -855,10 +824,6 @@ function App() {
     }
   }, [chat.messages])
 
-  // Autosave the conversation (debounced) whenever a turn settles. Files are
-  // plain JSON in the user-data folder; saving is a setting, on by default.
-  // The ref keeps the save-callback reading the current chat id without making
-  // it an effect dependency (a fresh id must not re-trigger a save).
   const chatIdRef = useRef(chat.chatId)
   useEffect(() => {
     chatIdRef.current = chat.chatId
@@ -884,13 +849,13 @@ function App() {
         .catch(() => undefined)
     }, 600)
     return () => window.clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [chat.messages, chat.streaming, settings?.saveChats, selectedPath, ragFolder, activeProject?.id, activeAgent])
 
   const handleNewChat = useCallback(() => {
     chat.reset()
     setPendingAttachments([])
-    // In a workspace, a fresh chat starts with the project's knowledge folder.
+
     setRagFolder(
       activeProject?.knowledge
         ? { id: activeProject.knowledge.folderId, name: activeProject.knowledge.name }
@@ -903,9 +868,6 @@ function App() {
     seenArtifactRef.current = null
   }, [activeProject, chat])
 
-  // "Start chat" from the Agents tab: a fresh chat with the agent's
-  // instructions, knowledge, and connectors applied (main-side, per message /
-  // via reconcile).
   const handleStartAgentChat = useCallback(
     (agent: CustomAgent) => {
       chat.reset()
@@ -933,8 +895,6 @@ function App() {
     }
   }, [agentsHook])
 
-  // Switch workspace: persist, re-point connectors (main side), then apply the
-  // project's model and knowledge folder here and start a clean chat.
   const handleSelectProject = useCallback(
     async (id: string | null) => {
       setProjectMenuOpen(false)
@@ -952,7 +912,7 @@ function App() {
       if (project?.knowledge) {
         const knowledge = project.knowledge
         setRagFolder({ id: knowledge.folderId, name: knowledge.name })
-        // Restored on a new machine the index may not exist yet — rebuild quietly.
+
         void bridge.rag
           .info(knowledge.folderId)
           .then((info) => (info ? null : bridge.rag.index(knowledge.folder)))
@@ -971,8 +931,7 @@ function App() {
     (saved: Project) => {
       void projectsHook.refresh()
       if (saved.id === activeProject?.id) {
-        // Instructions/skills apply on the next message via the main process;
-        // the knowledge chip is renderer state, so mirror it now.
+
         setRagFolder(saved.knowledge ? { id: saved.knowledge.folderId, name: saved.knowledge.name } : null)
         if (saved.modelPath && saved.modelPath !== selectedPath) void select(saved.modelPath).catch(() => undefined)
       }
@@ -1026,8 +985,7 @@ function App() {
       setPendingAttachments([])
       setArtifact(null)
       seenArtifactRef.current = null
-      // Restore the chat's agent badge; if the agent was deleted, the send
-      // path passes the id and the main process ignores it gracefully.
+
       setActiveAgent(stored.agent)
       void bridge.agents.setActive(stored.agent?.id ?? null)
       setRagFolder(stored.ragFolder ? { ...stored.ragFolder } : null)
@@ -1036,8 +994,7 @@ function App() {
           if (info) setRagFolder({ id: info.folderId, name: info.name, fileCount: info.fileCount, stale: info.stale })
         })
       }
-      // Reselect the chat's model when it is still around, without wiping the
-      // just-loaded messages.
+
       if (stored.modelPath && stored.modelPath !== selectedPath && models.some((m) => m.path === stored.modelPath)) {
         await select(stored.modelPath)
       }
@@ -1086,7 +1043,6 @@ function App() {
     [refresh],
   )
 
-  // Re-fetch the sidebar respecting any active search filter.
   const refreshChatList = useCallback(() => {
     if (chatQuery.trim()) void chatHistory.search(chatQuery)
     else void chatHistory.refresh()
@@ -1261,8 +1217,7 @@ function App() {
         window.alert(result.reason ?? 'The model file could not be deleted.')
         return
       }
-      // If we just deleted the model in use, drop the stale conversation —
-      // refresh() re-picks a remaining model (or none).
+
       if (wasSelected) chat.reset()
       await refresh()
       if (result.freedBytes > 0) window.alert(`Deleted "${model.name}" — freed ${formatBytes(result.freedBytes)}.`)
@@ -1712,8 +1667,6 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
   )
 }
 
-// --- Status pill --------------------------------------------------------------
-
 function StatusPill({
   onOpenMonitor,
   snapshot,
@@ -1756,8 +1709,6 @@ function StatusPill({
     </button>
   )
 }
-
-// --- Chat view --------------------------------------------------------------
 
 function ChatView({
   artifact,
@@ -2047,8 +1998,7 @@ function ArtifactPane({ artifact, onClose }: { artifact: Artifact; onClose: () =
           <iframe
             className="artifact-frame"
             title={artifact.title}
-            // Scripts may run, but the opaque origin means no access to the
-            // app, its bridge, or its storage.
+
             sandbox="allow-scripts"
             srcDoc={artifactSrcDoc(artifact)}
           />
@@ -2284,8 +2234,6 @@ function MessageBubble({
   )
 }
 
-// --- Audit modal -----------------------------------------------------------------
-
 const DECISION_LABEL: Record<string, { text: string; tone: 'ok' | 'warn' | 'bad' }> = {
   allowed: { text: 'allowed once', tone: 'ok' },
   'allowed-always': { text: 'allowed always', tone: 'ok' },
@@ -2377,14 +2325,6 @@ function AuditModal({
     </div>
   )
 }
-
-// --- Permission modal ----------------------------------------------------------
-
-// --- Compare modal -----------------------------------------------------------
-//
-// One prompt, two models. Runs are SEQUENTIAL by design: the worker holds one
-// model at a time, so each candidate gets the whole machine — fair timings and
-// no memory gamble. The UI says so rather than pretending to race them.
 
 type CompareSlotState = {
   status: 'idle' | 'loading' | 'generating' | 'done' | 'refused' | 'error' | 'skipped'
@@ -2592,8 +2532,6 @@ function CompareModal({
   )
 }
 
-// --- Agent modal ----------------------------------------------------------------
-
 function AgentModal({
   agent,
   onClose,
@@ -2616,7 +2554,7 @@ function AgentModal({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+
     void bridge.settings
       .get()
       .then((s) => setServers(s.utilities.mcpServers.map((server) => ({ id: server.id, name: server.name }))))
@@ -2807,8 +2745,6 @@ function AgentModal({
   )
 }
 
-// --- Project modal -----------------------------------------------------------
-
 function ProjectModal({
   models,
   onClose,
@@ -2834,7 +2770,7 @@ function ProjectModal({
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    // One-shot load on mount; state is set after awaited IPC, not synchronously.
+
     void bridge.skills.list().then(setSkills).catch(() => undefined)
     void bridge.settings
       .get()
@@ -3198,7 +3134,6 @@ function Composer({
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  // Edit-and-resend seeds the composer with the recalled message.
   const seedKeyRef = useRef<number | null>(null)
   useEffect(() => {
     if (seed && seed.key !== seedKeyRef.current) {

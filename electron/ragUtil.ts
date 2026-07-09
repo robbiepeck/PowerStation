@@ -1,9 +1,6 @@
-// Pure helpers for the chat-with-a-folder pipeline: chunking, similarity, and
-// context-block formatting. No Electron imports — unit-tested directly.
-
 export type Chunk = {
   file: string
-  /** Character offset of the chunk within the file (for dedup/debug). */
+
   start: number
   text: string
 }
@@ -11,10 +8,6 @@ export type Chunk = {
 const CHUNK_CHARS = 1000
 const CHUNK_OVERLAP = 150
 
-/**
- * Split text into overlapping chunks, preferring paragraph/sentence
- * boundaries near the target size so retrieval units read coherently.
- */
 export function chunkText(file: string, text: string): Chunk[] {
   const clean = text.replace(/\r\n/g, '\n').trim()
   if (!clean) return []
@@ -23,7 +16,7 @@ export function chunkText(file: string, text: string): Chunk[] {
   while (start < clean.length) {
     let end = Math.min(start + CHUNK_CHARS, clean.length)
     if (end < clean.length) {
-      // Prefer to break at a paragraph, then a sentence, then a space.
+
       const slice = clean.slice(start, end)
       const breakAt = Math.max(slice.lastIndexOf('\n\n'), slice.lastIndexOf('. '), slice.lastIndexOf(' '))
       if (breakAt > CHUNK_CHARS * 0.5) end = start + breakAt + 1
@@ -60,11 +53,6 @@ export function topKChunks(
     .slice(0, k)
 }
 
-/**
- * Frame retrieved chunks as reference data. The framing matters on small
- * models: labelled, fenced blocks keep file contents from being read as
- * instructions.
- */
 export function buildRetrievalBlock(chunks: Array<Chunk & { score: number }>): string {
   if (!chunks.length) return ''
   const parts = chunks.map(
@@ -76,7 +64,6 @@ export function buildRetrievalBlock(chunks: Array<Chunk & { score: number }>): s
   )
 }
 
-/** Files whose names/sources appear in a retrieval, deduped, for the UI. */
 export function sourceFiles(chunks: Array<{ file: string }>): string[] {
   return [...new Set(chunks.map((chunk) => chunk.file))]
 }

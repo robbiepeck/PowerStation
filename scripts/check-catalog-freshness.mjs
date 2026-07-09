@@ -1,29 +1,19 @@
-// Catalogue freshness check: verifies every Hugging Face URL in
-// catalog/models.json (and the advertised file sizes) and every npm package
-// in catalog/connectors.json. Run weekly by CI and on catalog edits — a stale
-// catalogue silently kills a recommendation product, so link rot must page us.
-//
-// Usage: node scripts/check-catalog-freshness.mjs
-// Exits non-zero if anything fails; writes a markdown report to stdout and to
-// $GITHUB_STEP_SUMMARY when present.
-
 import { readFile, appendFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const TIMEOUT_MS = 30_000
-// Split-model catalog entries advertise the TOTAL size across parts while the
-// download URL points at part 1 only, so size comparison is skipped for them.
+
 const SPLIT_PART = /-\d{5}-of-\d{5}\.gguf$/i
-const SIZE_TOLERANCE = 0.01 // 1% drift = the file changed = admission math lies
+const SIZE_TOLERANCE = 0.01
 
 const failures = []
 const warnings = []
 const passes = []
 
 async function headOrRange(url) {
-  // Prefer HEAD; some CDNs reject it, so fall back to a 1-byte range GET.
+
   try {
     const res = await fetch(url, { method: 'HEAD', redirect: 'follow', signal: AbortSignal.timeout(TIMEOUT_MS) })
     if (res.ok) {
@@ -33,7 +23,7 @@ async function headOrRange(url) {
     if (res.status !== 405 && res.status !== 403) return { ok: false, status: res.status, length: 0 }
   } catch (error) {
     if (error.name === 'TimeoutError') return { ok: false, status: 0, length: 0, note: 'timeout' }
-    // fall through to range GET
+
   }
   try {
     const res = await fetch(url, {
@@ -42,7 +32,7 @@ async function headOrRange(url) {
       redirect: 'follow',
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
-    const range = res.headers.get('content-range') // "bytes 0-0/123456"
+    const range = res.headers.get('content-range')
     const total = range ? Number(range.split('/')[1]) : 0
     res.body?.cancel?.()
     return { ok: res.ok, status: res.status, length: Number.isFinite(total) ? total : 0 }
@@ -113,8 +103,7 @@ async function checkConnectors() {
 }
 
 async function checkSkills() {
-  // Skill bodies are self-contained (no URLs/packages) — validate structure so
-  // a malformed skills.json on main can't silently empty the in-app gallery.
+
   const catalog = JSON.parse(await readFile(path.join(root, 'catalog', 'skills.json'), 'utf8'))
   if (catalog.schemaVersion !== 1 || !Array.isArray(catalog.skills) || catalog.skills.length === 0) {
     failures.push('**skills.json** invalid: schemaVersion must be 1 with a non-empty skills array')
@@ -133,9 +122,7 @@ async function checkSkills() {
 }
 
 async function checkRuntimeUpdates() {
-  // Vision is blocked on multimodal support in node-llama-cpp
-  // (docs/vision-plan.md). Flag every newer release so the unblock gets
-  // evaluated the week it ships instead of months later.
+
   try {
     const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'))
     const installed = String(pkg.dependencies['node-llama-cpp'] ?? '').replace(/^[^0-9]*/, '')
@@ -150,7 +137,7 @@ async function checkRuntimeUpdates() {
       passes.push(`runtime: node-llama-cpp up to date (${installed})`)
     }
   } catch {
-    /* watchdog is best-effort */
+    void 0
   }
 }
 

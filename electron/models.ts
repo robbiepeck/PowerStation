@@ -12,12 +12,12 @@ export type ModelInfo = {
   parameters: string | null
   quantization: string | null
   contextLength: number | null
-  /** Total size including sibling split parts (-0000N-of-0000N.gguf). */
+
   sizeBytes: number
   source: 'folder' | 'imported'
-  /** KV-cache geometry from the GGUF header, used for admission control. */
+
   geometry: KvGeometry | null
-  /** Whether the embedded chat template mentions tool calling (null = no template read). */
+
   templateSupportsTools: boolean | null
 }
 
@@ -34,12 +34,6 @@ function isSecondarySplitPart(fileName: string): boolean {
   return Boolean(match && match[1] !== '00001')
 }
 
-/**
- * Every file that makes up a model on disk: the file itself, plus its sibling
- * split parts when it is the first shard of a multi-part GGUF. Used both to
- * sum a model's real size and to delete it completely (a multi-part model
- * lives across several files — removing only the first frees nothing).
- */
 async function modelFilePaths(filePath: string): Promise<string[]> {
   const dir = path.dirname(filePath)
   const fileName = path.basename(filePath)
@@ -57,9 +51,6 @@ async function modelFilePaths(filePath: string): Promise<string[]> {
   }
 }
 
-// Multi-part GGUFs are listed by their first part only, but the model needs
-// ALL parts in memory — admission control must see the summed size, not the
-// first shard, or a 63GB model reads as 21GB and "fits".
 async function totalSizeWithSplitParts(filePath: string, firstPartSize: number): Promise<number> {
   const parts = await modelFilePaths(filePath)
   if (parts.length <= 1) return firstPartSize
@@ -68,7 +59,7 @@ async function totalSizeWithSplitParts(filePath: string, firstPartSize: number):
     try {
       total += (await fs.stat(part)).size
     } catch {
-      /* ignore unreadable sibling */
+      void 0
     }
   }
   return total > firstPartSize ? total : firstPartSize
@@ -96,9 +87,9 @@ async function walkForGguf(dir: string, depth: number, found: string[], limit: n
 
 function asNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value
-  // GGUF metadata can surface uint64 fields as BigInt.
+
   if (typeof value === 'bigint') return Number(value)
-  // Per-layer arrays (some MoE/hybrid models): use the first value.
+
   if (Array.isArray(value)) return asNumber(value[0])
   return null
 }
@@ -119,8 +110,6 @@ function extractGeometry(archMeta: Record<string, unknown>): KvGeometry | null {
 
 type ModelMetadata = Omit<ModelInfo, 'path' | 'fileName' | 'sizeBytes' | 'source'>
 
-// GGUF headers don't change under a stable mtime+size, and chat:send needs
-// this on every message — cache to keep header parsing off the hot path.
 const metadataCache = new Map<string, { mtimeMs: number; size: number; meta: ModelMetadata }>()
 
 async function readMetadata(filePath: string): Promise<ModelMetadata> {
@@ -144,8 +133,7 @@ async function readMetadata(filePath: string): Promise<ModelMetadata> {
     const architecture = typeof general.architecture === 'string' ? general.architecture : null
     const archMeta = architecture ? ((metadata[architecture] ?? {}) as Record<string, unknown>) : {}
     const contextLength = asNumber(archMeta.context_length)
-    // The embedded Jinja chat template is the best available signal for
-    // whether a model was trained to emit tool calls.
+
     const chatTemplate = typeof tokenizer.chat_template === 'string' ? tokenizer.chat_template : null
     return {
       name: typeof general.name === 'string' && general.name.trim() ? general.name : fallback.name,
@@ -257,15 +245,14 @@ export async function deleteModelFile(filePath: string): Promise<{ deleted: bool
   const resolved = path.resolve(filePath)
   const known = await isKnownModelPath(resolved)
   if (!known) return { deleted: false, freedBytes: 0, reason: 'File is outside any known model folder' }
-  // Delete every file the model occupies — the first shard plus all sibling
-  // split parts — so a multi-part GGUF actually frees its full size.
+
   const parts = await modelFilePaths(resolved)
   let freedBytes = 0
   for (const part of parts) {
     try {
       freedBytes += (await fs.stat(part)).size
     } catch {
-      /* size best-effort */
+      void 0
     }
     await fs.rm(part, { force: true })
   }

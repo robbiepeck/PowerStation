@@ -1,19 +1,8 @@
-// The skill file format: plain markdown with a tiny frontmatter block, so
-// skills are readable, hand-editable, and shareable outside the app.
-//
-//   ---
-//   name: Concise answers
-//   description: Short, direct replies without filler.
-//   ---
-//   When answering, be brief...
-//
-// Pure functions only — this module is unit-tested without Electron.
-
 export type ParsedSkill = {
   name: string
   description: string
   body: string
-  /** Words/phrases that auto-activate the skill when it is in 'auto' mode. */
+
   triggers: string[]
 }
 
@@ -65,7 +54,6 @@ export function serializeSkillFile(skill: ParsedSkill): string {
   return `---\nname: ${name}\ndescription: ${description}${triggersLine}\n---\n\n${skill.body.trim().slice(0, MAX_BODY)}\n`
 }
 
-/** Same rough chars/4 heuristic the tool-schema meter uses. */
 export function estimateSkillTokens(body: string): number {
   return Math.ceil(body.length / 4)
 }
@@ -79,11 +67,6 @@ export function slugifySkillName(name: string): string {
   return slug || 'skill'
 }
 
-/**
- * Does this auto-mode skill apply to the given message? Matches any trigger
- * phrase; a skill with no explicit triggers falls back to the words of its
- * own name (so "Code reviewer" activates on "review this code").
- */
 export function skillMatchesMessage(skill: ParsedSkill, message: string): boolean {
   const haystack = message.toLowerCase()
   const triggers = skill.triggers.length
@@ -95,11 +78,6 @@ export function skillMatchesMessage(skill: ParsedSkill, message: string): boolea
   return triggers.some((trigger) => haystack.includes(trigger))
 }
 
-/**
- * Compose the effective system prompt: the user's base prompt plus every
- * enabled skill, each under a clear heading so models treat them as standing
- * instructions rather than conversation.
- */
 export function composeSystemPrompt(basePrompt: string, skills: ParsedSkill[]): string {
   const parts: string[] = []
   const base = basePrompt.trim()

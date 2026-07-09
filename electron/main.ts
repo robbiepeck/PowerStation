@@ -10,9 +10,6 @@ import { disconnectAll as disconnectMcp } from './mcp.js'
 import { stopApiServer } from './apiServer.js'
 import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
 
-// GUI apps launched from Finder/Dock get launchd's minimal PATH; fix it before
-// any MCP server is spawned (npx/uvx would otherwise fail with ENOENT).
-// macOS-specific by design — Windows GUI apps inherit the user PATH already.
 if (process.platform === 'darwin') fixPath()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -50,10 +47,7 @@ function createMainWindow() {
     mainWindow?.show()
     startTelemetry((snapshot) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('telemetry:update', snapshot)
-      // Auto-pause: when the OS reports critical memory pressure during
-      // generation, stop the generation rather than letting the machine swap
-      // itself into a beachball. Latched on the transition into critical so a
-      // sustained episode fires one event, not one per telemetry tick.
+
       const critical = snapshot.pressure.level === 'critical'
       if (critical && !wasCritical) {
         const active = getActiveRequestIds()
@@ -78,16 +72,11 @@ function createMainWindow() {
     mainWindow = null
   })
 
-  // Open only web links externally; never let the renderer spawn windows or
-  // hand arbitrary URI schemes (file:, custom protocol handlers, etc.) to the OS.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isSafeExternalUrl(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
 
-  // Block in-app navigation away from the bundled UI. Anything that tries to
-  // navigate the top-level frame to a remote origin is opened externally instead,
-  // so the preload bridge is never exposed to untrusted content.
   mainWindow.webContents.on('will-navigate', (event, url) => {
     const devUrl = process.env.VITE_DEV_SERVER_URL
     if (devUrl && url.startsWith(devUrl)) return

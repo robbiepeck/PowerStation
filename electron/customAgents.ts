@@ -1,6 +1,3 @@
-// Custom agent persistence — same transparent pattern as chats and projects:
-// one JSON file per agent in the user-data directory, sanitized on read.
-
 import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
@@ -67,7 +64,6 @@ export async function saveAgent(payload: unknown): Promise<CustomAgent | null> {
   return agent
 }
 
-/** Used by backup restore — accepts a full raw agent, keeps its id. */
 export async function importAgent(raw: unknown): Promise<boolean> {
   const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
   if (!isValidAgentId(record.id)) return false
@@ -77,17 +73,11 @@ export async function importAgent(raw: unknown): Promise<boolean> {
   return true
 }
 
-/** Serialize one agent as a portable share file. */
 export async function exportAgentShare(id: unknown): Promise<string | null> {
   const agent = await getAgent(id)
   return agent ? buildAgentShare(agent) : null
 }
 
-/**
- * Import a shared agent file under a FRESH id — unlike backup restore, importing
- * a shared file should never overwrite an existing agent, even if the file
- * carries a colliding id. Throws with a readable message on a bad file.
- */
 export async function importAgentShare(text: string): Promise<CustomAgent | null> {
   const raw = parseAgentShare(text)
   const id = newAgentId()

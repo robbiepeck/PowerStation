@@ -10,15 +10,15 @@ describe('chunkText', () => {
 
   it('splits long text into overlapping chunks covering everything', () => {
     const sentence = 'The quick brown fox jumps over the lazy dog. '
-    const text = sentence.repeat(80) // ~3.6k chars
+    const text = sentence.repeat(80)
     const chunks = chunkText('b.md', text)
     expect(chunks.length).toBeGreaterThan(2)
-    // Every chunk within size bounds and non-empty
+
     for (const chunk of chunks) {
       expect(chunk.text.length).toBeGreaterThan(0)
       expect(chunk.text.length).toBeLessThanOrEqual(1000)
     }
-    // Full coverage: the last chunk reaches the end of the text
+
     const last = chunks[chunks.length - 1]
     expect(text.trim().endsWith(last.text.slice(-20))).toBe(true)
   })

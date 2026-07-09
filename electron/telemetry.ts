@@ -14,7 +14,7 @@ export type TelemetrySnapshot = {
   power: { watts: number; estimated: boolean }
   battery: { present: boolean; charging: boolean; percent: number | null; real: boolean }
   thermal: { celsius: number | null; headroomPct: number; real: boolean }
-  /** OS memory pressure (macOS kernel signal, no privileges needed). */
+
   pressure: { level: MemoryPressureLevel | null; real: boolean }
   tokensPerSec: number
   model: { loaded: boolean; path: string | null }
@@ -52,8 +52,6 @@ async function getPrimaryStorage() {
   }
 }
 
-// Telemetry must never be the thing that spawns (or respawns) the inference
-// worker — it only reads from it when it happens to be alive.
 function deviceInfoIfRunning() {
   return isWorkerRunning() ? getDeviceInfo().catch(() => null) : Promise.resolve(null)
 }
@@ -61,7 +59,7 @@ function deviceInfoIfRunning() {
 async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
   if (staticInfo) return staticInfo
   const device = await deviceInfoIfRunning()
-  // Rough package power ceiling used only to scale the (estimated) power readout.
+
   const cores = os.cpus().length
   const tdpWatts = clamp(18 + cores * 3.5, 25, 130)
   const resolved = {
@@ -69,7 +67,7 @@ async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
     gpuType: typeof device?.gpuType === 'string' ? device.gpuType : device?.gpuType === false ? 'cpu' : null,
     tdpWatts,
   }
-  // Only cache once the worker has answered, so the GPU name isn't stuck null.
+
   if (device) staticInfo = resolved
   return resolved
 }
@@ -99,12 +97,10 @@ async function sample(): Promise<TelemetrySnapshot> {
     vramReal = true
   }
 
-  // GPU utilisation is generally unavailable without elevated access (especially on Apple Silicon).
   const gpuLoad: number | null = null
 
   const tempC = temp && typeof temp.main === 'number' && temp.main > 0 ? temp.main : null
 
-  // Power draw cannot be read cross-platform without privileges; derive a labelled estimate from load.
   const powerWatts = round(
     7 + (cpuLoad / 100) * info.tdpWatts * 0.62 + (gpuLoad != null ? (gpuLoad / 100) * info.tdpWatts * 0.38 : (cpuLoad / 100) * info.tdpWatts * 0.18),
     1,
@@ -126,8 +122,7 @@ async function sample(): Promise<TelemetrySnapshot> {
     battery: battery?.hasBattery
       ? {
           present: true,
-          // acConnected covers the "plugged in, already full" state where
-          // isCharging goes false but the machine is not draining.
+
           charging: Boolean(battery.isCharging || battery.acConnected),
           percent: typeof battery.percent === 'number' ? clamp(round(battery.percent), 0, 100) : null,
           real: true,
@@ -146,7 +141,7 @@ export function startTelemetry(send: (snapshot: TelemetrySnapshot) => void, inte
     try {
       send(await sample())
     } catch {
-      /* ignore transient sampling errors */
+      void 0
     }
   }
   void tick()

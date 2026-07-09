@@ -1,6 +1,3 @@
-// Standalone smoke test for the bundled GGUF engine.
-// Downloads a tiny real instruct model into PowerStation's managed models folder
-// (so it also shows up in the app) and runs a streaming prompt to prove inference.
 import { getLlama, LlamaChatSession, createModelDownloader } from 'node-llama-cpp'
 import os from 'node:os'
 import path from 'node:path'

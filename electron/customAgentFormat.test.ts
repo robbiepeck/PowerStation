@@ -47,7 +47,7 @@ describe('sanitizeCustomAgent', () => {
         name: 'X',
         knowledge: [
           FOLDER,
-          FOLDER, // duplicate folderId
+          FOLDER,
           { folderId: 'not-hex', folder: '/y', name: 'y' },
           ...Array.from({ length: 12 }, (_, i) => ({
             folderId: `${i}`.repeat(16).slice(0, 15) + 'f',

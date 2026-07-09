@@ -1,14 +1,9 @@
-// Project (workspace) shape and sanitization — pure, so it can be unit-tested
-// and reused by backup restore. A project bundles the things you'd otherwise
-// set up per chat: instructions, a knowledge folder, skill modes, a connector
-// selection, and a preferred model. Everything is optional except the name.
-
 import type { SkillMode } from './skillFormat.js'
 
 export type ProjectKnowledge = {
-  /** Folder-index id (rag.ts derives it from the path). */
+
   folderId: string
-  /** Absolute path — kept so a restored project can re-index on a new machine. */
+
   folder: string
   name: string
 }
@@ -16,13 +11,13 @@ export type ProjectKnowledge = {
 export type Project = {
   id: string
   name: string
-  /** Extra system-prompt text, appended after the global base prompt. */
+
   instructions: string
   modelPath: string | null
   knowledge: ProjectKnowledge | null
-  /** Per-project skill modes; skills not listed keep their global mode. */
+
   skillModes: Record<string, SkillMode>
-  /** Configured MCP servers enabled while this project is active. */
+
   mcpServerIds: string[]
   createdAt: number
   updatedAt: number
@@ -42,7 +37,6 @@ export function newProjectId(): string {
   return `proj-${Date.now()}-${Math.round(Math.random() * 1e6)}`
 }
 
-/** Returns null when the input is not salvageable (no usable name). */
 export function sanitizeProject(raw: unknown, id: string): Project | null {
   if (typeof raw !== 'object' || raw === null || !isValidProjectId(id)) return null
   const record = raw as Record<string, unknown>

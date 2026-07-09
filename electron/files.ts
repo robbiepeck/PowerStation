@@ -1,7 +1,3 @@
-// Text extraction for chat attachments and folder indexing. Local files only,
-// extension-allowlisted, size-capped — extracted text goes into the model's
-// context with the same token honesty as everything else.
-
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 
@@ -14,8 +10,8 @@ export type ExtractedFile = {
   truncated: boolean
 }
 
-const MAX_TEXT_BYTES = 2 * 1024 * 1024 // refuse enormous text files outright
-const MAX_CHARS = 200_000 // ~50k tokens — far beyond any local context anyway
+const MAX_TEXT_BYTES = 2 * 1024 * 1024
+const MAX_CHARS = 200_000
 const MAX_PDF_PAGES = 300
 
 export const TEXT_EXTENSIONS = new Set([
@@ -30,7 +26,7 @@ export function isSupportedFile(filePath: string): boolean {
 }
 
 async function extractPdfText(filePath: string): Promise<string> {
-  // pdfjs-dist legacy build runs in Node without a worker.
+
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const data = new Uint8Array(await fs.readFile(filePath))
   const task = getDocument({ data, useSystemFonts: true })

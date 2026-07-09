@@ -1,9 +1,3 @@
-// LLM runtime host. Inference itself runs in an isolated utilityProcess
-// (llmWorker.ts) so a native llama.cpp crash becomes a restartable event with
-// a recovery card instead of killing the app. This module supervises that
-// worker: request/response correlation, token streaming, crash surfacing, and
-// the tool-execution bridge used by the agent harness.
-
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { utilityProcess, type UtilityProcess } from 'electron'
@@ -41,13 +35,10 @@ const pending = new Map<number, Pending>()
 const chatCallbacks = new Map<string, ChatCallbacks>()
 const runtimeListeners = new Set<(event: RuntimeEvent) => void>()
 
-// Mirrored from worker 'state' events so telemetry can read them synchronously.
 let loadedPath: string | null = null
 let loadingPath: string | null = null
 let lastTokensPerSec = 0
 
-// The agent layer installs this; it runs MCP calls (with permission checks) in
-// the main process and returns the tool output that goes back into the model.
 let toolExecutor: ((toolKey: string, args: unknown, requestId: string) => Promise<string>) | null = null
 
 export function setToolExecutor(executor: typeof toolExecutor): void {
@@ -109,8 +100,6 @@ function handleWorkerMessage(message: WorkerMessage): void {
   else entry.reject(new Error(message.error))
 }
 
-// Respawn guard: a worker that crashes during native init must not be
-// re-forked in a tight loop (the telemetry tick used to do exactly that).
 let crashCooldownUntil = 0
 let recentCrashes = 0
 
@@ -126,10 +115,10 @@ function handleWorkerExit(code: number): void {
   for (const entry of pending.values()) entry.reject(error)
   pending.clear()
   chatCallbacks.clear()
-  // Only report crashes; code 0 is a deliberate shutdown.
+
   if (code !== 0) {
     recentCrashes += 1
-    // Escalating cooldown: 5s after the first crash, up to 60s when crashing repeatedly.
+
     crashCooldownUntil = Date.now() + Math.min(60000, 5000 * recentCrashes)
     for (const listener of runtimeListeners) listener({ type: 'crashed', message })
   }
@@ -148,7 +137,7 @@ function ensureWorker(): UtilityProcess {
     serviceName: 'PowerStation LLM runtime',
   })
   spawned.on('message', (message: unknown) => {
-    // A responsive worker clears the crash streak.
+
     recentCrashes = 0
     handleWorkerMessage(message as WorkerMessage)
   })
@@ -163,7 +152,6 @@ function send(request: WorkerRequest): void {
   ensureWorker().postMessage(request)
 }
 
-// Omit must distribute over the request union, otherwise 'payload' is dropped.
 type WorkerRequestBody = WorkerRequest extends infer R ? (R extends WorkerRequest ? Omit<R, 'id'> : never) : never
 
 function call<T>(request: WorkerRequestBody): Promise<T> {
@@ -178,14 +166,10 @@ export async function getDeviceInfo(): Promise<WorkerDeviceInfo> {
   return call<WorkerDeviceInfo>({ cmd: 'deviceInfo' })
 }
 
-// One inference at a time. The worker holds a single model + chat sequence, so
-// concurrent generations (e.g. an in-app chat and a local-API-server request)
-// would corrupt each other's session. Every generation acquires this lock, so
-// they queue rather than overlap — the API server surfaces this as "serialized".
 let inferenceChain: Promise<unknown> = Promise.resolve()
 function withInferenceLock<T>(fn: () => Promise<T>): Promise<T> {
   const run = inferenceChain.then(fn, fn)
-  // Swallow settlement on the chain so one failed turn doesn't reject the next.
+
   inferenceChain = run.then(
     () => undefined,
     () => undefined,
@@ -209,7 +193,6 @@ export async function runBenchmark(payload: BenchmarkRequest): Promise<Benchmark
   return withInferenceLock(() => call<BenchmarkResult>({ cmd: 'benchmark', payload }))
 }
 
-/** Embed texts with a small local embedding model (loaded lazily in the worker). */
 export async function embedTexts(modelPath: string, texts: string[]): Promise<number[][]> {
   return call<number[][]>({ cmd: 'embed', payload: { modelPath, texts } })
 }
@@ -257,8 +240,6 @@ export function getActiveRequestIds(): string[] {
   return [...chatCallbacks.keys()]
 }
 
-// Downloads are plain HTTPS with resume support — no native inference code
-// involved, so they run in the main process, unaffected by worker restarts.
 export async function downloadModel(options: {
   uri: string
   dirPath: string

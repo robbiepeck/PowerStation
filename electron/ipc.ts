@@ -42,9 +42,6 @@ import {
   type ToolPermission,
 } from './config.js'
 
-// Model downloads come from a free-text field, so constrain them to the schemes
-// the app actually supports (Hugging Face shorthand or a direct HTTPS GGUF URL)
-// and reject things like file:, ftp:, or custom protocol handlers.
 function isAllowedModelUri(uri: string): boolean {
   if (typeof uri !== 'string') return false
   const trimmed = uri.trim()
@@ -61,7 +58,7 @@ function isTrustedExternalUrl(url: string): boolean {
     const parsed = new URL(url)
     if (parsed.protocol !== 'https:') return false
     if (parsed.hostname === 'huggingface.co') return true
-    // Path-boundary check: a bare prefix would also match /robbiepeck/PowerStation-evil.
+
     return (
       parsed.hostname === 'github.com' &&
       (parsed.pathname === '/robbiepeck/PowerStation' || parsed.pathname.startsWith('/robbiepeck/PowerStation/'))
@@ -71,9 +68,6 @@ function isTrustedExternalUrl(url: string): boolean {
   }
 }
 
-// One home for the capability heuristic: catalog tier wins; otherwise the
-// GGUF's own chat template is the best signal for tool training. Geometry
-// alone is NOT evidence — every valid transformer GGUF has geometry.
 function resolveToolTier(info: { templateSupportsTools: boolean | null } | null, entry: CatalogModel | null) {
   if (entry) return entry.toolCalling
   return info?.templateSupportsTools ? ('single' as const) : ('none' as const)
@@ -97,10 +91,6 @@ async function getOffloadCeilingBytes(): Promise<number> {
   return Math.round(profile.totalRamBytes * OFFLOAD_RAM_FRACTION)
 }
 
-/**
- * The user's base system prompt plus active skills: always-on ones, and — when
- * a message is provided — auto skills whose triggers match it.
- */
 async function getEffectiveSystemPrompt(
   message?: string,
   agentId?: string,
@@ -108,8 +98,7 @@ async function getEffectiveSystemPrompt(
   const state = await getState()
   const project = await projects.getActiveProject()
   const agent = agentId ? await customAgents.getAgent(agentId) : null
-  // Composition order: global prompt → active project's instructions → the
-  // chat's custom-agent instructions (most specific last), then skills.
+
   const base = [state.settings.utilities.systemPrompt, project?.instructions ?? '', agent?.instructions ?? '']
     .map((part) => part.trim())
     .filter(Boolean)
@@ -123,12 +112,6 @@ async function getEffectiveSystemPrompt(
   }
 }
 
-/**
- * Measure real tokens/sec for a model on this machine and persist the result
- * (keyed by lowercase fileName so catalog entries and local files match up).
- * Runs the same admission check as chat — a model that won't fit isn't
- * benchmarked, it's refused.
- */
 async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   if (llm.getActiveRequestIds().length > 0) {
     throw new Error('A generation is running — benchmark when the chat is idle.')
@@ -156,8 +139,7 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   const result = await llm.runBenchmark({
     modelPath,
     contextTokens,
-    // Same composed prompt as chat (always-on skills only), so the warm
-    // session carries over.
+
     systemPrompt: (await getEffectiveSystemPrompt()).prompt,
   })
   const record: BenchmarkRecord = {
@@ -173,22 +155,13 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
   return record
 }
 
-/**
- * Reconnect/disconnect MCP servers so connections mirror the settings — or,
- * while a project is active, that project's connector selection.
- */
-// The agent the current chat is using (per-chat, not a persisted mode). When it
-// declares connectors, they take precedence over the project/global set while
-// that chat is active. Set by agents:setActive from the renderer.
 let activeAgentId: string | null = null
 
 async function reconcileMcpServers(): Promise<void> {
   const state = await getState()
   const project = await projects.getActiveProject()
   const agent = activeAgentId ? await customAgents.getAgent(activeAgentId) : null
-  // Precedence: an active agent's connector selection (if it names any) wins
-  // over the project's, which wins over the global enabled set. An agent with
-  // no connectors named inherits rather than silencing everything.
+
   const scopeIds = agent?.mcpServerIds.length ? agent.mcpServerIds : project ? project.mcpServerIds : null
   const wanted = new Map(
     state.settings.utilities.mcpServers
@@ -203,9 +176,7 @@ async function reconcileMcpServers(): Promise<void> {
   }
   for (const [id, config] of wanted) {
     const serverState = statuses.get(id)
-    // Never auto-retry a failed server — that turns every settings change into
-    // a child-process spawn. Errors retry via the explicit reconnect button or
-    // by toggling the server off and on.
+
     if (serverState === 'connected' || serverState === 'connecting' || serverState === 'error') continue
     void mcp.connectServer(config)
   }
@@ -217,7 +188,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
 
-  // --- Agent/runtime event wiring -------------------------------------------
   llm.setToolExecutor(agent.executeToolCall)
   llm.onRuntimeEvent((event) => send('runtime:event', event))
   agent.setPermissionRequester((request) => send('agent:permissionRequest', request))
@@ -226,14 +196,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   agent.setPlanRequester((request) => send('agent:planRequest', request))
   apiServer.setApiLogListener((entry) => send('api:request', entry))
   apiServer.setApiStatusListener(() => void apiServer.getApiStatus().then((s) => send('api:status', s)))
-  // Start the local API server if it was left enabled (off by default).
+
   void apiServer.syncApiServer()
   mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
   void reconcileMcpServers()
 
-  // --- Models ---------------------------------------------------------------
-  // Each model is enriched with its resolved tool-calling tier and measured
-  // speed so the renderer never re-implements either.
   ipcMain.handle('models:list', async () => {
     const [list, catalog, state] = await Promise.all([models.listModels(), getCatalog(), getState()])
     return list.map((model) => ({
@@ -249,9 +216,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('models:select', (_event, filePath: string | null) => models.selectModel(filePath))
   ipcMain.handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
   ipcMain.handle('models:deleteFile', async (_event, filePath: string) => {
-    // If this model is the one currently loaded, unload it first so the file
-    // handle is released and the disk space is actually reclaimed (and the
-    // worker isn't left holding a model that no longer exists).
+
     const loaded = llm.getLoadedPath()
     if (loaded && path.resolve(loaded) === path.resolve(filePath)) await llm.unloadModel().catch(() => undefined)
     return models.deleteModelFile(filePath)
@@ -302,14 +267,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           onProgress: ({ totalSize, downloadedSize }) => send('models:downloadProgress', { id, totalSize, downloadedSize }),
         })
         await models.importModelFile(filePath)
-        // Measure real speed while we're here: it doubles as pre-warming the
-        // model, so the user's first chat message starts instantly. Optional —
-        // a benchmark failure never blocks delivering the model.
+
         try {
           send('models:benchmarking', { id, filePath })
           await runModelBenchmark(filePath)
         } catch {
-          /* model still delivered without a measurement */
+          void 0
         }
         send('models:downloadDone', { id, filePath })
       } catch (error) {
@@ -319,29 +282,24 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return id
   })
 
-  // --- Ollama -----------------------------------------------------------------
   ipcMain.handle('ollama:status', () => ollama.getOllamaStatus())
   ipcMain.handle('ollama:import', async (_event, name: string) => {
-    // Resolve server-side from our own manifest listing — the renderer never
-    // supplies a file path.
+
     const model = await ollama.resolveOllamaModel(name)
     if (!model) throw new Error('That model was not found in Ollama.')
     await models.importModelFile(model.blobPath)
     return model.blobPath
   })
 
-  // --- LM Studio ----------------------------------------------------------------
   ipcMain.handle('lmstudio:status', () => lmstudio.getLmStudioStatus())
   ipcMain.handle('lmstudio:import', async (_event, filePath: string) => {
-    // Same rule as Ollama: resolve server-side from our own directory walk —
-    // the renderer's string must match a file we listed, never a free path.
+
     const model = await lmstudio.resolveLmStudioModel(filePath)
     if (!model) throw new Error('That model was not found in LM Studio.')
     await models.importModelFile(model.path)
     return model.path
   })
 
-  // --- Benchmarks -------------------------------------------------------------
   ipcMain.handle('bench:run', async (_event, modelPath: string) => {
     if (typeof modelPath !== 'string' || !(await models.isKnownModelPath(modelPath))) {
       throw new Error('Unknown model path.')
@@ -350,7 +308,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('bench:results', async () => (await getState()).benchmarks)
 
-  // --- Chat history -------------------------------------------------------------
   const chatScope = (scope: unknown): chats.ChatScope => {
     if (typeof scope !== 'object' || scope === null || !('projectId' in scope)) return undefined
     const projectId = (scope as { projectId: unknown }).projectId
@@ -397,7 +354,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result.filePath
   })
 
-  // --- Local API server -----------------------------------------------------------
   ipcMain.handle('api:status', () => apiServer.getApiStatus())
   ipcMain.handle('api:log', () => apiServer.getApiLog())
   ipcMain.handle('api:setEnabled', async (_event, enabled: boolean) => {
@@ -415,12 +371,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('api:regenerateToken', () => apiServer.regenerateApiToken())
 
-  // --- Custom agents --------------------------------------------------------------
   ipcMain.handle('agents:list', () => customAgents.listAgents())
   ipcMain.handle('agents:get', (_event, id: string) => customAgents.getAgent(id))
   ipcMain.handle('agents:save', async (_event, payload: unknown) => {
     const saved = await customAgents.saveAgent(payload)
-    // Editing the active chat's agent can change its connector selection.
+
     if (saved && saved.id === activeAgentId) void reconcileMcpServers()
     return saved
   })
@@ -433,8 +388,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return removed
   })
   ipcMain.handle('agents:reveal', () => customAgents.revealAgentsDir())
-  // Tell the main process which agent the current chat is using, so its
-  // connector selection drives which MCP servers are connected.
+
   ipcMain.handle('agents:setActive', async (_event, id: string | null) => {
     const next = typeof id === 'string' && (await customAgents.getAgent(id)) ? id : null
     if (next === activeAgentId) return true
@@ -461,17 +415,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     })
     if (picked.canceled || !picked.filePaths.length) return null
     const text = await fs.readFile(picked.filePaths[0], 'utf8')
-    // parseAgentShare throws a readable message on a bad file; let it surface.
+
     return customAgents.importAgentShare(text)
   })
 
-  // --- Projects (workspaces) ----------------------------------------------------
   ipcMain.handle('projects:list', () => projects.listProjects())
   ipcMain.handle('projects:get', (_event, id: string) => projects.getProject(id))
   ipcMain.handle('projects:getActive', () => projects.getActiveProject())
   ipcMain.handle('projects:save', async (_event, payload: unknown) => {
     const saved = await projects.saveProject(payload)
-    // Editing the active project can change its connector selection.
+
     if (saved && (await getState()).activeProjectId === saved.id) void reconcileMcpServers()
     return saved
   })
@@ -487,7 +440,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   ipcMain.handle('projects:reveal', () => projects.revealProjectsDir())
 
-  // --- Repair (diagnose, don't operate) --------------------------------------------
   ipcMain.handle('repair:report', () => repair.getStorageReport())
   ipcMain.handle('repair:reclaimables', () => repair.getReclaimables())
   ipcMain.handle('repair:clean', (_event, id: string) => repair.cleanReclaimable(id))
@@ -495,7 +447,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('repair:integrity', () => repair.checkModelIntegrity())
   ipcMain.handle('repair:log', () => repair.getRepairLog())
 
-  // --- Backup & restore -----------------------------------------------------------
   ipcMain.handle('backup:export', async (_event, payload?: { filePath?: string }) => {
     let filePath = typeof payload?.filePath === 'string' ? payload.filePath : null
     if (!filePath) {
@@ -534,7 +485,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return summary
   })
 
-  // --- Attachments & folder knowledge ------------------------------------------
   ipcMain.handle('files:pickAndExtract', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
@@ -578,12 +528,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return rag.reindexFolder(folderId, (progress) => send('rag:indexProgress', progress))
   })
 
-  // --- What's new ---------------------------------------------------------------
   ipcMain.handle('app:whatsNew', async () => {
     const state = await getState()
     const currentVersion = app.getVersion()
     const previousVersion = state.lastSeenVersion || null
-    // First run: stamp silently so only real version changes show the card.
+
     if (previousVersion === null) {
       await mutate((current) => {
         current.lastSeenVersion = currentVersion
@@ -610,24 +559,21 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return true
   })
 
-  // --- Hardware, catalog, recommendations ------------------------------------
   ipcMain.handle('hardware:profile', async () => {
     const device = await llm.getDeviceInfo().catch(() => null)
     const profile = await getHardwareProfile(device?.vram?.total ?? null)
-    // One canonical "usable for AI" number, shared with the fit math, so the
-    // onboarding reveal and every fit summary quote the same figure.
+
     return { ...profile, usableBudgetBytes: Math.round(profile.gpuBudgetBytes * USABLE_BUDGET_FRACTION) }
   })
 
   ipcMain.handle('catalog:get', () => getCatalog())
   ipcMain.handle('catalog:refresh', () => {
-    // One button refreshes all curated datasets.
+
     void refreshConnectorCatalog()
     void refreshSkillCatalog()
     return refreshCatalog()
   })
 
-  // --- Skills ---------------------------------------------------------------
   ipcMain.handle('skills:list', () => skills.listSkills())
   ipcMain.handle('skills:save', (_event, payload: { slug?: string; name: string; description: string; body: string }) =>
     skills.saveSkill(payload ?? { name: '', description: '', body: '' }),
@@ -639,8 +585,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('skills:reveal', () => skills.revealSkillsDir())
   ipcMain.handle('skills:gallery', () => getSkillCatalog())
   ipcMain.handle('skills:install', async (_event, id: string) => {
-    // Resolve the entry server-side from the validated catalog — the renderer
-    // names an id, it never supplies skill content.
+
     const gallery = await getSkillCatalog()
     const entry = gallery.skills.find((skill) => skill.id === id)
     if (!entry) throw new Error('Unknown gallery skill.')
@@ -653,7 +598,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     })
   })
 
-  // --- Connector gallery -------------------------------------------------------
   ipcMain.handle('connectors:get', () => getConnectorCatalog())
   ipcMain.handle('app:pickFolder', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
@@ -672,15 +616,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       if (!stat?.isDirectory()) throw new Error('The chosen folder does not exist.')
     }
 
-    // Command is constructed HERE from the validated catalog entry — never
-    // from free-form remote strings.
     const args = entry.args.map((arg) => (arg === '{folder}' ? folder! : arg))
     const quoted = args.map((arg) => (arg.includes(' ') ? `"${arg}"` : arg))
     const command = ['npx', '-y', entry.npmPackage, ...quoted].join(' ')
 
     const state = await getState()
-    // Idempotent for folderless connectors: adding "Memory" twice re-enables
-    // the existing entry instead of spawning a duplicate server.
+
     const existing = state.settings.utilities.mcpServers.find(
       (server) => !entry.needsFolder && server.command.startsWith(`npx -y ${entry.npmPackage}`),
     )
@@ -703,8 +644,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         })
       })
     }
-    // Adding a connector while a project is active should take effect there —
-    // otherwise the project's selection silently filters the new server out.
+
     const activeProject = await projects.getActiveProject()
     if (activeProject && !activeProject.mcpServerIds.includes(serverId)) {
       await projects.saveProject({ ...activeProject, mcpServerIds: [...activeProject.mcpServerIds, serverId] })
@@ -732,8 +672,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     })
   })
 
-  // Fit report for a catalog entry or a local model file, used by the UI to
-  // show honest "will this fit" guidance before download or load.
   ipcMain.handle('fit:check', async (_event, payload: { catalogId?: string; modelPath?: string; contextTokens?: number }) => {
     const state = await getState()
     const contextTokens = payload.contextTokens ?? state.settings.contextTokens
@@ -756,8 +694,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       if (!info) return null
       const entry = await findCatalogEntryForModel(payload.modelPath)
       return checkFit({
-        // The catalog total wins for multi-part models where the local stat
-        // may undercount; the larger of the two is the safe estimate.
+
         weightsBytes: Math.max(info.sizeBytes, entry?.sizeBytes ?? 0),
         geometry: info.geometry,
         kvBytesPerToken: entry?.kvBytesPerToken ?? null,
@@ -769,7 +706,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return null
   })
 
-  // --- Onboarding -------------------------------------------------------------
   ipcMain.handle('onboarding:get', async () => (await getState()).onboarding)
   ipcMain.handle('onboarding:complete', async (_event, payload: { useCase?: string; priority?: string }) => {
     const state = await mutate((current) => {
@@ -782,7 +718,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return state.onboarding
   })
 
-  // --- MCP & permissions -------------------------------------------------------
   ipcMain.handle('mcp:statuses', () => mcp.getMcpStatuses())
   ipcMain.handle('mcp:toolInfo', async () => {
     const state = await getState()
@@ -820,13 +755,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return agent.resolvePlan(payload.promptId, payload.approved === true)
   })
 
-  // --- Settings & device ----------------------------------------------------
   ipcMain.handle('settings:get', async () => (await getState()).settings)
   ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
     const before = JSON.stringify((await getState()).settings.utilities.mcpServers)
     const settings = await patchSettings(patch)
-    // Only touch MCP connections when the server list itself changed —
-    // settings:update fires on every keystroke of unrelated fields.
+
     if (JSON.stringify(settings.utilities.mcpServers) !== before) void reconcileMcpServers()
     return settings
   })
@@ -835,7 +768,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return { ...info, health: await getDeviceHealthProfile(info.gpuNames) }
   })
 
-  // --- Chat -----------------------------------------------------------------
   ipcMain.handle(
     'chat:send',
     async (
@@ -850,7 +782,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       },
     ) => {
     const { requestId, prompt } = payload
-    // History arrives once when resuming a persisted chat; validate strictly.
+
     const history = Array.isArray(payload.history)
       ? payload.history
           .slice(-200)
@@ -868,9 +800,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     void (async () => {
       try {
-        // Admission control: verify the model + requested context fit BEFORE
-        // asking the worker to load anything, and shrink the context if that
-        // is what it takes to stay safe.
+
         const [info, entry, budget, offloadCeilingBytes] = await Promise.all([
           models.getModelInfo(modelPath),
           findCatalogEntryForModel(modelPath),
@@ -895,11 +825,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         }
         const contextTokens = admittedContextTokens(fitRequest)
 
-        // Agent tools: only register them for models that can actually use
-        // them — an untrained model flailing at tool calls reads as a broken
-        // app, not a limited model. The built-in repair tools register only
-        // when the Storage repair skill is active for this message: the skill
-        // teaches the workflow, and its mode doubles as the feature switch.
         const tier = resolveToolTier(info, entry)
         const agentId = typeof payload.agentId === 'string' ? payload.agentId : undefined
         const effective = await getEffectiveSystemPrompt(
@@ -919,9 +844,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           activeSkills: effective.skillNames,
         })
 
-        // Knowledge retrieval: the chat's manually-attached folder plus every
-        // folder the active custom agent references — one query, chunks from
-        // all folders competing for the same top-k slots.
         let effectivePrompt = prompt
         const folderIds = new Set<string>()
         if (typeof payload.ragFolderId === 'string') folderIds.add(payload.ragFolderId)
@@ -940,14 +862,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
               send('chat:sources', { requestId, sources: retrieval.sources })
             }
           } catch {
-            /* retrieval is best-effort; the question still goes through */
+            void 0
           }
         }
 
-        // Plan preview: when enabled and this turn can use tools, ask the model
-        // for a short plan first (an isolated probe that leaves the conversation
-        // untouched). The user approves the whole turn — every tool call
-        // pre-authorized — or cancels it, one decision instead of many prompts.
         if (state.settings.agentPlanPreview && toolDefinitions.length > 0) {
           try {
             const toolList = toolDefinitions.map((t) => `- ${t.key}: ${t.description}`.slice(0, 200)).join('\n')
@@ -988,7 +906,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
               agent.allowTurn(requestId)
             }
           } catch {
-            /* planning is best-effort — fall through to a normal turn if it fails */
+            void 0
           }
         }
 
@@ -1032,11 +950,6 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('chat:stop', (_event, requestId: string) => llm.stopChat(requestId))
   ipcMain.handle('chat:reset', () => llm.resetChat())
 
-  // --- Model compare -----------------------------------------------------------
-  // One prompt, two models, run SEQUENTIALLY: the worker holds one model at a
-  // time, so each run gets the whole machine — fair timings and no memory
-  // gamble. Each slot goes through the same admission check as a normal chat;
-  // a model that doesn't fit shows its honest refusal in that column.
   const abortedCompares = new Set<string>()
   ipcMain.handle(
     'compare:run',
@@ -1119,7 +1032,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   ipcMain.handle('compare:stop', (_event, requestId: string) => {
     if (typeof requestId !== 'string') return false
     abortedCompares.add(requestId)
-    // Abort whichever slot is currently generating; pending slots are skipped.
+
     for (const slot of [0, 1]) void llm.stopChat(`${requestId}-slot${slot}`)
     return true
   })
