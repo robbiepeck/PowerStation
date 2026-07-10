@@ -5,7 +5,6 @@ import { buildToolPreview, type ToolPreview } from './toolPreview.js'
 import type { ToolDefinition } from './llmProtocol.js'
 
 export type PermissionRequest = {
-  promptId: string
   requestId: string
   toolKey: string
   serverName: string
@@ -31,17 +30,12 @@ export type ToolResultEvent = {
   timestamp: number
 }
 
-const PERMISSION_TIMEOUT_MS = 2 * 60 * 1000
-
 const turnAllowedRequests = new Set<string>()
+const PROMPT_TIMEOUT_MS = 2 * 60 * 1000
 
-let permissionRequester: ((request: PermissionRequest) => void) | null = null
-let permissionExpiredNotifier: ((promptId: string) => void) | null = null
+let permissionRequester: ((request: PermissionRequest) => Promise<PermissionDecision>) | null = null
 let toolResultReporter: ((event: ToolResultEvent) => void) | null = null
-let planRequester: ((request: { promptId: string; requestId: string; plan: string }) => void) | null = null
-const pendingPermissions = new Map<string, (decision: PermissionDecision) => void>()
-const pendingPlans = new Map<string, (approved: boolean) => void>()
-let nextPromptId = 1
+let planRequester: ((request: { requestId: string; plan: string }) => Promise<boolean>) | null = null
 
 export function setPermissionRequester(fn: typeof permissionRequester): void {
   permissionRequester = fn
@@ -55,34 +49,23 @@ export function allowTurn(requestId: string): void {
   turnAllowedRequests.add(requestId)
 }
 
-export function resolvePlan(promptId: string, approved: boolean): boolean {
-  const resolve = pendingPlans.get(promptId)
-  if (!resolve) return false
-  pendingPlans.delete(promptId)
-  resolve(approved)
-  return true
+export function resolvePlan(_promptId: string, _approved: boolean): boolean {
+  void _promptId
+  void _approved
+  return false
 }
 
 export function requestPlanApproval(requestId: string, plan: string): Promise<boolean> {
   const requester = planRequester
   if (!requester) return Promise.resolve(false)
-  const promptId = `plan-${nextPromptId++}`
-  return new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => {
-      pendingPlans.delete(promptId)
-      permissionExpiredNotifier?.(promptId)
-      resolve(false)
-    }, PERMISSION_TIMEOUT_MS)
-    pendingPlans.set(promptId, (approved) => {
-      clearTimeout(timer)
-      resolve(approved)
-    })
-    requester({ promptId, requestId, plan })
-  })
-}
-
-export function setPermissionExpiredNotifier(fn: typeof permissionExpiredNotifier): void {
-  permissionExpiredNotifier = fn
+  try {
+    return Promise.race([
+      requester({ requestId, plan }),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), PROMPT_TIMEOUT_MS)),
+    ]).catch(() => false)
+  } catch {
+    return Promise.resolve(false)
+  }
 }
 
 export function setToolResultReporter(fn: typeof toolResultReporter): void {
@@ -93,12 +76,10 @@ export function endTurn(requestId: string): void {
   turnAllowedRequests.delete(requestId)
 }
 
-export function resolvePermission(promptId: string, decision: PermissionDecision): boolean {
-  const resolve = pendingPermissions.get(promptId)
-  if (!resolve) return false
-  pendingPermissions.delete(promptId)
-  resolve(decision)
-  return true
+export function resolvePermission(_promptId: string, _decision: PermissionDecision): boolean {
+  void _promptId
+  void _decision
+  return false
 }
 
 async function askUser(
@@ -109,28 +90,21 @@ async function askUser(
 ): Promise<PermissionDecision> {
   const requester = permissionRequester
   if (!requester) return 'deny'
-  const promptId = `perm-${nextPromptId++}`
-  return new Promise<PermissionDecision>((resolve) => {
-    const timer = setTimeout(() => {
-      pendingPermissions.delete(promptId)
-
-      permissionExpiredNotifier?.(promptId)
-      resolve('deny')
-    }, PERMISSION_TIMEOUT_MS)
-    pendingPermissions.set(promptId, (decision) => {
-      clearTimeout(timer)
-      resolve(decision)
-    })
-    requester({
-      promptId,
-      requestId,
-      toolKey: tool.key,
-      serverName: tool.serverName,
-      toolName: tool.name,
-      args,
-      preview,
-    })
-  })
+  try {
+    return await Promise.race([
+      requester({
+        requestId,
+        toolKey: tool.key,
+        serverName: tool.serverName,
+        toolName: tool.name,
+        args,
+        preview,
+      }),
+      new Promise<PermissionDecision>((resolve) => setTimeout(() => resolve('deny'), PROMPT_TIMEOUT_MS)),
+    ])
+  } catch {
+    return 'deny'
+  }
 }
 
 export async function getToolPermission(toolKey: string): Promise<ToolPermission> {

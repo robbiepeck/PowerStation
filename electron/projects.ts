@@ -24,8 +24,12 @@ async function readProject(id: string): Promise<Project | null> {
 }
 
 async function writeProject(project: Project): Promise<void> {
-  await fs.mkdir(projectsDir(), { recursive: true })
-  await fs.writeFile(projectFile(project.id), JSON.stringify(project, null, 1), 'utf8')
+  await fs.mkdir(projectsDir(), { recursive: true, mode: 0o700 })
+  await fs.chmod(projectsDir(), 0o700).catch(() => undefined)
+  const target = projectFile(project.id)
+  const temp = `${target}.${process.pid}.tmp`
+  await fs.writeFile(temp, JSON.stringify(project, null, 1), { encoding: 'utf8', mode: 0o600 })
+  await fs.rename(temp, target)
 }
 
 export async function listProjects(): Promise<Project[]> {

@@ -99,6 +99,7 @@ const defaultSettings: Settings = {
 }
 
 let state: PersistedState | null = null
+let saveQueue: Promise<void> = Promise.resolve()
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value)
@@ -114,22 +115,39 @@ function cleanString(value: unknown, maxLength: number): string {
   return typeof value === 'string' ? value.trim().slice(0, maxLength) : ''
 }
 
-function sanitizeMcpServers(value: unknown): McpServerConfig[] {
+function replaceControlCharacters(value: string): string {
+  return [...value].map((character) => {
+    const code = character.charCodeAt(0)
+    return code < 32 || code === 127 ? ' ' : character
+  }).join('')
+}
+
+function hasCommandControlCharacters(value: string): boolean {
+  return [...value].some((character) => character === '\0' || character === '\n' || character === '\r')
+}
+
+export function sanitizeMcpServers(value: unknown): McpServerConfig[] {
   if (!Array.isArray(value)) return []
 
   const seenNames = new Set<string>()
+  const seenIds = new Set<string>()
   return value
     .slice(0, 40)
     .map((item, index) => {
       const record = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
-      let name = cleanString(record?.name, 120)
+      let name = replaceControlCharacters(cleanString(record?.name, 120))
       const command = cleanString(record?.command, 2000)
+      if (hasCommandControlCharacters(command)) return null
       if (!name || !command) return null
       for (let n = 2; seenNames.has(name.toLowerCase()); n++) {
-        name = `${cleanString(record?.name, 110)} (${n})`
+        name = `${replaceControlCharacters(cleanString(record?.name, 110))} (${n})`
       }
       seenNames.add(name.toLowerCase())
-      const id = cleanString(record?.id, 120) || `mcp-${index}`
+      const rawId = cleanString(record?.id, 120)
+      const baseId = /^[a-zA-Z0-9_-]+$/.test(rawId) ? rawId : `mcp-${index}`
+      let id = baseId
+      for (let n = 2; seenIds.has(id); n += 1) id = `${baseId.slice(0, 110)}-${n}`
+      seenIds.add(id)
       return { id, name, command, enabled: boolOr(record?.enabled, true) }
     })
     .filter((server): server is McpServerConfig => Boolean(server))
@@ -227,14 +245,19 @@ export function managedModelsDir() {
 
 function normalize(parsed: Partial<PersistedState> | null): PersistedState {
   const managed = managedModelsDir()
-  const folders = Array.isArray(parsed?.modelFolders) ? parsed!.modelFolders.filter((f) => typeof f === 'string') : []
+  const folders = Array.isArray(parsed?.modelFolders)
+    ? parsed!.modelFolders.filter((f): f is string => typeof f === 'string' && f.length <= 4096).slice(0, 100)
+    : []
   if (!folders.includes(managed)) folders.unshift(managed)
   return {
     modelFolders: folders,
     importedModelPaths: Array.isArray(parsed?.importedModelPaths)
-      ? parsed!.importedModelPaths.filter((p) => typeof p === 'string')
+      ? parsed!.importedModelPaths.filter((p): p is string => typeof p === 'string' && p.length <= 4096).slice(0, 500)
       : [],
-    selectedModelPath: typeof parsed?.selectedModelPath === 'string' ? parsed!.selectedModelPath : null,
+    selectedModelPath:
+      typeof parsed?.selectedModelPath === 'string' && parsed.selectedModelPath.length <= 4096
+        ? parsed.selectedModelPath
+        : null,
     settings: sanitizeSettings(parsed?.settings ?? null, defaultSettings),
     toolPermissions: sanitizeToolPermissions(parsed?.toolPermissions),
     onboarding: sanitizeOnboarding(parsed?.onboarding),
@@ -260,7 +283,9 @@ function sanitizeApiServer(value: unknown): ApiServerConfig {
 
 export async function loadState(): Promise<PersistedState> {
   if (state) return state
-  await fs.mkdir(managedModelsDir(), { recursive: true })
+  const modelsDir = managedModelsDir()
+  await fs.mkdir(modelsDir, { recursive: true, mode: 0o700 })
+  await fs.chmod(modelsDir, 0o700).catch(() => undefined)
   try {
     const raw = await fs.readFile(configPath(), 'utf8')
     state = normalize(JSON.parse(raw) as Partial<PersistedState>)
@@ -276,7 +301,15 @@ export async function getState(): Promise<PersistedState> {
 
 export async function saveState(): Promise<void> {
   if (!state) return
-  await fs.writeFile(configPath(), JSON.stringify(state, null, 2), 'utf8')
+  const target = configPath()
+  const snapshot = JSON.stringify(state, null, 2)
+  const temp = `${target}.${process.pid}.tmp`
+  saveQueue = saveQueue.catch(() => undefined).then(async () => {
+    await fs.writeFile(temp, snapshot, { encoding: 'utf8', mode: 0o600 })
+    await fs.rename(temp, target)
+    await fs.chmod(target, 0o600).catch(() => undefined)
+  })
+  return saveQueue
 }
 
 export async function patchSettings(patch: Partial<Settings>): Promise<Settings> {

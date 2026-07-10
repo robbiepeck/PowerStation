@@ -6,7 +6,7 @@ const INLINE = /(\*\*([^*]+)\*\*|\*([^*\n]+)\*|_([^_\n]+)_|\[([^\]]+)\]\(([^)\s]
 function safeHref(raw: string): string | null {
   try {
     const protocol = new URL(raw, 'https://invalid.local').protocol
-    return protocol === 'https:' || protocol === 'http:' || protocol === 'mailto:' ? raw : null
+    return protocol === 'https:' || protocol === 'http:' ? raw : null
   } catch {
     return null
   }

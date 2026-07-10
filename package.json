@@ -14,6 +14,7 @@
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "tsc -b && vite build",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-electron-preload.mjs",
+    "audit": "npm audit --audit-level=high",
     "lint": "eslint .",
     "test": "vitest run",
     "package:mac": "npm run build && electron-builder --mac --universal",

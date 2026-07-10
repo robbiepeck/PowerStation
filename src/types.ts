@@ -31,6 +31,7 @@ export type ConnectorEntry = {
   tagline: string
   detail: string
   npmPackage: string
+  version: string
   args: string[]
   needsFolder: boolean
   maintainer: 'official' | 'community'
@@ -307,7 +308,6 @@ export type RepairLogEntry = {
 
 export type ExtractedFile = {
   name: string
-  path: string
   chars: number
   tokenEstimate: number
   text: string

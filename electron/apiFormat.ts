@@ -23,14 +23,14 @@ function contentToText(content: unknown): string {
 export function parseChatBody(body: unknown): ParsedChatBody {
   const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   if (!record) throw new Error('Request body must be a JSON object.')
-  const messages = Array.isArray(record.messages) ? (record.messages as OpenAiMessage[]) : null
+  const messages = Array.isArray(record.messages) ? (record.messages as OpenAiMessage[]).slice(-200) : null
   if (!messages || !messages.length) throw new Error('`messages` must be a non-empty array.')
 
   const systemParts: string[] = []
   const turns: Array<{ role: 'user' | 'assistant'; text: string }> = []
   for (const message of messages) {
     const role = typeof message?.role === 'string' ? message.role : ''
-    const text = contentToText(message?.content)
+    const text = contentToText(message?.content).slice(0, 200_000)
     if (role === 'system' || role === 'developer') {
       if (text) systemParts.push(text)
     } else if (role === 'assistant') {
@@ -47,7 +47,7 @@ export function parseChatBody(body: unknown): ParsedChatBody {
   const maxTokensRaw = record.max_completion_tokens ?? record.max_tokens
   return {
     model: typeof record.model === 'string' && record.model ? record.model : null,
-    systemPrompt: systemParts.length ? systemParts.join('\n\n') : undefined,
+    systemPrompt: systemParts.length ? systemParts.join('\n\n').slice(0, 100_000) : undefined,
     history,
     prompt: last.text,
     stream: record.stream === true,
@@ -124,7 +124,7 @@ export function apiError(message: string, type = 'invalid_request_error', code: 
 export function embeddingInputs(body: unknown): string[] {
   const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   const input = record?.input
-  if (typeof input === 'string') return input ? [input] : []
-  if (Array.isArray(input)) return input.filter((s): s is string => typeof s === 'string' && s.length > 0).slice(0, 96)
+  if (typeof input === 'string') return input.length > 0 && input.length <= 50_000 ? [input] : []
+  if (Array.isArray(input)) return input.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 50_000).slice(0, 96)
   return []
 }

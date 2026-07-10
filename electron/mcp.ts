@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StdioClientTransport, getDefaultEnvironment } from '@modelcontextprotocol/sdk/client/stdio.js'
 import type { McpServerConfig } from './config.js'
+import { splitCommand } from './mcpCommand.js'
 
 export type McpToolInfo = {
 
@@ -49,19 +50,9 @@ function setStatus(config: McpServerConfig, state: McpServerStatus['state'], err
     name: config.name,
     state,
     toolCount: connections.get(config.id)?.tools.length ?? 0,
-    error,
+    error: error?.slice(0, 500) ?? null,
   })
   publishStatus()
-}
-
-export function splitCommand(command: string): string[] {
-  const parts: string[] = []
-  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(command)) !== null) {
-    parts.push(match[1] ?? match[2] ?? match[3])
-  }
-  return parts
 }
 
 function toolKey(serverName: string, toolName: string): string {
@@ -148,6 +139,10 @@ export function getConnectedTools(): McpToolInfo[] {
 
 export function findTool(key: string): McpToolInfo | null {
   return getConnectedTools().find((tool) => tool.key === key) ?? null
+}
+
+export function getServerConfig(serverId: string): McpServerConfig | null {
+  return connections.get(serverId)?.config ?? null
 }
 
 export function getServerBaseDir(serverId: string): string | null {

@@ -273,8 +273,13 @@ export async function saveChat(payload: {
 }
 
 async function writeChat(chat: StoredChat): Promise<void> {
-  await fs.mkdir(chatsDir(), { recursive: true })
-  await fs.writeFile(chatFile(chat.id), JSON.stringify(chat, null, 1), 'utf8')
+  await fs.mkdir(chatsDir(), { recursive: true, mode: 0o700 })
+  await fs.chmod(chatsDir(), 0o700).catch(() => undefined)
+  const target = chatFile(chat.id)
+  const temp = `${target}.${process.pid}.tmp`
+  await fs.writeFile(temp, JSON.stringify(chat, null, 1), { encoding: 'utf8', mode: 0o600 })
+  await fs.rename(temp, target)
+  await fs.chmod(target, 0o600).catch(() => undefined)
 }
 
 export async function renameChat(id: unknown, title: unknown): Promise<boolean> {
@@ -333,7 +338,7 @@ export async function deleteAllChats(): Promise<number> {
 
 export async function searchChats(query: unknown, scope?: ChatScope): Promise<ChatSummary[]> {
   if (typeof query !== 'string' || !query.trim()) return listChats(scope)
-  const needle = query.trim().toLowerCase()
+  const needle = query.trim().toLowerCase().slice(0, 500)
   const summaries = await listChats(scope)
   const results: ChatSummary[] = []
   for (const summary of summaries) {
@@ -388,7 +393,7 @@ export function collectAuditLog(chat: StoredChat): Array<StoredToolCall & { mess
 }
 
 export async function revealChatsDir(): Promise<boolean> {
-  await fs.mkdir(chatsDir(), { recursive: true })
+  await fs.mkdir(chatsDir(), { recursive: true, mode: 0o700 })
   shell.showItemInFolder(chatsDir())
   return true
 }

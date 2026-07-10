@@ -1574,7 +1574,7 @@ function ConnectorGallery({
   }, [])
 
   const addedCount = (entry: ConnectorEntry) =>
-    mcpServers.filter((server) => server.command.startsWith(`npx -y ${entry.npmPackage}`)).length
+    mcpServers.filter((server) => server.command.startsWith(`npx -y ${entry.npmPackage}@${entry.version}`)).length
 
   const add = async (entry: ConnectorEntry) => {
     setBusyId(entry.id)

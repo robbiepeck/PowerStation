@@ -217,7 +217,7 @@ export async function getRepairLog(): Promise<RepairLogEntry[]> {
 
 async function appendRepairLog(entry: RepairLogEntry): Promise<void> {
   const log = [...(await getRepairLog()), entry].slice(-100)
-  await fs.writeFile(repairLogFile(), JSON.stringify(log, null, 1), 'utf8')
+  await fs.writeFile(repairLogFile(), JSON.stringify(log, null, 1), { encoding: 'utf8', mode: 0o600 })
 }
 
 export async function cleanReclaimable(id: unknown): Promise<{ removed: boolean; freedBytes: number }> {

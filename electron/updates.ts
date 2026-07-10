@@ -42,6 +42,23 @@ type ManualUpdateAsset = {
   kind: 'dmg' | 'zip'
 }
 
+const UPDATE_HOSTS = new Set([
+  'github.com',
+  'api.github.com',
+  'objects.githubusercontent.com',
+  'github-releases.githubusercontent.com',
+  'release-assets.githubusercontent.com',
+])
+
+function isUpdateUrl(raw: string): boolean {
+  try {
+    const parsed = new URL(raw)
+    return parsed.protocol === 'https:' && !parsed.username && !parsed.password && !parsed.port && UPDATE_HOSTS.has(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
 export type UpdateState = {
   phase: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'error' | 'unsupported'
   currentVersion: string
@@ -122,7 +139,7 @@ function chooseMacAsset(release: GitHubRelease): ManualUpdateAsset | null {
       const kind = lower.endsWith('.zip') ? 'zip' : lower.endsWith('.dmg') ? 'dmg' : null
       return kind ? { ...asset, kind } : null
     })
-    .filter((asset): asset is ManualUpdateAsset => Boolean(asset?.name && asset.url))
+    .filter((asset): asset is ManualUpdateAsset => Boolean(asset?.name && asset.url && asset.size > 0 && asset.size <= 2_000_000_000 && isUpdateUrl(asset.url)))
 
   return (
     updateAssets.find((asset) => asset.name.toLowerCase().includes(`macos-${arch}.${asset.kind}`)) ??
@@ -132,6 +149,7 @@ function chooseMacAsset(release: GitHubRelease): ManualUpdateAsset | null {
 }
 
 function requestUrl(url: string, redirects = 0): Promise<import('node:http').IncomingMessage> {
+  if (!isUpdateUrl(url)) return Promise.reject(new Error('Update URL is not an approved GitHub URL.'))
   return new Promise((resolve, reject) => {
     const request = https.get(
       url,
@@ -149,7 +167,12 @@ function requestUrl(url: string, redirects = 0): Promise<import('node:http').Inc
             reject(new Error('Too many redirects while downloading update.'))
             return
           }
-          resolve(requestUrl(new URL(location, url).toString(), redirects + 1))
+          const next = new URL(location, url).toString()
+          if (!isUpdateUrl(next)) {
+            reject(new Error('Update redirect left the approved GitHub hosts.'))
+            return
+          }
+          resolve(requestUrl(next, redirects + 1))
           return
         }
         if (!response.statusCode || response.statusCode >= 400) {
@@ -167,8 +190,12 @@ function requestUrl(url: string, redirects = 0): Promise<import('node:http').Inc
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await requestUrl(url)
   const chunks: Buffer[] = []
+  let size = 0
   for await (const chunk of response) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    size += buffer.length
+    if (size > 2 * 1024 * 1024) throw new Error('Update metadata is too large.')
+    chunks.push(buffer)
   }
   return JSON.parse(Buffer.concat(chunks).toString('utf8')) as T
 }
@@ -180,12 +207,18 @@ async function downloadFile(
 ): Promise<void> {
   const response = await requestUrl(url)
   const totalSize = Number(response.headers['content-length'] ?? 0)
+  if (totalSize > 2_000_000_000) throw new Error('Update download is too large.')
   let downloadedSize = 0
 
   await new Promise<void>((resolve, reject) => {
     const file = createWriteStream(targetPath)
     response.on('data', (chunk: Buffer) => {
       downloadedSize += chunk.length
+      if (downloadedSize > 2_000_000_000) {
+        response.destroy(new Error('Update download is too large.'))
+        file.destroy()
+        return
+      }
       onProgress({ downloadedSize, totalSize })
     })
     response.on('error', reject)
@@ -246,6 +279,7 @@ async function validateExtractedApp(appPath: string): Promise<void> {
   if (identifier !== 'com.powerstation.desktop') {
     throw new Error('Downloaded update is not a PowerStation app bundle.')
   }
+  await execFileAsync('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath])
 }
 
 async function installExtractedAppAndRestart(
@@ -278,7 +312,6 @@ if [ -d "$APP_PATH" ]; then
   /bin/mv "$APP_PATH" "$BACKUP_PATH"
 fi
 /usr/bin/ditto "$NEW_APP" "$APP_PATH"
-/usr/bin/xattr -dr com.apple.quarantine "$APP_PATH" 2>/dev/null || true
 if [ -n "$MOUNT_DIR" ]; then
   /usr/bin/hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
 fi
@@ -386,10 +419,20 @@ async function installLatest(getWindow: () => BrowserWindow | null): Promise<Upd
 }
 
 export function registerUpdateIpc(getWindow: () => BrowserWindow | null): void {
+  type IpcHandler = Parameters<typeof ipcMain.handle>[1]
+  const handle = (channel: string, listener: IpcHandler) => {
+    ipcMain.handle(channel, (event, ...args) => {
+      const win = getWindow()
+      if (!win || win.isDestroyed() || event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) {
+        throw new Error('Rejected IPC from an untrusted renderer.')
+      }
+      return listener(event, ...args)
+    })
+  }
   if (!updatesSupported) {
-    ipcMain.handle('updates:getState', () => state)
-    ipcMain.handle('updates:check', () => state)
-    ipcMain.handle('updates:installLatest', () => state)
+    handle('updates:getState', () => state)
+    handle('updates:check', () => state)
+    handle('updates:installLatest', () => state)
     return
   }
 
@@ -437,8 +480,8 @@ export function registerUpdateIpc(getWindow: () => BrowserWindow | null): void {
     })
   }
 
-  ipcMain.handle('updates:getState', () => state)
-  ipcMain.handle('updates:check', async () => {
+  handle('updates:getState', () => state)
+  handle('updates:check', async () => {
     try {
       return await checkForUpdates(getWindow)
     } catch (error) {
@@ -446,7 +489,7 @@ export function registerUpdateIpc(getWindow: () => BrowserWindow | null): void {
       return setState({ phase: 'error', message: formatUpdateError(error) }, getWindow)
     }
   })
-  ipcMain.handle('updates:installLatest', async () => {
+  handle('updates:installLatest', async () => {
     try {
       return await installLatest(getWindow)
     } catch (error) {

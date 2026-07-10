@@ -30,8 +30,12 @@ async function readAgent(id: string): Promise<CustomAgent | null> {
 }
 
 async function writeAgent(agent: CustomAgent): Promise<void> {
-  await fs.mkdir(agentsDir(), { recursive: true })
-  await fs.writeFile(agentFile(agent.id), JSON.stringify(agent, null, 1), 'utf8')
+  await fs.mkdir(agentsDir(), { recursive: true, mode: 0o700 })
+  await fs.chmod(agentsDir(), 0o700).catch(() => undefined)
+  const target = agentFile(agent.id)
+  const temp = `${target}.${process.pid}.tmp`
+  await fs.writeFile(temp, JSON.stringify(agent, null, 1), { encoding: 'utf8', mode: 0o600 })
+  await fs.rename(temp, target)
 }
 
 export async function listAgents(): Promise<CustomAgent[]> {
@@ -99,7 +103,7 @@ export async function deleteAgent(id: unknown): Promise<boolean> {
 }
 
 export async function revealAgentsDir(): Promise<boolean> {
-  await fs.mkdir(agentsDir(), { recursive: true })
+  await fs.mkdir(agentsDir(), { recursive: true, mode: 0o700 })
   shell.showItemInFolder(agentsDir())
   return true
 }

@@ -152,26 +152,27 @@ function sanitizeSchema(schema: unknown, depth = 0): Record<string, unknown> {
     const out: Record<string, unknown> = { type: 'object' }
     if (typeof record.properties === 'object' && record.properties !== null) {
       const props: Record<string, unknown> = {}
-      for (const [key, value] of Object.entries(record.properties as Record<string, unknown>)) {
+      for (const [key, value] of Object.entries(record.properties as Record<string, unknown>).slice(0, 100)) {
+        if (key.length > 200) continue
         props[key] = sanitizeSchema(value, depth + 1)
       }
       out.properties = props
     }
-    if (Array.isArray(record.required)) out.required = record.required.filter((k) => typeof k === 'string')
-    if (typeof record.description === 'string') out.description = record.description
+    if (Array.isArray(record.required)) out.required = record.required.filter((k) => typeof k === 'string').slice(0, 100)
+    if (typeof record.description === 'string') out.description = record.description.slice(0, 1000)
     return out
   }
   if (type === 'array') {
     return {
       type: 'array',
       items: sanitizeSchema(record.items, depth + 1),
-      ...(typeof record.description === 'string' ? { description: record.description } : {}),
+      ...(typeof record.description === 'string' ? { description: record.description.slice(0, 1000) } : {}),
     }
   }
   if (type === 'string' || type === 'number' || type === 'integer' || type === 'boolean' || type === 'null') {
     const out: Record<string, unknown> = { type }
-    if (Array.isArray(record.enum)) out.enum = record.enum
-    if (typeof record.description === 'string') out.description = record.description
+    if (Array.isArray(record.enum)) out.enum = record.enum.slice(0, 100)
+    if (typeof record.description === 'string') out.description = record.description.slice(0, 1000)
     return out
   }
   return permissive
@@ -189,9 +190,8 @@ function buildSessionFunctions(request: ChatRequest, guard: ToolGuard) {
   const tools = request.tools ?? []
   if (!tools.length) return undefined
   const functions: Record<string, ReturnType<typeof defineChatSessionFunction>> = {}
-  for (const tool of tools) {
-
-    const fnName = tool.key.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 64)
+  tools.slice(0, 200).forEach((tool, index) => {
+    const fnName = `tool_${index}_${tool.key.replace(/[^a-zA-Z0-9_]/g, '_')}`.slice(0, 64)
     functions[fnName] = defineChatSessionFunction({
       description: tool.description.slice(0, 1000),
       ...(tool.parameters ? { params: sanitizeSchema(tool.parameters) as never } : {}),
@@ -205,7 +205,7 @@ function buildSessionFunctions(request: ChatRequest, guard: ToolGuard) {
         }
       },
     })
-  }
+  })
   return functions
 }
 

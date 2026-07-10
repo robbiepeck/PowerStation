@@ -1,5 +1,5 @@
 import { app, BrowserWindow, shell } from 'electron'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import path from 'node:path'
 import fixPath from 'fix-path'
 import { loadState } from './config.js'
@@ -9,19 +9,18 @@ import { shutdown as shutdownLlm, getActiveRequestIds, stopChat } from './llm.js
 import { disconnectAll as disconnectMcp } from './mcp.js'
 import { stopApiServer } from './apiServer.js'
 import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
+import { isTrustedExternalUrl, isTrustedRendererNavigation, trustedLoopbackDevUrl } from './security.js'
 
 if (process.platform === 'darwin') fixPath()
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL)
+const devServerUrl = trustedLoopbackDevUrl(process.env.VITE_DEV_SERVER_URL)?.toString() ?? null
+const appEntryPath = path.join(__dirname, '../dist/index.html')
+const appEntryUrl = pathToFileURL(appEntryPath).toString()
 
-function isSafeExternalUrl(url: string): boolean {
-  try {
-    return ['https:', 'http:', 'mailto:'].includes(new URL(url).protocol)
-  } catch {
-    return false
-  }
-}
+// Force Chromium's renderer sandbox for every window, including future windows
+// that accidentally omit the per-window preference.
+app.enableSandbox()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -38,8 +37,17 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      webviewTag: false,
       preload: path.join(__dirname, 'preload.cjs'),
     },
+  })
+
+  const session = mainWindow.webContents.session
+  session.setPermissionCheckHandler((webContents, permission) =>
+    permission === 'clipboard-sanitized-write' && webContents === mainWindow?.webContents,
+  )
+  session.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(permission === 'clipboard-sanitized-write' && webContents === mainWindow?.webContents)
   })
 
   let wasCritical = false
@@ -73,23 +81,24 @@ function createMainWindow() {
   })
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (isSafeExternalUrl(url)) void shell.openExternal(url)
+    if (isTrustedExternalUrl(url)) void shell.openExternal(new URL(url).toString())
     return { action: 'deny' }
   })
 
-  mainWindow.webContents.on('will-navigate', (event, url) => {
-    const devUrl = process.env.VITE_DEV_SERVER_URL
-    if (devUrl && url.startsWith(devUrl)) return
-    if (url.startsWith('file://')) return
+  const guardNavigation = (event: Electron.Event, url: string) => {
+    if (isTrustedRendererNavigation(url, appEntryUrl, devServerUrl)) return
     event.preventDefault()
-    if (isSafeExternalUrl(url)) void shell.openExternal(url)
-  })
+    if (isTrustedExternalUrl(url)) void shell.openExternal(new URL(url).toString())
+  }
+  mainWindow.webContents.on('will-navigate', guardNavigation)
+  mainWindow.webContents.on('will-redirect', guardNavigation)
+  mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
 
-  if (isDevelopment && process.env.VITE_DEV_SERVER_URL) {
-    void mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
+  if (devServerUrl) {
+    void mainWindow.loadURL(devServerUrl)
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   } else {
-    void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+    void mainWindow.loadFile(appEntryPath)
   }
 }
 

@@ -3,7 +3,6 @@ import path from 'node:path'
 
 export type ExtractedFile = {
   name: string
-  path: string
   chars: number
   tokenEstimate: number
   text: string
@@ -11,6 +10,7 @@ export type ExtractedFile = {
 }
 
 const MAX_TEXT_BYTES = 2 * 1024 * 1024
+const MAX_PDF_BYTES = 64 * 1024 * 1024
 const MAX_CHARS = 200_000
 const MAX_PDF_PAGES = 300
 
@@ -61,6 +61,7 @@ export async function extractFile(filePath: string): Promise<ExtractedFile> {
 
   let text: string
   if (ext === '.pdf') {
+    if (stat.size > MAX_PDF_BYTES) throw new Error('PDF is too large (maximum 64 MB).')
     text = await extractPdfText(resolved)
     if (!text.trim()) {
       throw new Error('No extractable text in this PDF — it may be a scan without OCR.')
@@ -76,7 +77,6 @@ export async function extractFile(filePath: string): Promise<ExtractedFile> {
   if (truncated) text = text.slice(0, MAX_CHARS)
   return {
     name: path.basename(resolved),
-    path: resolved,
     chars: text.length,
     tokenEstimate: Math.ceil(text.length / 4),
     text,
