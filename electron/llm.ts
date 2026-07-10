@@ -158,7 +158,12 @@ function call<T>(request: WorkerRequestBody): Promise<T> {
   const id = nextRequestId++
   return new Promise<T>((resolve, reject) => {
     pending.set(id, { resolve: resolve as (value: unknown) => void, reject })
-    send({ ...request, id } as WorkerRequest)
+    try {
+      send({ ...request, id } as WorkerRequest)
+    } catch (error) {
+      pending.delete(id)
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
   })
 }
 
@@ -181,6 +186,7 @@ export async function chat(
   options: Omit<ChatRequest, 'requestId'> & { requestId: string } & ChatCallbacks,
 ): Promise<ChatResult> {
   const { onToken, onStatus, onToolCall, onCompacted, ...request } = options
+  if (chatCallbacks.size > 0) throw new Error('Another generation is already running.')
   chatCallbacks.set(request.requestId, { onToken, onStatus, onToolCall, onCompacted })
   try {
     return await withInferenceLock(() => call<ChatResult>({ cmd: 'chat', payload: request }))

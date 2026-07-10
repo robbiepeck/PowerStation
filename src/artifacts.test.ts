@@ -35,8 +35,10 @@ describe('extractArtifacts', () => {
 })
 
 describe('artifactSrcDoc', () => {
-  it('passes full html documents through unchanged', () => {
-    expect(artifactSrcDoc({ id: 'a', kind: 'html', title: 't', code: HTML })).toBe(HTML)
+  it('adds a restrictive CSP to full html documents', () => {
+    const doc = artifactSrcDoc({ id: 'a', kind: 'html', title: 't', code: HTML })
+    expect(doc).toContain('Content-Security-Policy')
+    expect(doc).toContain('<title>Demo page</title>')
   })
 
   it('wraps fragments in a document shell', () => {

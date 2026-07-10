@@ -53,9 +53,14 @@ export function extractArtifacts(messageId: string, content: string): Artifact[]
 export function artifactSrcDoc(artifact: Artifact): string {
   if (artifact.kind === 'html') {
     const head = artifact.code.trimStart().slice(0, 200).toLowerCase()
-    if (head.startsWith('<!doctype') || head.startsWith('<html')) return artifact.code
-    return `<!doctype html><html><head><meta charset="utf-8"></head><body>${artifact.code}</body></html>`
+    const policy = `<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:;">`
+    if (head.startsWith('<!doctype') || head.startsWith('<html')) {
+      return /<head(?:\s[^>]*)?>/i.test(artifact.code)
+        ? artifact.code.replace(/<head(?:\s[^>]*)?>/i, (tag) => `${tag}${policy}`)
+        : artifact.code.replace(/<html(?:\s[^>]*)?>/i, (tag) => `${tag}<head>${policy}</head>`)
+    }
+    return `<!doctype html><html><head><meta charset="utf-8">${policy}</head><body>${artifact.code}</body></html>`
   }
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;display:grid;place-items:center;min-height:100vh;background:#fff}svg{max-width:96vw;max-height:96vh}</style></head><body>${artifact.code}</body></html>`
+  return `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:;"><style>body{margin:0;display:grid;place-items:center;min-height:100vh;background:#fff}svg{max-width:96vw;max-height:96vh}</style></head><body>${artifact.code}</body></html>`
 }

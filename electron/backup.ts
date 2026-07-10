@@ -57,7 +57,7 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
     projects: projectList,
     agents: agentList,
   })
-  await fs.writeFile(filePath, json, 'utf8')
+  await fs.writeFile(filePath, json, { encoding: 'utf8', mode: 0o600 })
   return {
     chats: fullChats.length,
     skills: skills.length,
@@ -68,12 +68,14 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
 }
 
 export async function restoreBackup(filePath: string): Promise<BackupSummary> {
+  const stat = await fs.stat(filePath)
+  if (!stat.isFile() || stat.size > 300 * 1024 * 1024) throw new Error('Backup file is too large.')
   const archive = parseBackupJson(await fs.readFile(filePath, 'utf8'))
 
   let skillCount = 0
-  await fs.mkdir(skillsDir(), { recursive: true })
+  await fs.mkdir(skillsDir(), { recursive: true, mode: 0o700 })
   for (const skill of archive.skills) {
-    await fs.writeFile(path.join(skillsDir(), `${skill.slug}.md`), skill.content, 'utf8')
+    await fs.writeFile(path.join(skillsDir(), `${skill.slug}.md`), skill.content, { encoding: 'utf8', mode: 0o600 })
     skillCount += 1
   }
 

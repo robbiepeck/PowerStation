@@ -7,6 +7,9 @@ const TIMEOUT_MS = 30_000
 
 const SPLIT_PART = /-\d{5}-of-\d{5}\.gguf$/i
 const SIZE_TOLERANCE = 0.01
+const HF_REPO = /^[A-Za-z0-9][A-Za-z0-9._-]{0,95}\/[A-Za-z0-9][A-Za-z0-9._-]{0,95}$/
+const HF_REVISION = /^[a-f0-9]{40}$/i
+const NPM_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
 const failures = []
 const warnings = []
@@ -44,6 +47,13 @@ async function headOrRange(url) {
 async function checkModels() {
   const catalog = JSON.parse(await readFile(path.join(root, 'catalog', 'models.json'), 'utf8'))
   for (const model of catalog.models) {
+    let parsedDownload
+    try { parsedDownload = new URL(model.downloadUrl) } catch { parsedDownload = null }
+    const parts = parsedDownload?.pathname.split('/') ?? []
+    if (!HF_REPO.test(model.hfRepo ?? '') || !parsedDownload || parsedDownload.protocol !== 'https:' || parsedDownload.hostname !== 'huggingface.co' || parts[1] !== model.hfRepo?.split('/')[0] || parts[2] !== model.hfRepo?.split('/')[1] || parts[3] !== 'resolve' || !HF_REVISION.test(parts[4] ?? '')) {
+      failures.push(`**${model.id}** download URL is not a pinned Hugging Face resolve URL: ${model.downloadUrl}`)
+      continue
+    }
     const download = await headOrRange(model.downloadUrl)
     if (!download.ok) {
       failures.push(`**${model.id}** download URL broken (HTTP ${download.status}${download.note ? `, ${download.note}` : ''}): ${model.downloadUrl}`)
@@ -81,6 +91,10 @@ async function checkModels() {
 async function checkConnectors() {
   const catalog = JSON.parse(await readFile(path.join(root, 'catalog', 'connectors.json'), 'utf8'))
   for (const connector of catalog.connectors) {
+    if (!NPM_VERSION.test(connector.version ?? '')) {
+      failures.push(`**${connector.id}** must pin an exact npm version: ${connector.npmPackage}`)
+      continue
+    }
     const encoded = connector.npmPackage.replace('/', '%2F')
     try {
       const res = await fetch(`https://registry.npmjs.org/${encoded}/latest`, {
@@ -91,6 +105,10 @@ async function checkConnectors() {
         continue
       }
       const meta = await res.json()
+      if (meta.version !== connector.version) {
+        failures.push(`**${connector.id}** pins ${connector.npmPackage}@${connector.version}, but the registry reports ${meta.version}`)
+        continue
+      }
       if (meta.deprecated) {
         warnings.push(`**${connector.id}** npm package is deprecated: ${connector.npmPackage} — "${meta.deprecated}"`)
       } else {

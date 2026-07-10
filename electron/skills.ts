@@ -20,6 +20,7 @@ export type SkillInfo = ParsedSkill & {
 }
 
 const MAX_SKILLS = 100
+const MAX_SKILL_BODY_CHARS = 100_000
 
 export function skillsDir(): string {
   return path.join(app.getPath('userData'), 'skills')
@@ -45,7 +46,8 @@ async function ensureSeeded(): Promise<void> {
     () => true,
     () => false,
   )
-  await fs.mkdir(skillsDir(), { recursive: true }).catch(() => undefined)
+  await fs.mkdir(skillsDir(), { recursive: true, mode: 0o700 }).catch(() => undefined)
+  await fs.chmod(skillsDir(), 0o700).catch(() => undefined)
   let bundled: string[]
   try {
     bundled = (await fs.readdir(bundledSkillsDir())).filter((f) => f.endsWith('.md'))
@@ -132,7 +134,7 @@ export async function saveSkill(payload: {
   await ensureSeeded()
   const name = typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : 'Untitled skill'
   const description = typeof payload.description === 'string' ? payload.description.trim() : ''
-  const body = typeof payload.body === 'string' ? payload.body : ''
+  const body = typeof payload.body === 'string' ? payload.body.slice(0, MAX_SKILL_BODY_CHARS) : ''
   const triggers =
     typeof payload.triggers === 'string'
       ? payload.triggers
@@ -150,7 +152,11 @@ export async function saveSkill(payload: {
     slug = candidate
   }
   const skill: ParsedSkill = { name, description, body, triggers }
-  await fs.writeFile(path.join(skillsDir(), `${slug}.md`), serializeSkillFile(skill), 'utf8')
+  const target = path.join(skillsDir(), `${slug}.md`)
+  const temp = `${target}.${process.pid}.tmp`
+  await fs.writeFile(temp, serializeSkillFile(skill), { encoding: 'utf8', mode: 0o600 })
+  await fs.rename(temp, target)
+  await fs.chmod(target, 0o600).catch(() => undefined)
   const state = await getState()
   return {
     ...parseSkillFile(serializeSkillFile(skill), slug),

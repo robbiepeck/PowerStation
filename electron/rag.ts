@@ -7,7 +7,7 @@ import { extractFile, isSupportedFile } from './files.js'
 import { buildRetrievalBlock, chunkText, sourceFiles, topKChunks, type Chunk } from './ragUtil.js'
 
 const EMBED_MODEL_URL =
-  'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q8_0.gguf'
+  'https://huggingface.co/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/0188c9bf409793f810680a5a431e7b899c46104c/nomic-embed-text-v1.5.Q8_0.gguf'
 const EMBED_MODEL_FILE = 'nomic-embed-text-v1.5.Q8_0.gguf'
 const DOC_PREFIX = 'search_document: '
 const QUERY_PREFIX = 'search_query: '
@@ -16,6 +16,7 @@ const MAX_FILES = 500
 const MAX_CHUNKS = 4000
 const EMBED_BATCH = 16
 const TOP_K = 6
+const MAX_INDEX_BYTES = 128 * 1024 * 1024
 
 export type FolderIndexInfo = {
   folderId: string
@@ -49,7 +50,7 @@ async function ensureEmbedModel(onProgress?: (p: IndexProgress) => void): Promis
   const target = path.join(embeddingsDir(), EMBED_MODEL_FILE)
   const stat = await fs.stat(target).catch(() => null)
   if (stat?.isFile() && stat.size > 10_000_000) return target
-  await fs.mkdir(embeddingsDir(), { recursive: true })
+  await fs.mkdir(embeddingsDir(), { recursive: true, mode: 0o700 })
   onProgress?.({ phase: 'embedding-model', done: 0, total: 1 })
   const downloaded = await downloadModel({
     uri: EMBED_MODEL_URL,
@@ -57,7 +58,9 @@ async function ensureEmbedModel(onProgress?: (p: IndexProgress) => void): Promis
     onProgress: ({ totalSize, downloadedSize }) =>
       onProgress?.({ phase: 'embedding-model', done: downloadedSize, total: totalSize || 1 }),
   })
-  return downloaded
+  const [root, file] = await Promise.all([fs.realpath(embeddingsDir()), fs.realpath(downloaded)])
+  if (!file.startsWith(root + path.sep) || path.basename(file) !== EMBED_MODEL_FILE) throw new Error('Embedding model path validation failed.')
+  return file
 }
 
 async function collectFiles(folder: string): Promise<string[]> {
@@ -84,7 +87,10 @@ async function collectFiles(folder: string): Promise<string[]> {
 
 async function readIndex(folderId: string): Promise<StoredIndex | null> {
   try {
-    const raw = await fs.readFile(path.join(ragDir(), `${folderId}.json`), 'utf8')
+    const filePath = path.join(ragDir(), `${folderId}.json`)
+    const stat = await fs.stat(filePath)
+    if (stat.size > MAX_INDEX_BYTES) return null
+    const raw = await fs.readFile(filePath, 'utf8')
     return JSON.parse(raw) as StoredIndex
   } catch {
     return null
@@ -147,8 +153,11 @@ export async function ensureFolderIndex(
     newestMtimeMs,
     chunks: capped.map((chunk, i) => ({ ...chunk, vector: vectors[i] ?? [] })),
   }
-  await fs.mkdir(ragDir(), { recursive: true })
-  await fs.writeFile(path.join(ragDir(), `${folderId}.json`), JSON.stringify(index), 'utf8')
+  await fs.mkdir(ragDir(), { recursive: true, mode: 0o700 })
+  const target = path.join(ragDir(), `${folderId}.json`)
+  const temp = `${target}.${process.pid}.tmp`
+  await fs.writeFile(temp, JSON.stringify(index), { encoding: 'utf8', mode: 0o600 })
+  await fs.rename(temp, target)
   return toInfo(index)
 }
 

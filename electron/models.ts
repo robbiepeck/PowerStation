@@ -207,7 +207,8 @@ export async function getModelInfo(filePath: string): Promise<ModelInfo | null> 
 
 export async function importModelFile(filePath: string): Promise<void> {
   const resolved = path.resolve(filePath)
-  await fs.access(resolved)
+  const stat = await fs.stat(resolved)
+  if (!stat.isFile()) throw new Error('Model path is not a file.')
   await mutate((state) => {
     if (!state.importedModelPaths.includes(resolved)) state.importedModelPaths.push(resolved)
   })
@@ -232,13 +233,17 @@ export async function isKnownModelPath(filePath: string): Promise<boolean> {
   if (typeof filePath !== 'string' || !filePath) return false
   const resolved = path.resolve(filePath)
   const state = await getState()
-  return (
-    state.importedModelPaths.some((p) => path.resolve(p) === resolved) ||
-    state.modelFolders.some((folder) => {
-      const root = path.resolve(folder)
-      return resolved === root || resolved.startsWith(root + path.sep)
-    })
-  )
+  const candidate = await fs.realpath(resolved).catch(() => null)
+  if (!candidate) return false
+  for (const imported of state.importedModelPaths) {
+    const known = await fs.realpath(path.resolve(imported)).catch(() => null)
+    if (known === candidate) return true
+  }
+  for (const folder of state.modelFolders) {
+    const root = await fs.realpath(path.resolve(folder)).catch(() => null)
+    if (root && (candidate === root || candidate.startsWith(root + path.sep))) return true
+  }
+  return false
 }
 
 export async function deleteModelFile(filePath: string): Promise<{ deleted: boolean; freedBytes: number; reason?: string }> {

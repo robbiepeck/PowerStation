@@ -41,32 +41,9 @@ import {
   type Settings,
   type ToolPermission,
 } from './config.js'
-
-function isAllowedModelUri(uri: string): boolean {
-  if (typeof uri !== 'string') return false
-  const trimmed = uri.trim()
-  if (/^hf:/i.test(trimmed)) return true
-  try {
-    return new URL(trimmed).protocol === 'https:'
-  } catch {
-    return false
-  }
-}
-
-function isTrustedExternalUrl(url: string): boolean {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'https:') return false
-    if (parsed.hostname === 'huggingface.co') return true
-
-    return (
-      parsed.hostname === 'github.com' &&
-      (parsed.pathname === '/robbiepeck/PowerStation' || parsed.pathname.startsWith('/robbiepeck/PowerStation/'))
-    )
-  } catch {
-    return false
-  }
-}
+import { isAllowedModelUri, isPathInside, isTrustedExternalUrl } from './security.js'
+import { showSecurityPrompt } from './confirm.js'
+import { quoteCommandArg } from './mcpCommand.js'
 
 function resolveToolTier(info: { templateSupportsTools: boolean | null } | null, entry: CatalogModel | null) {
   if (entry) return entry.toolCalling
@@ -156,6 +133,9 @@ async function runModelBenchmark(modelPath: string): Promise<BenchmarkRecord> {
 }
 
 let activeAgentId: string | null = null
+let downloadActive = false
+const MAX_MODEL_DOWNLOAD_BYTES = 256 * 1024 ** 3
+let mainWindowGetter: () => BrowserWindow | null = () => null
 
 async function reconcileMcpServers(): Promise<void> {
   const state = await getState()
@@ -177,23 +157,98 @@ async function reconcileMcpServers(): Promise<void> {
   for (const [id, config] of wanted) {
     const serverState = statuses.get(id)
 
-    if (serverState === 'connected' || serverState === 'connecting' || serverState === 'error') continue
-    void mcp.connectServer(config)
+    if (serverState === 'connected' || serverState === 'connecting') {
+      const activeConfig = mcp.getServerConfig(id)
+      if (activeConfig?.name === config.name && activeConfig.command === config.command) continue
+      await mcp.disconnectServer(id)
+    }
+    if (serverState === 'error') continue
+    const response = await showSecurityPrompt(mainWindowGetter(), {
+      message: `Run the MCP server “${config.name}”?`,
+      detail: `${config.command}\n\nThis starts a process with your user-account permissions. Review the command carefully.`,
+      buttons: ['Cancel', 'Run server'],
+      cancelId: 0,
+    })
+    if (response === 1) void mcp.connectServer(config)
   }
 }
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
+  mainWindowGetter = getWindow
+  type IpcHandler = Parameters<typeof ipcMain.handle>[1]
+  const handle = (channel: string, listener: IpcHandler) => {
+    ipcMain.handle(channel, (event, ...args) => {
+      const win = getWindow()
+      if (
+        !win ||
+        win.isDestroyed() ||
+        event.sender !== win.webContents ||
+        event.senderFrame !== win.webContents.mainFrame
+      ) {
+        throw new Error('Rejected IPC from an untrusted renderer.')
+      }
+      return listener(event, ...args)
+    })
+  }
+
   const send = (channel: string, payload: unknown) => {
     const win = getWindow()
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
+  // Paths are capabilities granted by a native file/folder picker. Renderer-
+  // supplied absolute paths are never trusted on their own.
+  const approvedAttachmentPaths = new Set<string>()
+  const approvedFolders = new Set<string>()
+  const rememberFolder = (folder: string) => {
+    if (approvedFolders.size >= 32) approvedFolders.clear()
+    approvedFolders.add(path.resolve(folder))
+  }
+  const isApprovedFolder = async (folder: string): Promise<boolean> => {
+    const resolved = path.resolve(folder)
+    if (approvedFolders.has(resolved)) return true
+    const project = await projects.getActiveProject()
+    if (project?.knowledge && path.resolve(project.knowledge.folder) === resolved) return true
+    const agent = activeAgentId ? await customAgents.getAgent(activeAgentId) : null
+    return Boolean(agent?.knowledge.some((item) => path.resolve(item.folder) === resolved))
+  }
 
   llm.setToolExecutor(agent.executeToolCall)
   llm.onRuntimeEvent((event) => send('runtime:event', event))
-  agent.setPermissionRequester((request) => send('agent:permissionRequest', request))
-  agent.setPermissionExpiredNotifier((promptId) => send('agent:permissionExpired', { promptId }))
+  agent.setPermissionRequester(async (request) => {
+    const args = (() => {
+      try {
+        return JSON.stringify(request.args, null, 2).slice(0, 1800)
+      } catch {
+        return String(request.args).slice(0, 1800)
+      }
+    })()
+    const preview = request.preview
+    const previewText =
+      preview?.kind === 'diff'
+        ? `${preview.newFile ? 'Create' : 'Modify'} ${preview.path} (+${preview.summary.added}/-${preview.summary.removed})${preview.note ? `\n${preview.note}` : ''}`
+        : preview?.kind === 'move'
+          ? `Move ${preview.from} to ${preview.to}`
+          : preview?.kind === 'note'
+            ? `${preview.title}\n${preview.body}`
+            : ''
+    const response = await showSecurityPrompt(getWindow(), {
+      message: `Allow ${request.toolName} from ${request.serverName}?`,
+      detail: [previewText, args, 'Tools run with your operating-system permissions.'].filter(Boolean).join('\n\n'),
+      buttons: ['Deny', 'Allow once', 'Allow this turn', 'Always allow'],
+      cancelId: 0,
+    })
+    return response === 3 ? 'allow-always' : response === 2 ? 'allow-turn' : response === 1 ? 'allow-once' : 'deny'
+  })
+  agent.setPlanRequester(async (request) => {
+    const response = await showSecurityPrompt(getWindow(), {
+      message: 'Approve this tool plan?',
+      detail: `${request.plan.slice(0, 4000)}\n\nThe model will still request each tool call individually.`,
+      buttons: ['Deny', 'Approve plan'],
+      cancelId: 0,
+    })
+    return response === 1
+  })
   agent.setToolResultReporter((event) => send('chat:toolResult', event))
-  agent.setPlanRequester((request) => send('agent:planRequest', request))
   apiServer.setApiLogListener((entry) => send('api:request', entry))
   apiServer.setApiStatusListener(() => void apiServer.getApiStatus().then((s) => send('api:status', s)))
 
@@ -201,7 +256,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
   void reconcileMcpServers()
 
-  ipcMain.handle('models:list', async () => {
+  handle('models:list', async () => {
     const [list, catalog, state] = await Promise.all([models.listModels(), getCatalog(), getState()])
     return list.map((model) => ({
       ...model,
@@ -212,22 +267,27 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       measuredTps: state.benchmarks[model.fileName.toLowerCase()]?.tokensPerSec ?? null,
     }))
   })
-  ipcMain.handle('models:getSelected', async () => (await getState()).selectedModelPath)
-  ipcMain.handle('models:select', (_event, filePath: string | null) => models.selectModel(filePath))
-  ipcMain.handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
-  ipcMain.handle('models:deleteFile', async (_event, filePath: string) => {
+  handle('models:getSelected', async () => (await getState()).selectedModelPath)
+  handle('models:select', async (_event, filePath: string | null) => {
+    if (filePath !== null && (typeof filePath !== 'string' || !(await models.isKnownModelPath(filePath)))) {
+      throw new Error('Unknown model path.')
+    }
+    return models.selectModel(filePath)
+  })
+  handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
+  handle('models:deleteFile', async (_event, filePath: string) => {
 
     const loaded = llm.getLoadedPath()
     if (loaded && path.resolve(loaded) === path.resolve(filePath)) await llm.unloadModel().catch(() => undefined)
     return models.deleteModelFile(filePath)
   })
-  ipcMain.handle('models:reveal', async (_event, filePath: string) => {
+  handle('models:reveal', async (_event, filePath: string) => {
     if (!(await models.isKnownModelPath(filePath))) return false
     shell.showItemInFolder(path.resolve(filePath))
     return true
   })
 
-  ipcMain.handle('models:pickFile', async () => {
+  handle('models:pickFile', async () => {
     const win = getWindow()
     if (!win) return models.listModels()
     const result = await dialog.showOpenDialog(win, {
@@ -236,12 +296,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       filters: [{ name: 'GGUF model', extensions: ['gguf'] }],
     })
     if (!result.canceled) {
-      for (const filePath of result.filePaths) await models.importModelFile(filePath)
+      for (const filePath of result.filePaths) {
+        if (!filePath.toLowerCase().endsWith('.gguf')) throw new Error('Only GGUF model files can be imported.')
+        await models.importModelFile(filePath)
+      }
     }
     return models.listModels()
   })
 
-  ipcMain.handle('models:pickFolder', async () => {
+  handle('models:pickFolder', async () => {
     const win = getWindow()
     if (!win) return models.listModels()
     const result = await dialog.showOpenDialog(win, {
@@ -254,36 +317,60 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return models.listModels()
   })
 
-  ipcMain.handle('models:download', (_event, uri: string) => {
+  handle('models:download', async (_event, uri: string) => {
+    if (!isAllowedModelUri(uri)) {
+      throw new Error('Only Hugging Face GGUF downloads (hf: or huggingface.co) are allowed.')
+    }
+    if (downloadActive) throw new Error('A model download is already running.')
+    const confirmation = await showSecurityPrompt(getWindow(), {
+      message: 'Download this model?',
+      detail: `${uri.trim()}\n\nDownloaded model files are parsed by the local native runtime. Only download models you trust.`,
+      buttons: ['Cancel', 'Download'],
+      cancelId: 0,
+    })
+    if (confirmation !== 1) throw new Error('Download cancelled.')
     const id = `dl-${Date.now()}`
+    downloadActive = true
     void (async () => {
       try {
         if (!isAllowedModelUri(uri)) {
           throw new Error('Only Hugging Face (hf:) or HTTPS GGUF URLs can be downloaded.')
         }
+        const destination = managedModelsDir()
         const filePath = await llm.downloadModel({
-          uri,
-          dirPath: managedModelsDir(),
-          onProgress: ({ totalSize, downloadedSize }) => send('models:downloadProgress', { id, totalSize, downloadedSize }),
+          uri: uri.trim(),
+          dirPath: destination,
+          onProgress: ({ totalSize, downloadedSize }) => {
+            if (totalSize > MAX_MODEL_DOWNLOAD_BYTES || downloadedSize > MAX_MODEL_DOWNLOAD_BYTES) {
+              throw new Error('Model download exceeds the 256 GB safety limit.')
+            }
+            send('models:downloadProgress', { id, totalSize, downloadedSize })
+          },
         })
-        await models.importModelFile(filePath)
+        const [realDestination, realFile] = await Promise.all([fs.realpath(destination), fs.realpath(filePath)])
+        if (!isPathInside(realDestination, realFile) || !realFile.toLowerCase().endsWith('.gguf')) {
+          throw new Error('Downloaded model resolved outside the managed model folder or was not a GGUF file.')
+        }
+        await models.importModelFile(realFile)
 
         try {
-          send('models:benchmarking', { id, filePath })
-          await runModelBenchmark(filePath)
+          send('models:benchmarking', { id, filePath: realFile })
+          await runModelBenchmark(realFile)
         } catch {
           void 0
         }
-        send('models:downloadDone', { id, filePath })
+        send('models:downloadDone', { id, filePath: realFile })
       } catch (error) {
         send('models:downloadError', { id, message: error instanceof Error ? error.message : String(error) })
+      } finally {
+        downloadActive = false
       }
     })()
     return id
   })
 
-  ipcMain.handle('ollama:status', () => ollama.getOllamaStatus())
-  ipcMain.handle('ollama:import', async (_event, name: string) => {
+  handle('ollama:status', () => ollama.getOllamaStatus())
+  handle('ollama:import', async (_event, name: string) => {
 
     const model = await ollama.resolveOllamaModel(name)
     if (!model) throw new Error('That model was not found in Ollama.')
@@ -291,8 +378,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return model.blobPath
   })
 
-  ipcMain.handle('lmstudio:status', () => lmstudio.getLmStudioStatus())
-  ipcMain.handle('lmstudio:import', async (_event, filePath: string) => {
+  handle('lmstudio:status', () => lmstudio.getLmStudioStatus())
+  handle('lmstudio:import', async (_event, filePath: string) => {
 
     const model = await lmstudio.resolveLmStudioModel(filePath)
     if (!model) throw new Error('That model was not found in LM Studio.')
@@ -300,33 +387,33 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return model.path
   })
 
-  ipcMain.handle('bench:run', async (_event, modelPath: string) => {
+  handle('bench:run', async (_event, modelPath: string) => {
     if (typeof modelPath !== 'string' || !(await models.isKnownModelPath(modelPath))) {
       throw new Error('Unknown model path.')
     }
     return runModelBenchmark(modelPath)
   })
-  ipcMain.handle('bench:results', async () => (await getState()).benchmarks)
+  handle('bench:results', async () => (await getState()).benchmarks)
 
   const chatScope = (scope: unknown): chats.ChatScope => {
     if (typeof scope !== 'object' || scope === null || !('projectId' in scope)) return undefined
     const projectId = (scope as { projectId: unknown }).projectId
     return { projectId: typeof projectId === 'string' ? projectId : null }
   }
-  ipcMain.handle('chats:list', (_event, scope?: unknown) => chats.listChats(chatScope(scope)))
-  ipcMain.handle('chats:get', (_event, id: string) => chats.getChat(id))
-  ipcMain.handle('chats:save', async (_event, payload: { id?: string; messages: unknown; modelPath?: string }) => {
+  handle('chats:list', (_event, scope?: unknown) => chats.listChats(chatScope(scope)))
+  handle('chats:get', (_event, id: string) => chats.getChat(id))
+  handle('chats:save', async (_event, payload: { id?: string; messages: unknown; modelPath?: string }) => {
     const state = await getState()
     if (!state.settings.saveChats) return null
     return chats.saveChat(payload ?? { messages: [] })
   })
-  ipcMain.handle('chats:rename', (_event, id: string, title: string) => chats.renameChat(id, title))
-  ipcMain.handle('chats:pin', (_event, id: string, pinned: boolean) => chats.setChatPinned(id, pinned))
-  ipcMain.handle('chats:delete', (_event, id: string) => chats.deleteChat(id))
-  ipcMain.handle('chats:deleteAll', () => chats.deleteAllChats())
-  ipcMain.handle('chats:reveal', () => chats.revealChatsDir())
-  ipcMain.handle('chats:search', (_event, query: string, scope?: unknown) => chats.searchChats(query, chatScope(scope)))
-  ipcMain.handle('chats:exportAudit', async (_event, id: string) => {
+  handle('chats:rename', (_event, id: string, title: string) => chats.renameChat(id, title))
+  handle('chats:pin', (_event, id: string, pinned: boolean) => chats.setChatPinned(id, pinned))
+  handle('chats:delete', (_event, id: string) => chats.deleteChat(id))
+  handle('chats:deleteAll', () => chats.deleteAllChats())
+  handle('chats:reveal', () => chats.revealChatsDir())
+  handle('chats:search', (_event, query: string, scope?: unknown) => chats.searchChats(query, chatScope(scope)))
+  handle('chats:exportAudit', async (_event, id: string) => {
     const chat = await chats.getChat(id)
     if (!chat) return null
     const records = chats.collectAuditLog(chat)
@@ -342,7 +429,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     )
     return result.filePath
   })
-  ipcMain.handle('chats:export', async (_event, id: string) => {
+  handle('chats:export', async (_event, id: string) => {
     const chat = await chats.getChat(id)
     if (!chat) return null
     const result = await dialog.showSaveDialog({
@@ -354,32 +441,42 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return result.filePath
   })
 
-  ipcMain.handle('api:status', () => apiServer.getApiStatus())
-  ipcMain.handle('api:log', () => apiServer.getApiLog())
-  ipcMain.handle('api:setEnabled', async (_event, enabled: boolean) => {
+  handle('api:status', () => apiServer.getApiStatus())
+  handle('api:log', () => apiServer.getApiLog())
+  handle('api:setEnabled', async (_event, enabled: boolean) => {
     await mutate((s) => {
       s.apiServer.enabled = enabled === true
     })
     return apiServer.syncApiServer()
   })
-  ipcMain.handle('api:setPort', async (_event, port: number) => {
+  handle('api:setPort', async (_event, port: number) => {
     const clamped = Math.min(65535, Math.max(1024, Math.round(Number(port) || 0)))
     await mutate((s) => {
       s.apiServer.port = clamped
     })
     return apiServer.syncApiServer()
   })
-  ipcMain.handle('api:regenerateToken', () => apiServer.regenerateApiToken())
+  handle('api:regenerateToken', () => apiServer.regenerateApiToken())
 
-  ipcMain.handle('agents:list', () => customAgents.listAgents())
-  ipcMain.handle('agents:get', (_event, id: string) => customAgents.getAgent(id))
-  ipcMain.handle('agents:save', async (_event, payload: unknown) => {
+  handle('agents:list', () => customAgents.listAgents())
+  handle('agents:get', (_event, id: string) => customAgents.getAgent(id))
+  handle('agents:save', async (_event, payload: unknown) => {
+    const record = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {}
+    const knowledge = Array.isArray(record.knowledge) ? record.knowledge : []
+    const existing = typeof record.id === 'string' ? await customAgents.getAgent(record.id) : null
+    for (const item of knowledge) {
+      const folder = typeof item === 'object' && item !== null ? (item as Record<string, unknown>).folder : null
+      const existingFolder = existing?.knowledge.some((entry) => entry.folder === folder)
+      if (typeof folder === 'string' && !existingFolder && !(await isApprovedFolder(folder))) {
+        throw new Error('Choose agent knowledge folders with the native folder picker first.')
+      }
+    }
     const saved = await customAgents.saveAgent(payload)
 
     if (saved && saved.id === activeAgentId) void reconcileMcpServers()
     return saved
   })
-  ipcMain.handle('agents:delete', async (_event, id: string) => {
+  handle('agents:delete', async (_event, id: string) => {
     const removed = await customAgents.deleteAgent(id)
     if (removed && id === activeAgentId) {
       activeAgentId = null
@@ -387,16 +484,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     return removed
   })
-  ipcMain.handle('agents:reveal', () => customAgents.revealAgentsDir())
+  handle('agents:reveal', () => customAgents.revealAgentsDir())
 
-  ipcMain.handle('agents:setActive', async (_event, id: string | null) => {
+  handle('agents:setActive', async (_event, id: string | null) => {
     const next = typeof id === 'string' && (await customAgents.getAgent(id)) ? id : null
     if (next === activeAgentId) return true
     activeAgentId = next
     await reconcileMcpServers()
     return true
   })
-  ipcMain.handle('agents:export', async (_event, id: string) => {
+  handle('agents:export', async (_event, id: string) => {
     const json = await customAgents.exportAgentShare(id)
     if (!json) return null
     const agent = await customAgents.getAgent(id)
@@ -408,7 +505,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     await fs.writeFile(result.filePath, json, 'utf8')
     return result.filePath
   })
-  ipcMain.handle('agents:import', async () => {
+  handle('agents:import', async () => {
     const picked = await dialog.showOpenDialog({
       properties: ['openFile'],
       filters: [{ name: 'PowerStation agent', extensions: ['json'] }],
@@ -419,54 +516,55 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return customAgents.importAgentShare(text)
   })
 
-  ipcMain.handle('projects:list', () => projects.listProjects())
-  ipcMain.handle('projects:get', (_event, id: string) => projects.getProject(id))
-  ipcMain.handle('projects:getActive', () => projects.getActiveProject())
-  ipcMain.handle('projects:save', async (_event, payload: unknown) => {
+  handle('projects:list', () => projects.listProjects())
+  handle('projects:get', (_event, id: string) => projects.getProject(id))
+  handle('projects:getActive', () => projects.getActiveProject())
+  handle('projects:save', async (_event, payload: unknown) => {
+    const record = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : {}
+    const knowledge = typeof record.knowledge === 'object' && record.knowledge !== null ? (record.knowledge as Record<string, unknown>) : null
+    const existing = typeof record.id === 'string' ? await projects.getProject(record.id) : null
+    if (typeof knowledge?.folder === 'string' && knowledge.folder !== existing?.knowledge?.folder && !(await isApprovedFolder(knowledge.folder))) {
+      throw new Error('Choose project knowledge folders with the native folder picker first.')
+    }
     const saved = await projects.saveProject(payload)
 
     if (saved && (await getState()).activeProjectId === saved.id) void reconcileMcpServers()
     return saved
   })
-  ipcMain.handle('projects:delete', async (_event, id: string) => {
+  handle('projects:delete', async (_event, id: string) => {
     const removed = await projects.deleteProject(id)
     if (removed) void reconcileMcpServers()
     return removed
   })
-  ipcMain.handle('projects:setActive', async (_event, id: string | null) => {
+  handle('projects:setActive', async (_event, id: string | null) => {
     const project = await projects.setActiveProject(typeof id === 'string' ? id : null)
     await reconcileMcpServers()
     return project
   })
-  ipcMain.handle('projects:reveal', () => projects.revealProjectsDir())
+  handle('projects:reveal', () => projects.revealProjectsDir())
 
-  ipcMain.handle('repair:report', () => repair.getStorageReport())
-  ipcMain.handle('repair:reclaimables', () => repair.getReclaimables())
-  ipcMain.handle('repair:clean', (_event, id: string) => repair.cleanReclaimable(id))
-  ipcMain.handle('repair:reveal', (_event, id: string) => repair.revealLocation(id))
-  ipcMain.handle('repair:integrity', () => repair.checkModelIntegrity())
-  ipcMain.handle('repair:log', () => repair.getRepairLog())
+  handle('repair:report', () => repair.getStorageReport())
+  handle('repair:reclaimables', () => repair.getReclaimables())
+  handle('repair:clean', (_event, id: string) => repair.cleanReclaimable(id))
+  handle('repair:reveal', (_event, id: string) => repair.revealLocation(id))
+  handle('repair:integrity', () => repair.checkModelIntegrity())
+  handle('repair:log', () => repair.getRepairLog())
 
-  ipcMain.handle('backup:export', async (_event, payload?: { filePath?: string }) => {
-    let filePath = typeof payload?.filePath === 'string' ? payload.filePath : null
-    if (!filePath) {
-      const result = await dialog.showSaveDialog({
-        defaultPath: `powerstation-backup-${new Date().toISOString().slice(0, 10)}.json`,
-        filters: [{ name: 'JSON', extensions: ['json'] }],
-      })
-      if (result.canceled || !result.filePath) return null
-      filePath = result.filePath
-    }
+  handle('backup:export', async () => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: `powerstation-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+    })
+    if (result.canceled || !result.filePath) return null
+    const filePath = result.filePath
     const summary = await backup.exportBackup(filePath)
     return { filePath, ...summary }
   })
-  ipcMain.handle('backup:restore', async (_event, payload?: { filePath?: string }) => {
-    let filePath = typeof payload?.filePath === 'string' ? payload.filePath : null
-    if (!filePath) {
-      const picked = await dialog.showOpenDialog({
-        properties: ['openFile'],
-        filters: [{ name: 'PowerStation backup', extensions: ['json'] }],
-      })
+  handle('backup:restore', async () => {
+    const picked = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'PowerStation backup', extensions: ['json'] }],
+    })
       if (picked.canceled || !picked.filePaths.length) return null
       const confirm = await dialog.showMessageBox({
         type: 'warning',
@@ -478,14 +576,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           'Settings and permissions will be replaced by the backup. Chats, skills and projects from the backup overwrite items with the same id; everything else you have stays. Model files do not travel in backups — models missing on this machine simply will not appear until re-downloaded.',
       })
       if (confirm.response !== 0) return null
-      filePath = picked.filePaths[0]
-    }
+    const filePath = picked.filePaths[0]
     const summary = await backup.restoreBackup(filePath)
     await reconcileMcpServers()
     return summary
   })
 
-  ipcMain.handle('files:pickAndExtract', async () => {
+  handle('files:pickAndExtract', async () => {
     const result = await dialog.showOpenDialog({
       properties: ['openFile', 'multiSelections'],
       filters: [
@@ -493,6 +590,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       ],
     })
     if (result.canceled || !result.filePaths.length) return []
+    if (approvedAttachmentPaths.size + result.filePaths.length > 32) approvedAttachmentPaths.clear()
+    for (const filePath of result.filePaths) {
+      const real = await fs.realpath(filePath).catch(() => null)
+      if (real) approvedAttachmentPaths.add(real)
+    }
     return Promise.all(
       result.filePaths.slice(0, 4).map(async (filePath) => {
         try {
@@ -503,32 +605,36 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       }),
     )
   })
-  ipcMain.handle('files:extract', async (_event, paths: string[]) => {
+  handle('files:extract', async (_event, paths: string[]) => {
     if (!Array.isArray(paths)) return []
     return Promise.all(
       paths.slice(0, 4).map(async (filePath) => {
         try {
-          if (typeof filePath !== 'string') throw new Error('Bad path')
-          return { ok: true as const, file: await extractFile(filePath) }
+          const realFile = typeof filePath === 'string' ? await fs.realpath(filePath).catch(() => null) : null
+          if (!realFile || !approvedAttachmentPaths.has(realFile)) {
+            throw new Error('Choose files with the native file picker before attaching them.')
+          }
+          return { ok: true as const, file: await extractFile(realFile) }
         } catch (error) {
           return { ok: false as const, name: path.basename(String(filePath)), error: error instanceof Error ? error.message : String(error) }
         }
       }),
     )
   })
-  ipcMain.handle('rag:index', async (_event, folder: string) => {
+  handle('rag:index', async (_event, folder: string) => {
     if (typeof folder !== 'string') throw new Error('Bad folder')
+    if (!(await isApprovedFolder(folder))) throw new Error('Choose this folder with the native folder picker first.')
     return rag.ensureFolderIndex(folder, (progress) => send('rag:indexProgress', progress))
   })
-  ipcMain.handle('rag:info', (_event, folderId: string) => rag.getFolderIndexInfo(folderId))
-  ipcMain.handle('rag:list', () => rag.listFolderIndexes())
-  ipcMain.handle('rag:delete', (_event, folderId: string) => rag.deleteFolderIndex(folderId))
-  ipcMain.handle('rag:reindex', (_event, folderId: string) => {
+  handle('rag:info', (_event, folderId: string) => rag.getFolderIndexInfo(folderId))
+  handle('rag:list', () => rag.listFolderIndexes())
+  handle('rag:delete', (_event, folderId: string) => rag.deleteFolderIndex(folderId))
+  handle('rag:reindex', (_event, folderId: string) => {
     if (typeof folderId !== 'string') throw new Error('Bad folder id')
     return rag.reindexFolder(folderId, (progress) => send('rag:indexProgress', progress))
   })
 
-  ipcMain.handle('app:whatsNew', async () => {
+  handle('app:whatsNew', async () => {
     const state = await getState()
     const currentVersion = app.getVersion()
     const previousVersion = state.lastSeenVersion || null
@@ -544,14 +650,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       show: previousVersion !== null && previousVersion !== currentVersion,
     }
   })
-  ipcMain.handle('app:whatsNewSeen', async () => {
+  handle('app:whatsNewSeen', async () => {
     await mutate((state) => {
       state.lastSeenVersion = app.getVersion()
     })
     return true
   })
 
-  ipcMain.handle('app:openExternal', async (_event, url: string) => {
+  handle('app:openExternal', async (_event, url: string) => {
     if (!isTrustedExternalUrl(url)) {
       throw new Error('PowerStation can only open trusted external pages.')
     }
@@ -559,32 +665,32 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return true
   })
 
-  ipcMain.handle('hardware:profile', async () => {
+  handle('hardware:profile', async () => {
     const device = await llm.getDeviceInfo().catch(() => null)
     const profile = await getHardwareProfile(device?.vram?.total ?? null)
 
     return { ...profile, usableBudgetBytes: Math.round(profile.gpuBudgetBytes * USABLE_BUDGET_FRACTION) }
   })
 
-  ipcMain.handle('catalog:get', () => getCatalog())
-  ipcMain.handle('catalog:refresh', () => {
+  handle('catalog:get', () => getCatalog())
+  handle('catalog:refresh', () => {
 
     void refreshConnectorCatalog()
     void refreshSkillCatalog()
     return refreshCatalog()
   })
 
-  ipcMain.handle('skills:list', () => skills.listSkills())
-  ipcMain.handle('skills:save', (_event, payload: { slug?: string; name: string; description: string; body: string }) =>
+  handle('skills:list', () => skills.listSkills())
+  handle('skills:save', (_event, payload: { slug?: string; name: string; description: string; body: string }) =>
     skills.saveSkill(payload ?? { name: '', description: '', body: '' }),
   )
-  ipcMain.handle('skills:delete', (_event, slug: string) => skills.deleteSkill(slug))
-  ipcMain.handle('skills:setMode', (_event, payload: { slug: string; mode: 'off' | 'auto' | 'always' }) =>
+  handle('skills:delete', (_event, slug: string) => skills.deleteSkill(slug))
+  handle('skills:setMode', (_event, payload: { slug: string; mode: 'off' | 'auto' | 'always' }) =>
     skills.setSkillMode(payload?.slug, payload?.mode),
   )
-  ipcMain.handle('skills:reveal', () => skills.revealSkillsDir())
-  ipcMain.handle('skills:gallery', () => getSkillCatalog())
-  ipcMain.handle('skills:install', async (_event, id: string) => {
+  handle('skills:reveal', () => skills.revealSkillsDir())
+  handle('skills:gallery', () => getSkillCatalog())
+  handle('skills:install', async (_event, id: string) => {
 
     const gallery = await getSkillCatalog()
     const entry = gallery.skills.find((skill) => skill.id === id)
@@ -598,12 +704,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     })
   })
 
-  ipcMain.handle('connectors:get', () => getConnectorCatalog())
-  ipcMain.handle('app:pickFolder', async () => {
+  handle('connectors:get', () => getConnectorCatalog())
+  handle('app:pickFolder', async () => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-    return result.canceled || !result.filePaths.length ? null : result.filePaths[0]
+    if (result.canceled || !result.filePaths.length) return null
+    rememberFolder(result.filePaths[0])
+    return result.filePaths[0]
   })
-  ipcMain.handle('connectors:add', async (_event, payload: { connectorId: string; folder?: string }) => {
+  handle('connectors:add', async (_event, payload: { connectorId: string; folder?: string }) => {
     const catalog = await getConnectorCatalog()
     const entry: ConnectorEntry | undefined = catalog.connectors.find((c) => c.id === payload?.connectorId)
     if (!entry) throw new Error('Unknown connector.')
@@ -612,18 +720,19 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     if (entry.needsFolder) {
       folder = typeof payload.folder === 'string' ? payload.folder : null
       if (!folder) throw new Error('This connector needs a folder.')
+      if (!(await isApprovedFolder(folder))) throw new Error('Choose the connector folder with the native folder picker first.')
       const stat = await fs.stat(folder).catch(() => null)
       if (!stat?.isDirectory()) throw new Error('The chosen folder does not exist.')
     }
 
     const args = entry.args.map((arg) => (arg === '{folder}' ? folder! : arg))
-    const quoted = args.map((arg) => (arg.includes(' ') ? `"${arg}"` : arg))
-    const command = ['npx', '-y', entry.npmPackage, ...quoted].join(' ')
+    const quoted = args.map((arg) => quoteCommandArg(arg))
+    const command = ['npx', '-y', `${entry.npmPackage}@${entry.version}`, ...quoted].join(' ')
 
     const state = await getState()
 
     const existing = state.settings.utilities.mcpServers.find(
-      (server) => !entry.needsFolder && server.command.startsWith(`npx -y ${entry.npmPackage}`),
+      (server) => !entry.needsFolder && server.command.startsWith(`npx -y ${entry.npmPackage}@${entry.version}`),
     )
     let serverId: string
     if (existing) {
@@ -653,7 +762,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return (await getState()).settings.utilities.mcpServers
   })
 
-  ipcMain.handle('catalog:recommend', async (_event, intent: Intent) => {
+  handle('catalog:recommend', async (_event, intent: Intent) => {
     const [catalog, profile, budget, state] = await Promise.all([
       getCatalog(),
       getHardwareProfile(),
@@ -672,9 +781,10 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     })
   })
 
-  ipcMain.handle('fit:check', async (_event, payload: { catalogId?: string; modelPath?: string; contextTokens?: number }) => {
+  handle('fit:check', async (_event, payload: { catalogId?: string; modelPath?: string; contextTokens?: number }) => {
     const state = await getState()
-    const contextTokens = payload.contextTokens ?? state.settings.contextTokens
+    const requestedContext = typeof payload?.contextTokens === 'number' && Number.isFinite(payload.contextTokens) ? payload.contextTokens : state.settings.contextTokens
+    const contextTokens = Math.min(32768, Math.max(512, Math.round(requestedContext)))
     const [budget, offloadCeilingBytes] = await Promise.all([getGpuBudgetBytes(), getOffloadCeilingBytes()])
     if (payload.catalogId) {
       const catalog = await getCatalog()
@@ -690,6 +800,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       })
     }
     if (payload.modelPath) {
+      if (!(await models.isKnownModelPath(payload.modelPath))) return null
       const info = await models.getModelInfo(payload.modelPath)
       if (!info) return null
       const entry = await findCatalogEntryForModel(payload.modelPath)
@@ -706,8 +817,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return null
   })
 
-  ipcMain.handle('onboarding:get', async () => (await getState()).onboarding)
-  ipcMain.handle('onboarding:complete', async (_event, payload: { useCase?: string; priority?: string }) => {
+  handle('onboarding:get', async () => (await getState()).onboarding)
+  handle('onboarding:complete', async (_event, payload: { useCase?: string; priority?: string }) => {
     const state = await mutate((current) => {
       current.onboarding = {
         completed: true,
@@ -718,8 +829,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return state.onboarding
   })
 
-  ipcMain.handle('mcp:statuses', () => mcp.getMcpStatuses())
-  ipcMain.handle('mcp:toolInfo', async () => {
+  handle('mcp:statuses', () => mcp.getMcpStatuses())
+  handle('mcp:toolInfo', async () => {
     const state = await getState()
     return {
       tools: mcp.getConnectedTools(),
@@ -727,43 +838,47 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       contextTokens: state.settings.contextTokens,
     }
   })
-  ipcMain.handle('mcp:reconnect', async (_event, serverId: string) => {
+  handle('mcp:reconnect', async (_event, serverId: string) => {
     const state = await getState()
     const config = state.settings.utilities.mcpServers.find((server) => server.id === serverId)
     if (!config) return null
+    const response = await showSecurityPrompt(getWindow(), {
+      message: `Run the MCP server “${config.name}”?`,
+      detail: `${config.command}\n\nThis starts a process with your user-account permissions.`,
+      buttons: ['Cancel', 'Run server'],
+      cancelId: 0,
+    })
+    if (response !== 1) return null
     return mcp.connectServer(config)
   })
 
-  ipcMain.handle('permissions:get', async () => (await getState()).toolPermissions)
-  ipcMain.handle('permissions:set', async (_event, payload: { toolKey: string; permission: ToolPermission }) => {
+  handle('permissions:get', async () => (await getState()).toolPermissions)
+  handle('permissions:set', async (_event, payload: { toolKey: string; permission: ToolPermission }) => {
     if (!payload || typeof payload.toolKey !== 'string') return false
     if (!['allow', 'ask', 'deny'].includes(payload.permission)) return false
     await agent.setToolPermission(payload.toolKey.slice(0, 200), payload.permission)
     return true
   })
 
-  ipcMain.handle('agent:permissionResponse', (_event, payload: { promptId: string; decision: string }) => {
-    if (!payload || typeof payload.promptId !== 'string') return false
-    const decision = ['allow-once', 'allow-turn', 'allow-always', 'deny'].includes(payload.decision)
-      ? (payload.decision as agent.PermissionDecision)
-      : 'deny'
-    return agent.resolvePermission(payload.promptId, decision)
+  handle('agent:permissionResponse', (_event, payload: { promptId: string; decision: string }) => {
+    void payload
+    return false
   })
 
-  ipcMain.handle('agent:planResponse', (_event, payload: { promptId: string; approved: boolean }) => {
-    if (!payload || typeof payload.promptId !== 'string') return false
-    return agent.resolvePlan(payload.promptId, payload.approved === true)
+  handle('agent:planResponse', (_event, payload: { promptId: string; approved: boolean }) => {
+    void payload
+    return false
   })
 
-  ipcMain.handle('settings:get', async () => (await getState()).settings)
-  ipcMain.handle('settings:update', async (_event, patch: Partial<Settings>) => {
+  handle('settings:get', async () => (await getState()).settings)
+  handle('settings:update', async (_event, patch: Partial<Settings>) => {
     const before = JSON.stringify((await getState()).settings.utilities.mcpServers)
     const settings = await patchSettings(patch)
 
     if (JSON.stringify(settings.utilities.mcpServers) !== before) void reconcileMcpServers()
     return settings
   })
-  ipcMain.handle('device:info', async () => {
+  handle('device:info', async () => {
     const info = await llm.getDeviceInfo().catch(() => null)
     const profile = await getHardwareProfile(info?.vram?.total ?? null)
     const gpuNames = info?.gpuNames?.length ? info.gpuNames : profile.gpuDevices.map((gpu) => gpu.name)
@@ -777,7 +892,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
   })
 
-  ipcMain.handle(
+  handle(
     'chat:send',
     async (
       _event,
@@ -790,7 +905,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         agentId?: string
       },
     ) => {
-    const { requestId, prompt } = payload
+    if (!payload || typeof payload !== 'object') throw new Error('Invalid chat request.')
+    const requestId = typeof payload.requestId === 'string' ? payload.requestId : ''
+    const prompt = typeof payload.prompt === 'string' ? payload.prompt : ''
+    if (!/^[a-zA-Z0-9_-]{6,120}$/.test(requestId)) throw new Error('Invalid chat request id.')
+    if (!prompt.trim() || prompt.length > 200_000) throw new Error('Chat prompt is empty or too large.')
 
     const history = Array.isArray(payload.history)
       ? payload.history
@@ -803,7 +922,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       : undefined
     const state = await getState()
     const modelPath = state.selectedModelPath
-    if (!modelPath) {
+    if (!modelPath || !(await models.isKnownModelPath(modelPath))) {
       send('chat:error', { requestId, message: 'No model selected. Add and select a model first.' })
       return { requestId, ok: false }
     }
@@ -956,17 +1075,17 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     return { requestId, ok: true }
   })
 
-  ipcMain.handle('chat:stop', (_event, requestId: string) => llm.stopChat(requestId))
-  ipcMain.handle('chat:reset', () => llm.resetChat())
+  handle('chat:stop', (_event, requestId: string) => llm.stopChat(requestId))
+  handle('chat:reset', () => llm.resetChat())
 
   const abortedCompares = new Set<string>()
-  ipcMain.handle(
+  handle(
     'compare:run',
     async (_event, payload: { requestId: string; prompt: string; modelPaths: string[] }) => {
       const requestId = typeof payload?.requestId === 'string' ? payload.requestId : ''
       const prompt = typeof payload?.prompt === 'string' ? payload.prompt.trim() : ''
       const modelPaths = Array.isArray(payload?.modelPaths) ? payload.modelPaths.slice(0, 2) : []
-      if (!requestId || !prompt || modelPaths.length !== 2) return { ok: false }
+      if (!/^[a-zA-Z0-9_-]{6,120}$/.test(requestId) || !prompt || prompt.length > 200_000 || modelPaths.length !== 2) return { ok: false }
       for (const modelPath of modelPaths) {
         if (typeof modelPath !== 'string' || !(await models.isKnownModelPath(modelPath))) return { ok: false }
       }
@@ -1038,12 +1157,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return { ok: true }
     },
   )
-  ipcMain.handle('compare:stop', (_event, requestId: string) => {
+  handle('compare:stop', (_event, requestId: string) => {
     if (typeof requestId !== 'string') return false
     abortedCompares.add(requestId)
 
     for (const slot of [0, 1]) void llm.stopChat(`${requestId}-slot${slot}`)
     return true
   })
-  ipcMain.handle('chat:unload', () => llm.unloadModel())
+  handle('chat:unload', () => llm.unloadModel())
 }

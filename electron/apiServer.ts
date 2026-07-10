@@ -39,6 +39,7 @@ export type ApiServerStatus = {
 const MAX_BODY_BYTES = 8 * 1024 * 1024
 const LOG_LIMIT = 60
 const DEFAULT_MAX_TOKENS = 2048
+const MAX_CONCURRENT_REQUESTS = 2
 
 let server: http.Server | null = null
 let running = false
@@ -48,6 +49,7 @@ let nextRequestId = 1
 const log: ApiRequestLog[] = []
 let logListener: ((entry: ApiRequestLog) => void) | null = null
 let statusListener: (() => void) | null = null
+let activeRequests = 0
 
 export function setApiLogListener(fn: typeof logListener): void {
   logListener = fn
@@ -225,7 +227,10 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const state = await getState()
   const auth = req.headers.authorization ?? ''
   const presented = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (!state.apiServer.token || presented !== state.apiServer.token) {
+  const expected = Buffer.from(state.apiServer.token)
+  const actual = Buffer.from(presented)
+  const validToken = expected.length > 0 && expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
+  if (!validToken) {
     sendJson(res, 401, apiError('Missing or invalid API key.', 'invalid_api_key'))
     record({ method, path, model: null, status: 401, durationMs: Date.now() - started, error: 'unauthorized' })
     return
@@ -273,7 +278,18 @@ export async function startApiServer(): Promise<void> {
   void token
   const { apiServer } = await getState()
   lastError = null
-  server = http.createServer((req, res) => void handleRequest(req, res))
+  server = http.createServer((req, res) => {
+    if (activeRequests >= MAX_CONCURRENT_REQUESTS) {
+      sendJson(res, 429, apiError('Too many requests in progress.', 'rate_limited'))
+      return
+    }
+    activeRequests += 1
+    res.setTimeout(120_000, () => res.destroy())
+    void handleRequest(req, res).finally(() => {
+      activeRequests = Math.max(0, activeRequests - 1)
+    })
+  })
+  server.maxHeadersCount = 64
   server.on('error', (err) => {
     lastError = err instanceof Error ? err.message : String(err)
     running = false
