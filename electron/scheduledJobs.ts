@@ -211,11 +211,17 @@ async function executeJob(job: ScheduledJob, scheduledFor: number | null): Promi
   if ((await getMemoryPressureLevel().catch(() => null)) === 'critical') {
     return recordSkipped(job, scheduledFor, 'Skipped because the operating system reported critical memory pressure.')
   }
-  const installedModel = (await models.listModels()).find((model) => path.resolve(model.path) === path.resolve(job.modelPath))
-  if (!installedModel) {
-    return recordSkipped(job, scheduledFor, 'The selected model is no longer installed.')
+  let installedModel: Awaited<ReturnType<typeof models.listModels>>[number]
+  let admission: Awaited<ReturnType<typeof admitModel>>
+  try {
+    const match = (await models.listModels()).find((model) => path.resolve(model.path) === path.resolve(job.modelPath))
+    if (!match) return recordSkipped(job, scheduledFor, 'The selected model is no longer installed.')
+    installedModel = match
+    admission = await admitModel(job.modelPath)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    return recordSkipped(job, scheduledFor, `The model safety check failed: ${detail}`.slice(0, 2000))
   }
-  const admission = await admitModel(job.modelPath)
   if (!admission.fits) return recordSkipped(job, scheduledFor, admission.reason ?? 'The selected model does not fit safely.')
 
   const startedAt = Date.now()
