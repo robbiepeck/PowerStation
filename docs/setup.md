@@ -41,14 +41,13 @@ npm install
 npm run desktop:dev
 ```
 
-`npm run desktop:dev` runs Vite and Electron together (via `concurrently`). It builds the Electron
-main process, waits for the dev server, then launches the app pointed at it.
+`npm run desktop:dev` selects a free loopback port, starts Vite, builds the Electron main process,
+then launches the app pointed at that exact port. It will not attach to an unrelated dev server.
 
 ### Running on a custom port
 
-`desktop:dev` uses Vite's default port (5173). If another project is already holding that port, Vite
-will auto-bump the renderer to a different port while Electron still points at 5173 — which loads the
-wrong page. To avoid this, run the two halves yourself on a free port:
+`desktop:dev` handles occupied ports automatically. To run the two halves yourself on a specific
+port, use:
 
 ```bash
 # terminal 1 — dev server on a dedicated port
@@ -95,12 +94,13 @@ as build artifacts, and publishes all of them to the GitHub Release when a `v*` 
 grab the latest Linux package without a release: repo → **Actions** → newest CI run → **Artifacts**
 → `PowerStation-linux-x64`.
 
-**Signing & notarization.** The macOS build is currently ad-hoc signed, not Developer ID signed or
-notarized, so Gatekeeper can warn on first open (right-click → Open, or allow it in *System Settings
-→ Privacy & Security*). Tagged macOS CI releases are configured to fail instead of publishing an
-unsigned app when Developer ID credentials are required. Configure `MACOS_CSC_LINK`,
-`MACOS_CSC_KEY_PASSWORD`, `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` before tagging
-a public macOS release.
+**Signing & notarization.** Local `package:mac` builds are ad-hoc signed for contributor testing, so
+Gatekeeper can warn on first open (right-click → Open, or allow it in *System Settings → Privacy &
+Security*). Tagged macOS CI releases require Developer ID signing, hardened runtime and Apple
+notarization; the release job fails before publishing if any credential is missing. Configure these
+GitHub Actions secrets before tagging a public release: `MACOS_CSC_LINK` (base64 `.p12`),
+`MACOS_CSC_KEY_PASSWORD`, `APPLE_API_KEY_BASE64` (base64 App Store Connect `.p8`),
+`APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. Release tags must point to a commit already on `main`.
 
 Tagged Windows CI releases also run with `forceCodeSigning=true`. Configure `WINDOWS_CSC_LINK` and
 `WINDOWS_CSC_KEY_PASSWORD` with a Windows code-signing certificate before tagging a public Windows

@@ -1,7 +1,8 @@
 import { createRequire } from 'node:module'
 import { spawn, execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { app, ipcMain, type BrowserWindow } from 'electron'
-import { createWriteStream } from 'node:fs'
+import { createReadStream, createWriteStream } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import https from 'node:https'
 import os from 'node:os'
@@ -27,6 +28,7 @@ type GitHubReleaseAsset = {
   name?: string
   browser_download_url?: string
   size?: number
+  digest?: string
 }
 
 type GitHubRelease = {
@@ -39,6 +41,7 @@ type ManualUpdateAsset = {
   name: string
   url: string
   size: number
+  digest: string | null
   kind: 'dmg' | 'zip'
 }
 
@@ -133,6 +136,10 @@ function chooseMacAsset(release: GitHubRelease): ManualUpdateAsset | null {
       name: typeof asset.name === 'string' ? asset.name : '',
       url: typeof asset.browser_download_url === 'string' ? asset.browser_download_url : '',
       size: typeof asset.size === 'number' ? asset.size : 0,
+      digest:
+        typeof asset.digest === 'string' && /^sha256:[a-f0-9]{64}$/i.test(asset.digest)
+          ? asset.digest.toLowerCase()
+          : null,
     }))
     .map((asset) => {
       const lower = asset.name.toLowerCase()
@@ -231,6 +238,19 @@ async function downloadFile(
   })
 }
 
+async function validateDownloadedAsset(asset: ManualUpdateAsset, filePath: string): Promise<void> {
+  const stat = await fs.stat(filePath)
+  if (!stat.isFile() || stat.size !== asset.size) {
+    throw new Error(`Update download size mismatch: expected ${asset.size} bytes, received ${stat.size} bytes.`)
+  }
+  if (!asset.digest) return
+
+  const hash = createHash('sha256')
+  for await (const chunk of createReadStream(filePath)) hash.update(chunk)
+  const actual = `sha256:${hash.digest('hex')}`
+  if (actual !== asset.digest) throw new Error('Update download failed its SHA-256 integrity check.')
+}
+
 function execFileAsync(command: string, args: string[]): Promise<void> {
   return new Promise((resolve, reject) => {
     execFile(command, args, (error, stdout, stderr) => {
@@ -280,6 +300,7 @@ async function validateExtractedApp(appPath: string): Promise<void> {
     throw new Error('Downloaded update is not a PowerStation app bundle.')
   }
   await execFileAsync('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath])
+  await execFileAsync('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', appPath])
 }
 
 async function installExtractedAppAndRestart(
@@ -311,11 +332,24 @@ done
 if [ -d "$APP_PATH" ]; then
   /bin/mv "$APP_PATH" "$BACKUP_PATH"
 fi
-/usr/bin/ditto "$NEW_APP" "$APP_PATH"
+if ! /usr/bin/ditto "$NEW_APP" "$APP_PATH"; then
+  /bin/rm -rf "$APP_PATH"
+  if [ -d "$BACKUP_PATH" ]; then
+    /bin/mv "$BACKUP_PATH" "$APP_PATH"
+  fi
+  exit 1
+fi
 if [ -n "$MOUNT_DIR" ]; then
   /usr/bin/hdiutil detach "$MOUNT_DIR" >/dev/null 2>&1 || true
 fi
-/usr/bin/open "$APP_PATH"
+if ! /usr/bin/open "$APP_PATH"; then
+  /bin/rm -rf "$APP_PATH"
+  if [ -d "$BACKUP_PATH" ]; then
+    /bin/mv "$BACKUP_PATH" "$APP_PATH"
+  fi
+  exit 1
+fi
+/bin/rm -rf "$BACKUP_PATH"
 /bin/rm -rf "$TEMP_DIR"
 `
   await fs.writeFile(scriptPath, script, { mode: 0o700 })
@@ -362,33 +396,45 @@ async function installManualMacUpdate(getWindow: () => BrowserWindow | null): Pr
   const extractDir = path.join(tempDir, 'extracted')
   const mountDir = update.asset.kind === 'dmg' ? path.join(tempDir, 'mount') : null
   await fs.mkdir(extractDir, { recursive: true })
+  let handedOff = false
+  let mounted = false
+  try {
+    setState({ phase: 'downloading', latestVersion: update.version, progressPct: 0, message: undefined }, getWindow)
+    await downloadFile(update.asset.url, artifactPath, ({ downloadedSize, totalSize }) => {
+      setState(
+        {
+          phase: 'downloading',
+          latestVersion: update.version,
+          transferredBytes: downloadedSize,
+          totalBytes: totalSize || update.asset.size,
+          progressPct: totalSize ? (downloadedSize / totalSize) * 100 : undefined,
+        },
+        getWindow,
+      )
+    })
+    await validateDownloadedAsset(update.asset, artifactPath)
 
-  setState({ phase: 'downloading', latestVersion: update.version, progressPct: 0, message: undefined }, getWindow)
-  await downloadFile(update.asset.url, artifactPath, ({ downloadedSize, totalSize }) => {
-    setState(
-      {
-        phase: 'downloading',
-        latestVersion: update.version,
-        transferredBytes: downloadedSize,
-        totalBytes: totalSize || update.asset.size,
-        progressPct: totalSize ? (downloadedSize / totalSize) * 100 : undefined,
-      },
-      getWindow,
-    )
-  })
-  let extractedApp: string
-  if (update.asset.kind === 'zip') {
-    await execFileAsync('/usr/bin/ditto', ['-x', '-k', artifactPath, extractDir])
-    extractedApp = await findExtractedApp(extractDir)
-  } else {
-    if (!mountDir) throw new Error('Missing update mount directory.')
-    await fs.mkdir(mountDir, { recursive: true })
-    await execFileAsync('/usr/bin/hdiutil', ['attach', artifactPath, '-nobrowse', '-readonly', '-mountpoint', mountDir])
-    extractedApp = await findExtractedApp(mountDir)
+    let extractedApp: string
+    if (update.asset.kind === 'zip') {
+      await execFileAsync('/usr/bin/ditto', ['-x', '-k', artifactPath, extractDir])
+      extractedApp = await findExtractedApp(extractDir)
+    } else {
+      if (!mountDir) throw new Error('Missing update mount directory.')
+      await fs.mkdir(mountDir, { recursive: true })
+      await execFileAsync('/usr/bin/hdiutil', ['attach', artifactPath, '-nobrowse', '-readonly', '-mountpoint', mountDir])
+      mounted = true
+      extractedApp = await findExtractedApp(mountDir)
+    }
+    await validateExtractedApp(extractedApp)
+    await installExtractedAppAndRestart(extractedApp, tempDir, mountDir, getWindow)
+    handedOff = true
+    return state
+  } finally {
+    if (!handedOff) {
+      if (mounted && mountDir) await execFileAsync('/usr/bin/hdiutil', ['detach', mountDir]).catch(() => undefined)
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => undefined)
+    }
   }
-  await validateExtractedApp(extractedApp)
-  await installExtractedAppAndRestart(extractedApp, tempDir, mountDir, getWindow)
-  return state
 }
 
 async function checkForUpdates(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
