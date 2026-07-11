@@ -218,7 +218,7 @@ export function CatalogGrid({
               {model.vision ? (
                 <span
                   className="badge neutral"
-                  title="This model can accept images. PowerStation's local runtime doesn't support image input yet — vision lands the moment the runtime does (see the roadmap)."
+                  title="This model can accept images. PowerStation's local runtime doesn't support image input yet; see the vision plan in the documentation."
                 >
                   vision-capable model
                 </span>

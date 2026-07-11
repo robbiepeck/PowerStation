@@ -1640,7 +1640,9 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
 
   const label =
     state.phase === 'available'
-      ? state.latestVersion
+      ? state.sourceOnly
+        ? 'View source update'
+        : state.latestVersion
         ? `Update ${state.latestVersion}`
         : 'Update'
       : state.phase === 'downloaded'

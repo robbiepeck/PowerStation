@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module'
 import { spawn, execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { app, ipcMain, type BrowserWindow } from 'electron'
+import { app, ipcMain, shell, type BrowserWindow } from 'electron'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { promises as fs } from 'node:fs'
 import https from 'node:https'
@@ -52,6 +52,7 @@ const UPDATE_HOSTS = new Set([
   'github-releases.githubusercontent.com',
   'release-assets.githubusercontent.com',
 ])
+const SOURCE_UPDATE_GUIDE = 'https://github.com/robbiepeck/PowerStation/blob/main/docs/source-install.md#updating'
 
 function isUpdateUrl(raw: string): boolean {
   try {
@@ -73,6 +74,7 @@ export type UpdateState = {
   totalBytes?: number
   bytesPerSecond?: number
   lastCheckedAt?: number
+  sourceOnly?: boolean
 }
 
 let state: UpdateState = {
@@ -82,6 +84,7 @@ let state: UpdateState = {
 }
 let installAfterDownload = false
 let manualMacUpdate: { version: string; releaseName?: string; asset: ManualUpdateAsset } | null = null
+let sourceUpdateUrl: string | null = null
 
 function cleanInfo(info?: UpdateInfo): Pick<UpdateState, 'latestVersion' | 'releaseName'> {
   return {
@@ -359,15 +362,13 @@ fi
 }
 
 async function checkManualMacUpdate(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
-  setState({ phase: 'checking', message: undefined }, getWindow)
+  setState({ phase: 'checking', message: undefined, sourceOnly: false }, getWindow)
   const release = await fetchJson<GitHubRelease>('https://api.github.com/repos/robbiepeck/PowerStation/releases/latest')
   const version = typeof release.tag_name === 'string' ? release.tag_name.replace(/^v/i, '') : ''
   if (!version) throw new Error('Latest PowerStation release did not include a version tag.')
-  const asset = chooseMacAsset(release)
-  if (!asset) throw new Error(`PowerStation ${version} does not include a macOS ${process.arch} update asset.`)
-
   if (compareVersions(version, app.getVersion()) <= 0) {
     manualMacUpdate = null
+    sourceUpdateUrl = null
     return setState(
       {
         phase: 'idle',
@@ -375,13 +376,32 @@ async function checkManualMacUpdate(getWindow: () => BrowserWindow | null): Prom
         releaseName: release.name,
         lastCheckedAt: Date.now(),
         message: `PowerStation ${app.getVersion()} is already current.`,
+        sourceOnly: false,
       },
       getWindow,
     )
   }
 
+  const asset = chooseMacAsset(release)
+  if (!asset) {
+    manualMacUpdate = null
+    sourceUpdateUrl = SOURCE_UPDATE_GUIDE
+    return setState(
+      {
+        phase: 'available',
+        latestVersion: version,
+        releaseName: release.name,
+        lastCheckedAt: Date.now(),
+        message: `PowerStation ${version} is available as a source release. Open the update guide to install it locally.`,
+        sourceOnly: true,
+      },
+      getWindow,
+    )
+  }
+
+  sourceUpdateUrl = null
   manualMacUpdate = { version, releaseName: release.name, asset }
-  return setState({ phase: 'available', latestVersion: version, releaseName: release.name, message: undefined }, getWindow)
+  return setState({ phase: 'available', latestVersion: version, releaseName: release.name, message: undefined, sourceOnly: false }, getWindow)
 }
 
 async function installManualMacUpdate(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
@@ -446,7 +466,13 @@ async function checkForUpdates(getWindow: () => BrowserWindow | null): Promise<U
 }
 
 async function installLatest(getWindow: () => BrowserWindow | null): Promise<UpdateState> {
-  if (manualMacUpdatesSupported) return installManualMacUpdate(getWindow)
+  if (manualMacUpdatesSupported) {
+    if (sourceUpdateUrl) {
+      await shell.openExternal(sourceUpdateUrl)
+      return state
+    }
+    return installManualMacUpdate(getWindow)
+  }
   if (!builtInUpdatesSupported) return setState({ phase: 'unsupported', message: state.message }, getWindow)
 
   installAfterDownload = true

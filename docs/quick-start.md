@@ -7,26 +7,25 @@ From a clean checkout to your first local chat in a few minutes.
 - **macOS on Apple Silicon** (M-series) with **16 GB unified memory or more**, or
   **Windows 10/11 x64** / **Linux x64** (beta) with **16 GB RAM** — ideally with a discrete GPU
   (8 GB+ VRAM).
-- **Node.js 20+** and **npm**.
+- **Node.js 22+** and **npm**.
 - macOS only: Xcode Command Line Tools (`xcode-select --install`) — the native runtime ships
   prebuilt, but the CLT are handy if a source build is ever needed.
 
-Prefer an installer over building from source? Grab the latest from
-[Releases](https://github.com/robbiepeck/PowerStation/releases/latest) — macOS `.dmg`, Windows
-installer/portable, or Linux `.AppImage` / `.deb`. See the [Setup Guide](setup.md) if you hit
-anything native-build related.
+PowerStation publishes source-only releases. On macOS the supported installer builds and signs the
+app locally, avoiding the risks and warnings of distributing an unnotarized binary.
 
 ## 2. Get it running
 
 ```bash
-git clone https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
-npm install
-npm run desktop:dev
+npm run doctor
+npm run install:mac
 ```
 
-`npm install` pulls Electron and the `node-llama-cpp` runtime, so the first install takes a couple
-of minutes. `npm run desktop:dev` starts Vite and opens the app window.
+`install:mac` installs the locked dependencies, builds the app locally, verifies it, installs it to
+Applications, and opens it. It preserves existing models, chats and settings. See the
+[Source Install guide](source-install.md) for updates and privacy-safe diagnostics.
 
 ## 3. First run: pick a model
 
@@ -78,9 +77,7 @@ headroom, each labelled as measured or estimated.
 
 - **"Won't fit" on every big model** — expected; your memory tier can't hold them. Stick to the
   models marked *fits comfortably*. See [Models & devices](models-and-devices.md).
-- **A preferred dev port is occupied** — `desktop:dev` automatically selects another loopback port.
-  For a fixed custom port, see the [Setup Guide](setup.md).
-- **Gatekeeper warning on a local contributor build** — local packages are ad-hoc signed; see the
-  [Setup Guide](setup.md).
+- **The prerequisite check fails** — fix the failed item shown by `npm run doctor`, then retry.
+- **A build step fails** — run `npm run diagnostics` and include its privacy-safe output in an issue.
 
 Next: [Setup Guide](setup.md) · [Architecture](architecture.md)

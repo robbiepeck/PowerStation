@@ -1,21 +1,20 @@
 # Scope improvements
 
 Items discussed in the original product critique that were deferred for scope, tracked here as the
-working backlog. Each entry notes where it came from, what it takes, and its status. The high-level
-direction lives in the [Roadmap](../ROADMAP.md); this page is the detailed version.
+working backlog. Each entry notes where it came from, what it takes, and its status.
 
 | # | Item | Origin | Effort | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Real skills & connector gallery | Original goal #2 | Medium | **Shipped v0.3** |
 | 2 | On-device speed micro-benchmark | Critique recommendation | Small | **Shipped v0.2** |
-| 3 | Conversation persistence | Roadmap / daily-use gap | Medium | **Shipped v0.2** |
+| 3 | Conversation persistence | Daily-use gap | Medium | **Shipped v0.2** |
 | 4 | Catalogue freshness CI | Critique: "stale catalogue is fatal" | Small | **Shipped v0.4** |
 | 5 | First-run demo moment | UX critique | Small | **Shipped v0.4** |
 | 6 | Storage cleanup / repair (tab + agent skill) | Cut feature, approved return path | Medium | **Shipped v0.12 + v0.14** |
 | 7 | Ollama as detected optional backend | Critique runtime recommendation | Medium | **Shipped v0.4** (model import) |
-| 8 | MLX engine pack (Apple Silicon) | Critique performance chapter | Large | **Designed** — [plan](mlx-engine-plan.md), staged after signing |
+| 8 | MLX engine pack (Apple Silicon) | Critique performance chapter | Large | **Designed** — [plan](mlx-engine-plan.md), staged behind safe pack verification |
 | 9 | Web-based recommender funnel | Product critique | Small–medium | Later |
-| 10 | Signing & notarization (macOS + Windows) | Critique pre-release prerequisite | Small (needs credentials) | **Blocked on accounts** |
+| 10 | Signing & notarization (macOS + Windows) | Critique pre-release prerequisite | Small (needs credentials) | **Deferred; source-only releases selected** |
 
 ## The items in detail
 
@@ -149,22 +148,20 @@ ships to shell out to. Full gap analysis and the two delivery paths in
 [vision-plan.md](vision-plan.md); a freshness-CI watchdog flags every new runtime release so the
 unblock is evaluated the week it lands. No vision UI ships until the runtime runs it.
 
-### 8. MLX engine pack — *designed, staged after signing*
+### 8. MLX engine pack — *designed, staged behind safe pack verification*
 Research showed MLX runs 1.2–3× faster than llama.cpp on Apple Silicon. The full engineering plan
 — engine registry, managed Python subprocess, parallel MLX catalogue variants, per-engine
-benchmarks — lives in [mlx-engine-plan.md](mlx-engine-plan.md). Deliberately staged after
-signing/notarization rather than half-shipped.
+benchmarks — lives in [mlx-engine-plan.md](mlx-engine-plan.md). Deliberately staged until engine
+packs have authenticated, integrity-checked delivery rather than half-shipped.
 
 ### 9. Web-based recommender funnel — *later*
 The onboarding questionnaire as a free static web page (same catalogue JSON, browser-detectable
 hints) that funnels visitors to the app download. Marketing surface more than product.
 
-### 10. Signing & notarization — *release gates wired, blocked on accounts*
-The release path now refuses to publish tagged macOS builds unless Developer ID signing succeeds,
-and tagged Windows builds unless code signing succeeds. The packaging config is ready for macOS
-Developer ID + notarization credentials and Windows certificate secrets; public distribution still
-needs those accounts/certificates, and Windows SmartScreen reputation still has to accrue from
-signed releases.
+### 10. Signing & notarization — *deferred; source-only releases selected*
+Paid signing accounts are not part of the current distribution plan. Stable tags create source-only
+GitHub Releases, and macOS users build and ad-hoc sign the app locally. CI packages are explicitly
+unsigned verification artifacts and are not supported public downloads.
 
 ## Still excluded, by decision
 

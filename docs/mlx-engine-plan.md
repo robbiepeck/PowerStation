@@ -48,8 +48,8 @@ engines behind one UI, selected per model.
 
 ## Staging
 
-1. **Prerequisite:** signing/notarization (scope item #10) — shipping a downloadable Python
-   runtime into an unsigned app compounds Gatekeeper pain.
+1. **Prerequisite:** authenticated, integrity-checked pack delivery — a source-installed app must
+   not download and execute an engine archive unless its provenance and digest are verified.
 2. Engine registry refactor (no behaviour change; llama.cpp only).
 3. MLX engine behind a "beta engines" setting, chat-only.
 4. Catalogue MLX variants + per-engine benchmarks + recommender integration.

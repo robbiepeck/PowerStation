@@ -8,8 +8,15 @@
   "author": "Robbie Peck",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "dist-electron/main.js",
   "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "install:mac": "node scripts/install-macos.mjs",
+    "update:mac": "node scripts/update-macos.mjs",
+    "diagnostics": "node scripts/diagnostics.mjs",
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "tsc -b && vite build",
@@ -19,6 +26,7 @@
     "test": "vitest run",
     "package:mac": "npm run build && electron-builder --mac --universal -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
     "package:mac:dir": "npm run build && electron-builder --mac --universal --dir -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
+    "package:mac:local": "npm run build && electron-builder --mac --arm64 --dir --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
     "package:mac:signed": "npm run build && electron-builder --mac --universal -c.forceCodeSigning=true",
     "package:win": "npm run build && electron-builder --win --x64",
     "package:win:signed": "npm run build && electron-builder --win --x64 -c.forceCodeSigning=true",

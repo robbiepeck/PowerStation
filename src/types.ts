@@ -599,6 +599,7 @@ export type UpdateState = {
   totalBytes?: number
   bytesPerSecond?: number
   lastCheckedAt?: number
+  sourceOnly?: boolean
 }
 
 export type Unsubscribe = () => void

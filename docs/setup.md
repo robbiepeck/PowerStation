@@ -8,7 +8,7 @@ running app, see the [Quick Start](quick-start.md).
 **macOS (primary platform)**
 
 - macOS on Apple Silicon (M-series), 16 GB unified memory or more.
-- **Node.js 20+** and **npm**.
+- **Node.js 22+** and **npm**.
 - **Xcode Command Line Tools** — `xcode-select --install`. The `node-llama-cpp` runtime ships as a
   prebuilt binary, so a source compile is usually unnecessary, but the CLT are required if it ever
   falls back to building from source.
@@ -19,7 +19,7 @@ running app, see the [Quick Start](quick-start.md).
   recommended — models run on CUDA/Vulkan when available and fall back to CPU otherwise.
 - Multi-GPU laptops and desktops are supported: PowerStation lists detected adapters and uses the
   largest discrete NVIDIA/AMD VRAM budget until the runtime reports its exact backend memory.
-- **Node.js 20+** and **npm**. Prebuilt `node-llama-cpp` binaries (CPU, CUDA and Vulkan variants)
+- **Node.js 22+** and **npm**. Prebuilt `node-llama-cpp` binaries (CPU, CUDA and Vulkan variants)
   install automatically; Visual Studio Build Tools are only needed if a source build is ever forced.
 - Keep your GPU drivers current — the CUDA/Vulkan runtimes use them directly.
 
@@ -27,22 +27,34 @@ running app, see the [Quick Start](quick-start.md).
 
 - Linux x64 on a desktop distribution with 16 GB RAM or more. Ubuntu/Debian derivatives are the
   tested packaging target; the AppImage should also run on many other mainstream desktop distros.
-- **Node.js 20+** and **npm**. Prebuilt `node-llama-cpp` Linux binaries install automatically; a
+- **Node.js 22+** and **npm**. Prebuilt `node-llama-cpp` Linux binaries install automatically; a
   system compiler toolchain is only needed if a source build is ever forced.
 - Keep NVIDIA/AMD GPU drivers current when using GPU acceleration. Without a supported discrete
   GPU, inference runs on CPU from system RAM.
 
-## Install and run
+## Install on macOS
+
+```bash
+git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
+cd PowerStation
+npm run doctor
+npm run install:mac
+```
+
+See the [Source Install guide](source-install.md) for updating, diagnostics, installation
+destinations, data preservation and troubleshooting.
+
+## Development checkout
 
 ```bash
 git clone https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
-npm install
+npm ci
 npm run desktop:dev
 ```
 
-`npm run desktop:dev` selects a free loopback port, starts Vite, builds the Electron main process,
-then launches the app pointed at that exact port. It will not attach to an unrelated dev server.
+`desktop:dev` selects a free loopback port, starts Vite, builds the Electron main process, then
+launches the app pointed at that exact port. It will not attach to an unrelated dev server.
 
 ### Running on a custom port
 
@@ -62,13 +74,17 @@ VITE_DEV_SERVER_URL=http://127.0.0.1:5180 npx electron .
 
 | Command | What it does |
 | --- | --- |
+| `npm run doctor` | Check whether a Mac is ready for a local source install. |
+| `npm run install:mac` | Reproducibly build, verify and atomically install the macOS app. |
+| `npm run update:mac` | Install the newest stable source release without changing the current checkout. |
+| `npm run diagnostics` | Print a privacy-safe troubleshooting report. |
 | `npm run desktop:dev` | Run the app in development (Vite + Electron). |
 | `npm run build` | Typecheck and build the renderer and the Electron main process. |
 | `npm run build:renderer` | Renderer only (`tsc -b` + `vite build`). |
 | `npm run build:electron` | Electron main only (`tsc` + copy preload). |
 | `npm test` | Run the unit tests (admission-control math, via Vitest). |
 | `npm run lint` | ESLint. |
-| `npm run package:mac` | Package the macOS app with electron-builder. |
+| `npm run package:mac:local` | Build the Apple Silicon app used by the local installer. |
 | `npm run package:win` | Package the Windows NSIS installer and portable exe on Windows. |
 | `npm run package:win:signed` | Package Windows artifacts and fail if code signing credentials are missing. |
 | `npm run package:linux` | Package the Linux x64 AppImage and deb on Linux. |
@@ -89,27 +105,18 @@ Artifacts land in `release/`.
 **Build on the target platform.** The native llama.cpp binaries are platform-specific, so a working
 Windows build must be produced on Windows, macOS on macOS, and Linux on Linux. That's exactly what
 CI does: the [GitHub Actions workflow](../.github/workflows/ci.yml) lint/tests/builds on all three
-platforms for every push to `main`, uploads a Windows installer, macOS app, and Linux AppImage/deb
-as build artifacts, and publishes all of them to the GitHub Release when a `v*` tag is pushed. To
-grab the latest Linux package without a release: repo → **Actions** → newest CI run → **Artifacts**
-→ `PowerStation-linux-x64`.
+platforms for every push to `main` and tests the documented macOS installer. CI's unsigned packages
+are short-lived verification artifacts, not supported downloads. A `v*` tag creates a source-only
+GitHub Release after every required job passes.
 
-**Signing & notarization.** Local `package:mac` builds are ad-hoc signed for contributor testing, so
-Gatekeeper can warn on first open (right-click → Open, or allow it in *System Settings → Privacy &
-Security*). Tagged macOS CI releases require Developer ID signing, hardened runtime and Apple
-notarization; the release job fails before publishing if any credential is missing. Configure these
-GitHub Actions secrets before tagging a public release: `MACOS_CSC_LINK` (base64 `.p12`),
-`MACOS_CSC_KEY_PASSWORD`, `APPLE_API_KEY_BASE64` (base64 App Store Connect `.p8`),
-`APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. Release tags must point to a commit already on `main`.
+**Signing & releases.** The supported macOS installation is built and ad-hoc signed on the user's
+own Mac. The project does not publish `.dmg`, `.zip`, `.exe`, `.AppImage` or `.deb` files as consumer
+releases without the appropriate platform trust chain. This avoids asking users to bypass security
+warnings. Release tags must point to a commit already on `main`.
 
-Tagged Windows CI releases also run with `forceCodeSigning=true`. Configure `WINDOWS_CSC_LINK` and
-`WINDOWS_CSC_KEY_PASSWORD` with a Windows code-signing certificate before tagging a public Windows
-release. Non-tag Windows CI artifacts remain unsigned for testing; use `npm run package:win:signed`
-locally when you want the same fail-if-unsigned behavior.
-
-**Linux updates.** The AppImage build includes Electron Builder update metadata and can use
-PowerStation's in-app updater when it is launched from the AppImage. The deb package follows normal
-package replacement: download and install the newer `.deb` from Releases.
+**Updates.** A locally installed macOS build checks GitHub Releases and opens the source update
+guide when a newer source-only release exists. Run `npm run update:mac` from the checkout to perform
+the update. Windows and Linux currently use a fresh development checkout.
 
 **Native module packaging.** `node-llama-cpp` ships native binaries that must be unpacked from the
 asar archive at build time — this is already configured under `build.asarUnpack` in `package.json`.
@@ -154,6 +161,7 @@ without an app release.
   delete `node_modules` and re-run `npm install` to re-fetch the prebuilt binary.
 - **A model crashes the runtime** — you'll get a recovery card, not a dead app. Try a smaller
   context or a smaller model; the app applies a short cooldown before re-spawning the runtime.
-- **Gatekeeper blocks a packaged build** — see *Signing & notarization* above.
+- **Local installation fails** — run `npm run doctor`, then `npm run diagnostics`; see the
+  [Source Install guide](source-install.md).
 
 Next: [Architecture](architecture.md) · [Contributing](../CONTRIBUTING.md)

@@ -13,9 +13,9 @@ skills, MCP tools and an agent harness, and honest resource monitoring — all r
 on open-weight models, entirely on your machine.
 
 [Quick Start](docs/quick-start.md) ·
+[Source Install](docs/source-install.md) ·
 [Setup Guide](docs/setup.md) ·
-[Contributing](CONTRIBUTING.md) ·
-[Roadmap](ROADMAP.md)
+[Contributing](CONTRIBUTING.md)
 
 ![Platform](https://img.shields.io/badge/platform-macOS%20Apple%20Silicon%20·%20Windows%20x64%20·%20Linux%20x64-111111?logo=linux&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-008476)
@@ -99,32 +99,35 @@ those three gaps:
 
 Windows and Linux support are CI-built but less battle-tested than macOS — issues welcome.
 
-## Download
+## Install
 
-Grab the latest installer from **[Releases](https://github.com/robbiepeck/PowerStation/releases/latest)** —
-macOS (Apple Silicon `.dmg`), Windows x64 (installer or portable), and Linux x64 (`.AppImage` or
-`.deb`). Consumer macOS releases still require Developer ID signing and notarization; tagged
-Windows releases are configured to require code signing credentials before publishing.
+Public releases are source-only. On macOS, the supported installer builds and ad-hoc signs the app
+on your own Mac—no paid Apple Developer account and no downloaded, unnotarized binary.
 
-## Quick Start (from source)
+## Quick Start (macOS)
 
 ```bash
-git clone https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
-npm install
-npm run desktop:dev
+npm run doctor
+npm run install:mac
 ```
 
 On first launch PowerStation scans your machine, asks two questions, recommends models, and
 downloads your pick straight into a working chat. Full walkthrough in the
-[Quick Start guide](docs/quick-start.md); native-build prerequisites, packaging and
-troubleshooting in the [Setup Guide](docs/setup.md).
+[Quick Start guide](docs/quick-start.md); installation, updates, safe diagnostics and
+troubleshooting in the [Source Install guide](docs/source-install.md).
+
+Windows and Linux are beta and currently require a development source checkout; see the
+[Setup Guide](docs/setup.md). CI packages on all three platforms to catch regressions, but its
+unsigned artifacts are not public releases.
 
 ## Documentation
 
 | Guide | What's inside |
 | --- | --- |
 | [Quick Start](docs/quick-start.md) | From clone to first local chat in a few minutes. |
+| [Source Install](docs/source-install.md) | Safe macOS install, update, diagnostics and troubleshooting. |
 | [Setup Guide](docs/setup.md) | Prerequisites, building, packaging, data locations, troubleshooting. |
 | [Architecture](docs/architecture.md) | How the app works: processes, the isolated inference worker, IPC, data flow. |
 | [Models & devices](docs/models-and-devices.md) | The full model catalogue and what hardware each model needs. |
@@ -135,7 +138,6 @@ troubleshooting in the [Setup Guide](docs/setup.md).
 | [API server](docs/api-server.md) | Serve your model as a localhost OpenAI-compatible endpoint for other apps. |
 | [Repair](docs/repair.md) | Storage & health for AI workloads — diagnose and reveal, never touch system files. |
 | [Contributing](CONTRIBUTING.md) | Dev setup, how the catalogue works, proposing a model. |
-| [Roadmap](ROADMAP.md) | What's next. |
 | [Security](SECURITY.md) · [Threat model](THREAT_MODEL.md) | The local-first posture and the agent attack surface. |
 
 ## The model catalogue

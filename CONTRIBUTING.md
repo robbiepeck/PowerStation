@@ -14,7 +14,7 @@ npm install
 npm run desktop:dev
 ```
 
-Requirements: macOS on Apple Silicon, Windows 10/11 x64, or Linux x64 (16 GB+), Node.js 20+; on
+Requirements: macOS on Apple Silicon, Windows 10/11 x64, or Linux x64 (16 GB+), Node.js 22+; on
 macOS the Xcode Command Line Tools. CI runs lint, tests and builds on all supported platforms for
 every PR.
 
