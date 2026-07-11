@@ -64,7 +64,7 @@ try {
     const output = await successfulRun.locator('pre').textContent()
     if (!output?.includes('SCHEDULE_OK')) throw new Error('Scheduled inference completed without the expected output.')
   } else {
-    await window.locator('.schedule-run-row').waitFor({ timeout: 10_000 })
+    await window.getByRole('button', { name: 'Running…' }).waitFor({ timeout: 10_000 })
   }
   await window.screenshot({ path: screenshot, fullPage: true })
   console.log(`Schedules smoke test passed. Screenshots: ${screenshot}, ${editorScreenshot}`)
