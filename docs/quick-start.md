@@ -17,7 +17,7 @@ app locally, avoiding the risks and warnings of distributing an unnotarized bina
 ## 2. Get it running
 
 ```bash
-git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac
@@ -72,6 +72,8 @@ headroom, each labelled as measured or estimated.
   Ollama or LM Studio without re-downloading. → [Models & devices](models-and-devices.md)
 - **Check the Repair tab** if disk space is tight — honest storage intelligence for AI files.
   → [Repair](repair.md)
+- **Create a schedule** for a bounded recurring prompt. Scheduled runs remain inference-only and
+  local. → [Schedules](schedules.md)
 
 ## Troubleshooting
 

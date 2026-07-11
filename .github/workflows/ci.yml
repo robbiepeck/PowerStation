@@ -110,6 +110,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Test schedules UI in an isolated profile
+        run: npm run test:schedules-ui
       - name: Test the documented source installer
         env:
           POWERSTATION_INSTALL_SKIP_DEPENDENCIES: '1'

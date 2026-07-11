@@ -213,7 +213,55 @@ export type BackupSummary = {
   skills: number
   projects: number
   agents: number
+  schedules: number
   settingsApplied: boolean
+}
+
+export type MissedRunPolicy = 'skip' | 'run-once'
+export type ScheduleRunStatus = 'running' | 'success' | 'failed' | 'skipped'
+
+export type ScheduledJob = {
+  id: string
+  name: string
+  enabled: boolean
+  cron: string
+  timezone: string
+  modelPath: string
+  prompt: string
+  systemPrompt: string
+  maxTokens: number
+  timeoutSeconds: number
+  missedRunPolicy: MissedRunPolicy
+  allowOnBattery: boolean
+  notify: boolean
+  createdAt: number
+  updatedAt: number
+  nextRunAt: number | null
+  lastRunAt: number | null
+  lastScheduledFor: number | null
+}
+
+export type ScheduleRun = {
+  id: string
+  jobId: string
+  jobName: string
+  scheduledFor: number | null
+  startedAt: number
+  finishedAt: number | null
+  status: ScheduleRunStatus
+  output: string
+  error: string
+  modelName: string
+  tokensPerSec: number | null
+}
+
+export type SchedulerSnapshot = {
+  jobs: ScheduledJob[]
+  runs: ScheduleRun[]
+  runningJobIds: string[]
+  openAtLogin: boolean
+  openAtLoginSupported: boolean
+  backgroundNote: string
 }
 
 export type AgentKnowledge = {
@@ -670,6 +718,15 @@ export type PowerStationBridge = {
     regenerateToken: () => Promise<ApiServerStatus>
     onStatus: (callback: (status: ApiServerStatus) => void) => Unsubscribe
     onRequest: (callback: (entry: ApiRequestLog) => void) => Unsubscribe
+  }
+  schedules: {
+    get: () => Promise<SchedulerSnapshot>
+    save: (payload: Partial<ScheduledJob> & { name: string; modelPath: string; prompt: string }) => Promise<ScheduledJob>
+    delete: (id: string) => Promise<boolean>
+    runNow: (id: string) => Promise<ScheduleRun>
+    setOpenAtLogin: (enabled: boolean) => Promise<SchedulerSnapshot>
+    reveal: () => Promise<boolean>
+    onChanged: (callback: (snapshot: SchedulerSnapshot) => void) => Unsubscribe
   }
   agents: {
     list: () => Promise<CustomAgent[]>

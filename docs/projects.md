@@ -27,9 +27,12 @@ storage as chats — revealable, readable, yours.
 ## Backup & restore
 
 Settings → **Backup & restore** writes a single JSON archive containing settings, tool
-permissions, benchmarks, skills, chats, projects, and agents. Restore on any machine:
+permissions, benchmarks, skills, chats, projects, agents, and scheduled-job definitions. Restore
+on any machine:
 
 - **Settings and permissions are replaced** by the backup's values.
+- **Scheduled jobs are imported under fresh ids.** Jobs whose pinned model is absent are paused;
+  run history is intentionally not included.
 - **Chats, skills and projects overwrite items with the same id**; everything else you already
   have stays.
 - **Model weights never travel** — they're huge and re-downloadable. Their catalogue entries and

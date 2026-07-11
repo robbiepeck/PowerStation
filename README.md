@@ -72,6 +72,9 @@ those three gaps:
 - **Agents** — reusable assistants with instructions, up to eight knowledge folders, and a
   connector selection; answer with folder-prefixed citations, export/import as a file, and
   optionally preview a turn's plan before it runs. → [Agents](docs/agents.md)
+- **Scheduled jobs** — recurring, timezone-aware prompts against a pinned installed model, with
+  missed-run and battery safeguards, bounded execution, notifications, and a durable local ledger.
+  Unattended runs are inference-only: no tools, shell, or connectors. → [Schedules](docs/schedules.md)
 - **Honest model choice** — measured on-device benchmarks (read *and* write speed), side-by-side
   **model compare**, recommendations that explain *why this over that*, and one-click import of
   models you already have in **Ollama or LM Studio** (no re-download).
@@ -82,7 +85,7 @@ those three gaps:
   `127.0.0.1` so other apps and scripts can call it with the OpenAI SDK; off by default,
   token-gated. → [API server](docs/api-server.md)
 - **Backup & restore** — one readable JSON archive of settings, permissions, skills, chats,
-  projects, and agents.
+  projects, agents, and scheduled-job definitions.
 - **Truthful telemetry** — live CPU/RAM/VRAM/pressure/battery, every figure labelled measured or
   estimated, plus a per-chat energy estimate. → [Memory & monitoring](docs/memory-and-monitoring.md)
 
@@ -107,7 +110,7 @@ on your own Mac—no paid Apple Developer account and no downloaded, unnotarized
 ## Quick Start (macOS)
 
 ```bash
-git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac
@@ -135,6 +138,7 @@ unsigned artifacts are not public releases.
 | [Agent harness](docs/agent-harness.md) | MCP tools, permissions, capability gating, loop guards. |
 | [Projects & backup](docs/projects.md) | Workspaces that bundle instructions, knowledge, skills, connectors; one-file backup. |
 | [Agents](docs/agents.md) | Reusable assistants: instructions + multiple knowledge folders, started with one click. |
+| [Schedules](docs/schedules.md) | Safe recurring local-model jobs, cron syntax, lifecycle and run history. |
 | [API server](docs/api-server.md) | Serve your model as a localhost OpenAI-compatible endpoint for other apps. |
 | [Repair](docs/repair.md) | Storage & health for AI workloads — diagnose and reveal, never touch system files. |
 | [Contributing](CONTRIBUTING.md) | Dev setup, how the catalogue works, proposing a model. |

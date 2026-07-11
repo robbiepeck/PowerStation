@@ -2,6 +2,30 @@
 
 The "See what's new" card in the app links here.
 
+## v0.19.0 — Quiet automation
+
+- **Scheduled local-model jobs** — the new Schedules workspace runs validated five-field cron
+  expressions in explicit timezones against a pinned installed model. Jobs have friendly presets,
+  Run now, pause/edit/delete controls, token and time bounds, missed-run policy, battery gating,
+  status-only notifications, start-at-login support, and a durable local run ledger.
+- **Unattended means less authority** — scheduled runs are isolated raw inference. They never
+  receive MCP tools, built-in tools, skills, project context, retrieval, API credentials, or shell
+  access. They use the existing model-fit and memory-pressure gates, serialize with chat/API work,
+  skip overlaps, suppress duplicate daylight-saving minutes, and terminate a stuck worker after a
+  bounded grace period.
+- **Portable definitions** — backups include scheduled-job definitions but omit result history;
+  jobs whose pinned model is missing restore paused. A single-instance app lock prevents login and
+  manual launches from creating competing schedulers.
+
+## v0.18.1 — Source installation
+
+- **Frictionless local macOS build** — stable source releases now include doctor, atomic install,
+  update, and privacy-safe diagnostic commands. The locally built app is ad-hoc signed and verified
+  before replacing an existing installation; chats, settings, and models are preserved.
+- **Source-only public releases** — CI tests unsigned packages on each target operating system but
+  publishes no consumer binaries without platform signing. The in-app updater directs macOS users
+  to the source update guide.
+
 ## v0.18.0 — Local API server
 
 - **OpenAI-compatible API server** — Settings → *Local API server* turns your running model into an

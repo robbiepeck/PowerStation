@@ -66,6 +66,15 @@ contextBridge.exposeInMainWorld('powerStation', {
     onStatus: (callback) => subscribe('api:status', callback),
     onRequest: (callback) => subscribe('api:request', callback),
   },
+  schedules: {
+    get: () => ipcRenderer.invoke('schedules:get'),
+    save: (payload) => ipcRenderer.invoke('schedules:save', payload),
+    delete: (id) => ipcRenderer.invoke('schedules:delete', id),
+    runNow: (id) => ipcRenderer.invoke('schedules:runNow', id),
+    setOpenAtLogin: (enabled) => ipcRenderer.invoke('schedules:setOpenAtLogin', enabled),
+    reveal: () => ipcRenderer.invoke('schedules:reveal'),
+    onChanged: (callback) => subscribe('schedules:changed', callback),
+  },
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
     get: (id) => ipcRenderer.invoke('agents:get', id),

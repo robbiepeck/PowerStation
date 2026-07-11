@@ -1883,9 +1883,9 @@ export function SettingsView({
         <section className="settings-section">
           <h3>Backup & restore</h3>
           <p className="policy-note subtle">
-            One JSON file with your settings, tool permissions, benchmarks, skills, chats, and projects — readable,
-            local, yours. Model weights don't travel (they're huge and re-downloadable); their entries reappear once
-            the files exist on the target machine.
+            One JSON file with your settings, tool permissions, benchmarks, skills, chats, projects, agents, and
+            scheduled-job definitions — readable, local, yours. Run history and model weights don't travel;
+            schedules whose pinned model is missing restore paused.
           </p>
           <div className="settings-actions">
             <button className="secondary-button compact" type="button" onClick={onExportBackup}>
@@ -1896,8 +1896,8 @@ export function SettingsView({
             </button>
           </div>
           <p className="policy-note subtle">
-            Restoring replaces settings and permissions with the backup's; chats, skills and projects from the backup
-            overwrite items with the same id and everything else stays.
+            Restoring replaces settings and permissions with the backup's; chats, skills and projects overwrite items
+            with the same id, while schedules import as new jobs.
           </p>
         </section>
 

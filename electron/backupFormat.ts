@@ -15,6 +15,7 @@ export type BackupArchive = {
   projects: unknown[]
 
   agents: unknown[]
+  schedules: unknown[]
 }
 
 const MAX_INPUT_CHARS = 300 * 1024 * 1024
@@ -30,6 +31,7 @@ export function buildBackupJson(parts: {
   chats: unknown[]
   projects: unknown[]
   agents?: unknown[]
+  schedules?: unknown[]
 }): string {
   const archive: BackupArchive = {
     format: BACKUP_FORMAT,
@@ -41,6 +43,7 @@ export function buildBackupJson(parts: {
     chats: parts.chats.slice(0, MAX_CHATS),
     projects: parts.projects.slice(0, MAX_PROJECTS),
     agents: (parts.agents ?? []).slice(0, MAX_PROJECTS),
+    schedules: (parts.schedules ?? []).slice(0, MAX_PROJECTS),
   }
   return JSON.stringify(archive, null, 1)
 }
@@ -79,5 +82,6 @@ export function parseBackupJson(text: string): BackupArchive {
     chats: (Array.isArray(record.chats) ? record.chats : []).slice(0, MAX_CHATS),
     projects: (Array.isArray(record.projects) ? record.projects : []).slice(0, MAX_PROJECTS),
     agents: (Array.isArray(record.agents) ? record.agents : []).slice(0, MAX_PROJECTS),
+    schedules: (Array.isArray(record.schedules) ? record.schedules : []).slice(0, MAX_PROJECTS),
   }
 }

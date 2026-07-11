@@ -48,6 +48,14 @@ const models = await countFiles(path.join(dataDir, 'models'), '.gguf')
 const chats = await countFiles(path.join(dataDir, 'chats'), '.json')
 const projects = await countFiles(path.join(dataDir, 'projects'), '.json')
 const agents = await countFiles(path.join(dataDir, 'agents'), '.json')
+const scheduleSummary = await fs
+  .readFile(path.join(dataDir, 'scheduled-jobs.json'), 'utf8')
+  .then((text) => JSON.parse(text))
+  .then((value) => ({
+    jobs: Array.isArray(value?.jobs) ? value.jobs.length : 0,
+    runs: Array.isArray(value?.runs) ? value.runs.length : 0,
+  }))
+  .catch(() => ({ jobs: 0, runs: 0 }))
 const disk = await fs.statfs(os.homedir()).catch(() => null)
 const systemApp = '/Applications/PowerStation.app'
 const userApp = path.join(os.homedir(), 'Applications', 'PowerStation.app')
@@ -74,5 +82,6 @@ Models: ${models.count} (${formatGb(models.bytes)})
 Chats: ${chats.count}
 Projects: ${projects.count}
 Agents: ${agents.count}
+Schedules: ${scheduleSummary.jobs} (${scheduleSummary.runs} retained runs)
 
-Privacy note: this report excludes usernames, paths, model names, chat titles, prompts, document contents and secrets.`)
+Privacy note: this report excludes usernames, paths, model names, chat titles, prompts, scheduled results, document contents and secrets.`)

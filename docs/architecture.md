@@ -74,6 +74,7 @@ flowchart LR
 | `electron/repair.ts` + `repairUtil.ts` | Storage scans (read-only), reclaimables, the containment guard, integrity checks. |
 | `electron/backup.ts` + `backupFormat.ts` | One-file backup archive; restore through the same sanitizers as config reads. |
 | `electron/apiServer.ts` + `apiFormat.ts` | Localhost OpenAI-compatible HTTP server (off by default, token-gated); pure request/response mapping. |
+| `electron/scheduledJobs.ts` + `scheduleFormat.ts` | Durable cron scheduler, timezone validation, resource gates, bounded inference, notifications, and run ledger. |
 | `electron/admitModel.ts` | Shared fit check reused by in-app chat and the API server. |
 | `electron/ollama.ts` / `electron/lmstudio.ts` | Detect models already on disk in other apps; register in place. |
 | `electron/models.ts` | Indexes local GGUFs; reads header geometry; sums split parts. |
@@ -83,6 +84,7 @@ flowchart LR
 | `src/App.tsx` | App shell, hooks, chat state, modals (permission, audit, compare, project), recovery cards. |
 | `src/onboarding.tsx` | First-run scan-and-reveal flow. |
 | `src/views.tsx` | Models, Monitor, Utilities, Agents, Settings, Repair. |
+| `src/schedules.tsx` | Scheduled-job register, editor, background readiness, and run ledger. |
 
 ## What happens when you send a message
 
@@ -110,6 +112,18 @@ flowchart LR
 If the worker crashes at any point, the host rejects in-flight calls, surfaces a **recovery card**
 to the UI, and applies an escalating cooldown before it will re-spawn — so a model that crashes on
 load can't be re-forked in a tight loop.
+
+## What happens when a scheduled job runs
+
+1. The main-process scheduler advances the job's durable next-run timestamp before execution, so a
+   crash or wake event cannot duplicate it. Timezone and daylight-saving matching happen in the
+   validated five-field cron layer.
+2. Battery state, memory pressure, model presence, overlap, and model fit are checked. A failed gate
+   creates a visible `skipped` ledger record.
+3. The scheduler calls the same serialized `llm.chat` worker with `isolated: true`, bounded context,
+   tokens, and time—but no tool definitions, history, skills, retrieval, or connectors.
+4. The bounded result or error is written atomically to the private schedule store. Notifications
+   contain status only; the result remains inside the ledger.
 
 ## Design decisions worth knowing
 

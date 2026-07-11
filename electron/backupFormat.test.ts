@@ -7,6 +7,7 @@ const PARTS = {
   skills: [{ slug: 'sql-helper', content: '---\nname: SQL helper\n---\nbody' }],
   chats: [{ id: 'chat-1-2', messages: [] }],
   projects: [{ id: 'proj-1-2', name: 'Docs' }],
+  schedules: [{ id: 'schedule-12345678', name: 'Morning brief' }],
 }
 
 describe('backup format', () => {
@@ -18,6 +19,7 @@ describe('backup format', () => {
     expect(archive.skills).toEqual(PARTS.skills)
     expect(archive.chats).toHaveLength(1)
     expect(archive.projects).toHaveLength(1)
+    expect(archive.schedules).toHaveLength(1)
     expect(archive.state).toEqual(PARTS.state)
   })
 

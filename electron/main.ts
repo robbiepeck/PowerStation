@@ -9,9 +9,14 @@ import { shutdown as shutdownLlm, getActiveRequestIds, stopChat } from './llm.js
 import { disconnectAll as disconnectMcp } from './mcp.js'
 import { stopApiServer } from './apiServer.js'
 import { registerUpdateIpc, scheduleInitialUpdateCheck } from './updates.js'
+import { startScheduler, stopScheduler } from './scheduledJobs.js'
 import { isTrustedExternalUrl, isTrustedRendererNavigation, trustedLoopbackDevUrl } from './security.js'
 
 if (process.platform === 'darwin') fixPath()
+if (!app.isPackaged && process.env.POWERSTATION_TEST_USER_DATA) {
+  app.setPath('userData', path.resolve(process.env.POWERSTATION_TEST_USER_DATA))
+}
+if (!app.requestSingleInstanceLock()) app.exit(0)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const devServerUrl = trustedLoopbackDevUrl(process.env.VITE_DEV_SERVER_URL)?.toString() ?? null
@@ -102,12 +107,22 @@ function createMainWindow() {
   }
 }
 
+app.on('second-instance', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) createMainWindow()
+  else {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  }
+})
+
 app.setAppUserModelId('com.powerstation.desktop')
 
 void app.whenReady().then(async () => {
   await loadState()
   registerIpc(() => mainWindow)
   registerUpdateIpc(() => mainWindow)
+  await startScheduler()
   createMainWindow()
 
   app.on('activate', () => {
@@ -125,6 +140,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   stopTelemetry()
+  stopScheduler()
   shutdownLlm()
   void disconnectMcp()
   void stopApiServer()

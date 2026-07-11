@@ -14,11 +14,11 @@ Gatekeeper for a binary downloaded from someone else.
 
 ## Install a stable release
 
-Open Terminal and replace `v0.18.1` with the newest stable tag shown on
+Open Terminal and replace `v0.19.0` with the newest stable tag shown on
 [GitHub Releases](https://github.com/robbiepeck/PowerStation/releases/latest):
 
 ```bash
-git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac
@@ -55,7 +55,7 @@ npm run diagnostics
 
 The diagnostics report includes software versions, hardware capacity, install presence and data
 counts/sizes. It deliberately omits usernames, paths, chat contents, document contents, model
-names, configuration values and secrets. Paste that output into a GitHub issue along with the
+names, schedule prompts/results, configuration values and secrets. Paste that output into a GitHub issue along with the
 exact command that failed.
 
 ## Why no downloadable `.dmg`?

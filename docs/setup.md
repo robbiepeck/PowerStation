@@ -35,7 +35,7 @@ running app, see the [Quick Start](quick-start.md).
 ## Install on macOS
 
 ```bash
-git clone --depth 1 --branch v0.18.1 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac
@@ -141,6 +141,7 @@ Everything PowerStation writes stays on your machine, under the app's user-data 
 - **`projects/`** — one JSON file per workspace (instructions, knowledge folder, skill modes,
   connector selection, preferred model).
 - **`repair-log.json`** — everything the Repair tab or repair skill has ever removed.
+- **`scheduled-jobs.json`** — validated job definitions and the bounded local run ledger.
 - **Backups** — single JSON archives written wherever you choose from Settings → Backup & restore.
 
 Network traffic is limited to model downloads and catalogue updates from `huggingface.co` / this

@@ -13,6 +13,7 @@ import * as backup from './backup.js'
 import * as repair from './repair.js'
 import * as customAgents from './customAgents.js'
 import * as apiServer from './apiServer.js'
+import * as scheduledJobs from './scheduledJobs.js'
 import { REPAIR_SKILL_SLUG } from './builtinTools.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
@@ -272,6 +273,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   agent.setToolResultReporter((event) => send('chat:toolResult', event))
   apiServer.setApiLogListener((entry) => send('api:request', entry))
   apiServer.setApiStatusListener(() => void apiServer.getApiStatus().then((s) => send('api:status', s)))
+  scheduledJobs.setChangeListener((snapshot) => send('schedules:changed', snapshot))
 
   void apiServer.syncApiServer()
   mcp.onMcpStatusChange((statuses) => send('mcp:status', statuses))
@@ -481,6 +483,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   })
   handle('api:regenerateToken', () => apiServer.regenerateApiToken())
 
+  handle('schedules:get', () => scheduledJobs.getSnapshot())
+  handle('schedules:save', (_event, payload: unknown) => scheduledJobs.saveJob(payload))
+  handle('schedules:delete', (_event, id: string) => scheduledJobs.deleteJob(id))
+  handle('schedules:runNow', (_event, id: string) => scheduledJobs.runJobNow(id))
+  handle('schedules:setOpenAtLogin', (_event, enabled: boolean) => scheduledJobs.setOpenAtLogin(enabled))
+  handle('schedules:reveal', () => scheduledJobs.revealScheduleData())
+
   handle('agents:list', () => customAgents.listAgents())
   handle('agents:get', (_event, id: string) => customAgents.getAgent(id))
   handle('agents:save', async (_event, payload: unknown) => {
@@ -596,7 +605,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         cancelId: 1,
         message: 'Restore from this backup?',
         detail:
-          'Settings and permissions will be replaced by the backup. Chats, skills and projects from the backup overwrite items with the same id; everything else you have stays. Model files do not travel in backups — models missing on this machine simply will not appear until re-downloaded.',
+          'Settings and permissions will be replaced by the backup. Chats, skills and projects overwrite matching items; scheduled jobs are imported as new jobs. Model files do not travel — schedules whose models are missing are restored paused.',
       })
       if (confirm.response !== 0) return null
     const filePath = picked.filePaths[0]

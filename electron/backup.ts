@@ -7,12 +7,14 @@ import * as chats from './chats.js'
 import * as projects from './projects.js'
 import * as customAgents from './customAgents.js'
 import { skillsDir } from './skills.js'
+import * as scheduledJobs from './scheduledJobs.js'
 
 export type BackupSummary = {
   chats: number
   skills: number
   projects: number
   agents: number
+  schedules: number
   settingsApplied: boolean
 }
 
@@ -46,6 +48,7 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
   const skills = await collectSkillFiles()
   const projectList = await projects.listProjects()
   const agentList = await customAgents.listAgents()
+  const scheduleList = await scheduledJobs.exportJobDefinitions()
 
   const portableState: Partial<PersistedState> = { ...state }
   delete portableState.lastSeenVersion
@@ -56,6 +59,7 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
     chats: fullChats,
     projects: projectList,
     agents: agentList,
+    schedules: scheduleList,
   })
   await fs.writeFile(filePath, json, { encoding: 'utf8', mode: 0o600 })
   return {
@@ -63,6 +67,7 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
     skills: skills.length,
     projects: projectList.length,
     agents: agentList.length,
+    schedules: scheduleList.length,
     settingsApplied: true,
   }
 }
@@ -94,7 +99,16 @@ export async function restoreBackup(filePath: string): Promise<BackupSummary> {
     if (await customAgents.importAgent(agent)) agentCount += 1
   }
 
+  const scheduleCount = await scheduledJobs.importJobDefinitions(archive.schedules)
+
   await applyRestoredState(archive.state as Partial<PersistedState>)
 
-  return { chats: chatCount, skills: skillCount, projects: projectCount, agents: agentCount, settingsApplied: true }
+  return {
+    chats: chatCount,
+    skills: skillCount,
+    projects: projectCount,
+    agents: agentCount,
+    schedules: scheduleCount,
+    settingsApplied: true,
+  }
 }

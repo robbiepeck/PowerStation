@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   Bot,
+  CalendarClock,
   BrainCircuit,
   FolderKanban,
   FolderSearch,
@@ -35,6 +36,7 @@ import { getDesktop } from './desktop'
 import { Markdown } from './markdown'
 import { artifactSrcDoc, extractArtifacts, type Artifact } from './artifacts'
 import { AgentsView, ModelsView, MonitorView, RepairView, SettingsView, UtilitiesView } from './views'
+import { SchedulesView } from './schedules'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
 import { CopyButton, formatBytes, formatNumber } from './ui'
@@ -77,7 +79,7 @@ import type {
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'settings' | 'repair'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'schedules' | 'settings' | 'repair'
 
 const bridge = getDesktop()
 const hostNoun = bridge.platform === 'darwin' ? 'Mac' : 'PC'
@@ -88,6 +90,7 @@ const navItems: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: 'models', label: 'Models', icon: BrainCircuit },
   { id: 'utilities', label: 'Utilities', icon: Wrench },
   { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'schedules', label: 'Schedules', icon: CalendarClock },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
   { id: 'repair', label: 'Repair', icon: LifeBuoy },
 ]
@@ -953,7 +956,7 @@ function App() {
       const result = await bridge.backup.export()
       if (result) {
         window.alert(
-          `Backed up ${result.chats} chats, ${result.skills} skills, and ${result.projects} projects to:\n${result.filePath}`,
+          `Backed up ${result.chats} chats, ${result.skills} skills, ${result.projects} projects, ${result.agents} agents, and ${result.schedules} schedules to:\n${result.filePath}`,
         )
       }
     } catch (error) {
@@ -966,7 +969,7 @@ function App() {
       const summary = await bridge.backup.restore()
       if (summary) {
         window.alert(
-          `Restored ${summary.chats} chats, ${summary.skills} skills, and ${summary.projects} projects. PowerStation will reload to apply everything.`,
+          `Restored ${summary.chats} chats, ${summary.skills} skills, ${summary.projects} projects, ${summary.agents} agents, and ${summary.schedules} schedules. PowerStation will reload to apply everything.`,
         )
         window.location.reload()
       }
@@ -1498,6 +1501,11 @@ function App() {
             onImport={() => void handleImportAgent()}
             onStartChat={handleStartAgentChat}
           />
+        )}
+        {visibleView === 'schedules' && (
+          <div className="scroll-view">
+            <SchedulesView models={models} selectedPath={selectedPath} />
+          </div>
         )}
         {visibleView === 'models' && (
           <div className="scroll-view">

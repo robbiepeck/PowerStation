@@ -47,6 +47,16 @@ mitigations:
 The full analysis — assets, trust boundaries, threats and residual risk — is in the
 [Threat model](THREAT_MODEL.md).
 
+## Scheduled jobs
+
+Scheduled jobs execute without a person present, so their authority is intentionally narrower than
+chat. They receive only the saved prompt and optional system instructions; no MCP tools, built-in
+tools, skills, retrieval context, API credentials, or shell are attached. Jobs cannot change their
+own schedule or permissions. Model presence, fit, overlap, battery state, memory pressure, response
+size, and runtime are bounded before or during every run. Notifications never contain generated
+text. Definitions and results remain in the private local schedule store and are visible in the run
+ledger.
+
 ## Your responsibilities
 
 - **MCP servers run with your permissions.** Only add servers you trust, and only grant "always allow"

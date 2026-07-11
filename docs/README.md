@@ -24,6 +24,7 @@ run on your machine.
   connectors; one-file backup & restore.
 - **[Agents](agents.md)** — reusable assistants: instructions + multiple knowledge folders,
   started with one click.
+- **[Schedules](schedules.md)** — recurring inference-only jobs with cron timing and a local ledger.
 - **[API server](api-server.md)** — serve your model as a localhost OpenAI-compatible endpoint
   for other apps and scripts.
 - **[Repair](repair.md)** — storage & health for AI workloads, as a tab and as an agent skill;
