@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import path from 'node:path'
 import {
   compareVersions,
   isStableReleaseTag,
@@ -32,7 +33,7 @@ describe('source install helpers', () => {
         systemDirectoryWritable: true,
         userAppExists: true,
       }),
-    ).toBe('/tmp/apps')
+    ).toBe(path.resolve('/tmp/apps'))
   })
 
   it('updates a writable existing system installation, otherwise uses the user Applications folder', () => {
@@ -51,6 +52,6 @@ describe('source install helpers', () => {
         systemDirectoryWritable: false,
         userAppExists: false,
       }),
-    ).toBe('/Users/test/Applications')
+    ).toBe(path.join('/Users/test', 'Applications'))
   })
 })
