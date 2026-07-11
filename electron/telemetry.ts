@@ -3,6 +3,7 @@ import { app } from 'electron'
 import si from 'systeminformation'
 import { getDeviceInfo, getLastTokensPerSec, getLoadedPath, isWorkerRunning } from './llm.js'
 import { getMemoryPressureLevel, type MemoryPressureLevel } from './hardware.js'
+import { shouldUseSystemInformationMemory } from './telemetryPlatform.js'
 
 export type TelemetrySnapshot = {
   timestamp: number
@@ -74,9 +75,12 @@ async function loadStaticInfo(): Promise<NonNullable<typeof staticInfo>> {
 
 async function sample(): Promise<TelemetrySnapshot> {
   const info = await loadStaticInfo()
+  const memorySample = shouldUseSystemInformationMemory(process.platform)
+    ? si.mem().catch(() => null)
+    : Promise.resolve(null)
   const [load, mem, temp, device, storage, pressureLevel, battery] = await Promise.all([
     si.currentLoad().catch(() => null),
-    si.mem().catch(() => null),
+    memorySample,
     si.cpuTemperature().catch(() => null),
     deviceInfoIfRunning(),
     getPrimaryStorage().catch(() => null),

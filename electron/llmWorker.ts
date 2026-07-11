@@ -8,6 +8,7 @@ import type {
   WorkerMessage,
   WorkerRequest,
 } from './llmProtocol.js'
+import { generationTokensPerSecond } from './generationMetrics.js'
 
 type LlamaInstance = Awaited<ReturnType<typeof getLlama>>
 type LoadedModel = Awaited<ReturnType<LlamaInstance['loadModel']>>
@@ -269,6 +270,8 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
     const functions = buildSessionFunctions(request, guard)
     const start = Date.now()
     let charCount = 0
+    let outputTokens = 0
+    let firstTokenAt: number | null = null
     const generation = active.session.prompt(request.prompt, {
       temperature: request.temperature,
       maxTokens: request.maxTokens > 0 ? request.maxTokens : undefined,
@@ -280,6 +283,11 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
 
         post({ event: 'chat:token', requestId: request.requestId, token: chunk })
       },
+      onResponseChunk: (chunk: { tokens?: unknown[] }) => {
+        const tokenCount = chunk.tokens?.length ?? 0
+        if (tokenCount > 0 && firstTokenAt === null) firstTokenAt = Date.now()
+        outputTokens += tokenCount
+      },
     } as Parameters<LlamaChatSession['prompt']>[1])
     activeGenerations.add(generation)
     let text: string
@@ -288,13 +296,20 @@ async function chat(request: ChatRequest): Promise<ChatResult> {
     } finally {
       activeGenerations.delete(generation)
     }
-    const elapsedSec = (Date.now() - start) / 1000
+    const finishedAt = Date.now()
+    const elapsedSec = (finishedAt - start) / 1000
     const approxTokens = Math.max(1, Math.round(charCount / 4))
-    if (!request.isolated) lastTokensPerSec = elapsedSec > 0 ? approxTokens / elapsedSec : 0
+    const tokensPerSec = generationTokensPerSecond({
+      outputTokens: outputTokens || approxTokens,
+      startedAt: start,
+      firstTokenAt,
+      finishedAt,
+    })
+    if (!request.isolated) lastTokensPerSec = tokensPerSec
     publishState()
     return {
       text,
-      tokensPerSec: elapsedSec > 0 ? approxTokens / elapsedSec : 0,
+      tokensPerSec,
       elapsedMs: Math.round(elapsedSec * 1000),
       aborted: controller.signal.aborted && guard.haltReason === null,
       toolCallCount: guard.callCount,

@@ -78,9 +78,9 @@ headroom, each labelled as measured or estimated.
 
 - **"Won't fit" on every big model** — expected; your memory tier can't hold them. Stick to the
   models marked *fits comfortably*. See [Models & devices](models-and-devices.md).
-- **A dev server is already on port 5173** — another project may be holding it, which can show the
-  wrong app. Stop that server, or run the app pointed at a free port (see the [Setup Guide](setup.md)).
-- **Gatekeeper warning on a packaged build** — the macOS build isn't notarized yet; see the
+- **A preferred dev port is occupied** — `desktop:dev` automatically selects another loopback port.
+  For a fixed custom port, see the [Setup Guide](setup.md).
+- **Gatekeeper warning on a local contributor build** — local packages are ad-hoc signed; see the
   [Setup Guide](setup.md).
 
 Next: [Setup Guide](setup.md) · [Architecture](architecture.md)

@@ -44,6 +44,7 @@ import {
 import { isAllowedModelUri, isPathInside, isTrustedExternalUrl } from './security.js'
 import { showSecurityPrompt } from './confirm.js'
 import { quoteCommandArg } from './mcpCommand.js'
+import { requiredModelDownloadSpace } from './downloadCapacity.js'
 
 function resolveToolTier(info: { templateSupportsTools: boolean | null } | null, entry: CatalogModel | null) {
   if (entry) return entry.toolCalling
@@ -54,6 +55,26 @@ async function findCatalogEntryForModel(modelPath: string): Promise<CatalogModel
   const fileName = path.basename(modelPath).toLowerCase()
   const catalog = await getCatalog()
   return catalog.models.find((entry) => entry.fileName.toLowerCase() === fileName) ?? null
+}
+
+async function assertModelDownloadCapacity(uri: string, destination: string): Promise<void> {
+  const catalog = await getCatalog()
+  const entry = catalog.models.find((model) => model.downloadUrl === uri)
+  if (!entry) return
+
+  await fs.mkdir(destination, { recursive: true, mode: 0o700 })
+  const existingSize = await fs
+    .stat(path.join(destination, entry.fileName))
+    .then((stat) => (stat.isFile() ? stat.size : 0))
+    .catch(() => 0)
+  const filesystem = await fs.statfs(destination)
+  const availableBytes = filesystem.bavail * filesystem.bsize
+  const requiredBytes = requiredModelDownloadSpace(entry.sizeBytes, existingSize)
+  if (availableBytes < requiredBytes) {
+    const requiredGb = (requiredBytes / 1e9).toFixed(1)
+    const availableGb = (availableBytes / 1e9).toFixed(1)
+    throw new Error(`Not enough free disk space. This download needs ${requiredGb} GB including safety headroom; ${availableGb} GB is available.`)
+  }
 }
 
 async function getGpuBudgetBytes(): Promise<number> {
@@ -322,9 +343,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       throw new Error('Only Hugging Face GGUF downloads (hf: or huggingface.co) are allowed.')
     }
     if (downloadActive) throw new Error('A model download is already running.')
+    const normalizedUri = uri.trim()
+    const destination = managedModelsDir()
+    await assertModelDownloadCapacity(normalizedUri, destination)
     const confirmation = await showSecurityPrompt(getWindow(), {
       message: 'Download this model?',
-      detail: `${uri.trim()}\n\nDownloaded model files are parsed by the local native runtime. Only download models you trust.`,
+      detail: `${normalizedUri}\n\nDownloaded model files are parsed by the local native runtime. Only download models you trust.`,
       buttons: ['Cancel', 'Download'],
       cancelId: 0,
     })
@@ -336,9 +360,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         if (!isAllowedModelUri(uri)) {
           throw new Error('Only Hugging Face (hf:) or HTTPS GGUF URLs can be downloaded.')
         }
-        const destination = managedModelsDir()
         const filePath = await llm.downloadModel({
-          uri: uri.trim(),
+          uri: normalizedUri,
           dirPath: destination,
           onProgress: ({ totalSize, downloadedSize }) => {
             if (totalSize > MAX_MODEL_DOWNLOAD_BYTES || downloadedSize > MAX_MODEL_DOWNLOAD_BYTES) {

@@ -3,22 +3,23 @@
   "productName": "PowerStation",
   "desktopName": "powerstation.desktop",
   "private": true,
-  "version": "0.18.0",
+  "version": "0.18.1",
   "description": "Local AI for your computer: guided model choice, an agent harness built for small models, and honest resource monitoring.",
   "author": "Robbie Peck",
   "license": "MIT",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
-    "desktop:dev": "concurrently -k \"vite --host 127.0.0.1 --port 5173\" \"wait-on http://127.0.0.1:5173 && npm run build:electron && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
+    "desktop:dev": "node scripts/desktop-dev.mjs",
     "build": "npm run build:renderer && npm run build:electron",
     "build:renderer": "tsc -b && vite build",
     "build:electron": "tsc -p tsconfig.electron.json && node scripts/copy-electron-preload.mjs",
     "audit": "npm audit --audit-level=high",
     "lint": "eslint .",
     "test": "vitest run",
-    "package:mac": "npm run build && electron-builder --mac --universal",
-    "package:mac:dir": "npm run build && electron-builder --mac --universal --dir",
+    "package:mac": "npm run build && electron-builder --mac --universal -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
+    "package:mac:dir": "npm run build && electron-builder --mac --universal --dir -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
+    "package:mac:signed": "npm run build && electron-builder --mac --universal -c.forceCodeSigning=true",
     "package:win": "npm run build && electron-builder --win --x64",
     "package:win:signed": "npm run build && electron-builder --win --x64 -c.forceCodeSigning=true",
     "package:win:dir": "npm run build && electron-builder --win --x64 --dir",
@@ -34,7 +35,7 @@
     "pdfjs-dist": "^6.1.200",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "systeminformation": "^5.31.7"
+    "systeminformation": "^5.31.16"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -85,8 +86,10 @@
     "mac": {
       "icon": "build/icon.icns",
       "category": "public.app-category.developer-tools",
-      "identity": "-",
-      "hardenedRuntime": false,
+      "hardenedRuntime": true,
+      "notarize": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "target": [
         "dmg",
         "zip"
