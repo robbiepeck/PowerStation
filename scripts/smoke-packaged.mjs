@@ -31,14 +31,14 @@ async function closeDesktop() {
   const exited = child?.exitCode !== null
     ? Promise.resolve(true)
     : new Promise((resolve) => child?.once('exit', () => resolve(true)))
-  await desktop.evaluate(({ app }) => app.quit()).catch(() => undefined)
+  await desktop.evaluate(({ app }) => app.exit(0)).catch(() => undefined)
   const closed = await Promise.race([
     exited,
     new Promise((resolve) => setTimeout(() => resolve(false), 10_000)),
   ])
   if (closed) return
   child?.kill('SIGKILL')
-  throw new Error('Packaged app did not exit within 10 seconds of an explicit quit request.')
+  throw new Error('Packaged app did not exit within 10 seconds of the smoke-test teardown request.')
 }
 
 let failure = null
