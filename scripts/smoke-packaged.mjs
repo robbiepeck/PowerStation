@@ -26,10 +26,22 @@ const desktop = await electron.launch({
   timeout: 60_000,
 })
 
+async function closeDesktop() {
+  const closed = await Promise.race([
+    desktop.close().then(() => true, () => false),
+    new Promise((resolve) => setTimeout(() => resolve(false), 10_000)),
+  ])
+  if (closed) return
+  desktop.process()?.kill('SIGKILL')
+  throw new Error('Packaged app did not exit within 10 seconds of a graceful close request.')
+}
+
+let completed = false
 try {
   const window = await desktop.firstWindow({ timeout: 60_000 })
   await window.getByRole('button', { name: 'PowerStation home' }).waitFor({ timeout: 30_000 })
   if ((await window.title()) !== 'PowerStation') throw new Error(`Unexpected window title: ${await window.title()}`)
+  console.log('Packaged window and preload bridge are ready.')
 
   const destinations = [
     ['Monitor', 'Live monitor'],
@@ -42,12 +54,14 @@ try {
     await window.getByRole('button', { name: button, exact: true }).click()
     await window.getByRole('heading', { name: heading }).waitFor({ timeout: 30_000 })
   }
+  console.log('Primary packaged navigation is responsive.')
 
   await window.getByRole('button', { name: 'Schedules', exact: true }).click()
   await window.getByText('No scheduled work').waitFor({ timeout: 30_000 })
   await window.getByRole('button', { name: 'New job' }).click()
   await window.getByText('Tools and connectors are never attached.').waitFor()
   await window.getByRole('button', { name: 'Cancel' }).click()
+  console.log('Packaged scheduler IPC is responsive.')
 
   await window.getByRole('button', { name: 'Settings', exact: true }).click()
   const saveChats = window.locator('label.toggle-control').filter({ hasText: 'Save chats on this device' })
@@ -62,13 +76,15 @@ try {
     await window.waitForTimeout(100)
   }
   if (!settingsPersisted) throw new Error('Packaged settings IPC did not persist the updated value.')
+  console.log('Packaged settings persistence is working.')
 
   const entries = await fs.readdir(profile)
   for (const required of ['powerstation-config.json']) {
     if (!entries.includes(required)) throw new Error(`Packaged app did not create ${required} in its isolated profile.`)
   }
-  console.log(`Packaged PowerStation smoke test passed on ${process.platform}/${process.arch}.`)
+  completed = true
 } finally {
-  await desktop.close().catch(() => undefined)
+  await closeDesktop()
   await fs.rm(profile, { recursive: true, force: true })
 }
+if (completed) console.log(`Packaged PowerStation smoke test passed on ${process.platform}/${process.arch}.`)
