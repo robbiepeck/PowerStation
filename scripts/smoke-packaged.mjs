@@ -27,16 +27,21 @@ const desktop = await electron.launch({
 })
 
 async function closeDesktop() {
+  const child = desktop.process()
+  const exited = child?.exitCode !== null
+    ? Promise.resolve(true)
+    : new Promise((resolve) => child?.once('exit', () => resolve(true)))
+  await desktop.evaluate(({ app }) => app.quit()).catch(() => undefined)
   const closed = await Promise.race([
-    desktop.close().then(() => true, () => false),
+    exited,
     new Promise((resolve) => setTimeout(() => resolve(false), 10_000)),
   ])
   if (closed) return
-  desktop.process()?.kill('SIGKILL')
-  throw new Error('Packaged app did not exit within 10 seconds of a graceful close request.')
+  child?.kill('SIGKILL')
+  throw new Error('Packaged app did not exit within 10 seconds of an explicit quit request.')
 }
 
-let completed = false
+let failure = null
 try {
   const window = await desktop.firstWindow({ timeout: 60_000 })
   await window.getByRole('button', { name: 'PowerStation home' }).waitFor({ timeout: 30_000 })
@@ -56,12 +61,19 @@ try {
   }
   console.log('Primary packaged navigation is responsive.')
 
+  const scheduleSnapshot = await window.evaluate(() => Promise.race([
+    globalThis.powerStation.schedules.get(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Scheduler IPC timed out.')), 60_000)),
+  ]))
+  if (!Array.isArray(scheduleSnapshot.jobs) || !Array.isArray(scheduleSnapshot.runs)) {
+    throw new Error('Packaged scheduler IPC returned an invalid snapshot.')
+  }
+  console.log('Packaged scheduler IPC returned a valid snapshot.')
   await window.getByRole('button', { name: 'Schedules', exact: true }).click()
-  await window.getByText('No scheduled work').waitFor({ timeout: 30_000 })
   await window.getByRole('button', { name: 'New job' }).click()
   await window.getByText('Tools and connectors are never attached.').waitFor()
   await window.getByRole('button', { name: 'Cancel' }).click()
-  console.log('Packaged scheduler IPC is responsive.')
+  console.log('Packaged scheduler editor is responsive.')
 
   await window.getByRole('button', { name: 'Settings', exact: true }).click()
   const saveChats = window.locator('label.toggle-control').filter({ hasText: 'Save chats on this device' })
@@ -82,9 +94,16 @@ try {
   for (const required of ['powerstation-config.json']) {
     if (!entries.includes(required)) throw new Error(`Packaged app did not create ${required} in its isolated profile.`)
   }
-  completed = true
+} catch (error) {
+  failure = error
 } finally {
-  await closeDesktop()
+  try {
+    await closeDesktop()
+  } catch (closeError) {
+    if (!failure) failure = closeError
+    else console.error(`Additional shutdown failure: ${closeError instanceof Error ? closeError.message : String(closeError)}`)
+  }
   await fs.rm(profile, { recursive: true, force: true })
 }
-if (completed) console.log(`Packaged PowerStation smoke test passed on ${process.platform}/${process.arch}.`)
+if (failure) throw failure
+console.log(`Packaged PowerStation smoke test passed on ${process.platform}/${process.arch}.`)

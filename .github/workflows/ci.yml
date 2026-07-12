@@ -102,7 +102,7 @@ jobs:
       - name: Install and launch the Debian package
         timeout-minutes: 5
         run: |
-          deb=$(find release -maxdepth 1 -name '*.deb' -print -quit)
+          deb=$(find "$PWD/release" -maxdepth 1 -name '*.deb' -print -quit)
           test -n "$deb"
           sudo apt-get install -y "$deb"
           xvfb-run -a npm run test:packaged -- /usr/bin/powerstation
