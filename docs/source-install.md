@@ -14,11 +14,11 @@ Gatekeeper for a binary downloaded from someone else.
 
 ## Install a stable release
 
-Open Terminal and replace `v0.19.0` with the newest stable tag shown on
+Open Terminal and replace `v0.19.1` with the newest stable tag shown on
 [GitHub Releases](https://github.com/robbiepeck/PowerStation/releases/latest):
 
 ```bash
-git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac

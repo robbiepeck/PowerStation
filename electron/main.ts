@@ -35,6 +35,7 @@ const appEntryUrl = pathToFileURL(appEntryPath).toString()
 app.enableSandbox()
 
 let mainWindow: BrowserWindow | null = null
+let quitFallbackStarted = false
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -146,6 +147,10 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  if (!quitFallbackStarted) {
+    quitFallbackStarted = true
+    setTimeout(() => app.exit(0), 5_000).unref()
+  }
   stopTelemetry()
   stopScheduler()
   shutdownLlm()

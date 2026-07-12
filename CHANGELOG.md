@@ -2,6 +2,18 @@
 
 The "See what's new" card in the app links here.
 
+## v0.19.1 — Verified platform installs
+
+- **Installed-app launch coverage** — CI now installs and launches the Windows NSIS package, Linux
+  Debian package and AppImage, and the locally built macOS app in clean profiles. Each test checks
+  the packaged preload bridge, primary navigation, scheduler IPC and editor, settings persistence,
+  and explicit application shutdown.
+- **Quit cannot hang indefinitely** — after normal shutdown cleanup begins, PowerStation now has a
+  five-second last-resort exit. This fixes packaged Windows and constrained macOS environments that
+  could remain running after an explicit Quit request.
+- **Stable source instructions on every platform** — Windows and Linux setup commands now pin the
+  same stable release tag as macOS instead of silently cloning the moving development branch.
+
 ## v0.19.0 — Quiet automation
 
 - **Scheduled local-model jobs** — the new Schedules workspace runs validated five-field cron

@@ -17,7 +17,7 @@ app locally, avoiding the risks and warnings of distributing an unnotarized bina
 ## 2. Get it running
 
 ```bash
-git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac

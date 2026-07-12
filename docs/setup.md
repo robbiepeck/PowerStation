@@ -35,7 +35,7 @@ running app, see the [Quick Start](quick-start.md).
 ## Install on macOS
 
 ```bash
-git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac
@@ -43,6 +43,21 @@ npm run install:mac
 
 See the [Source Install guide](source-install.md) for updating, diagnostics, installation
 destinations, data preservation and troubleshooting.
+
+## Run from source on Windows or Linux
+
+Windows PowerShell and Linux shells use the same stable checkout:
+
+```bash
+git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
+cd PowerStation
+npm ci
+npm run desktop:dev
+```
+
+Keep that terminal open while PowerStation is running. Use a fresh checkout of the newest stable
+tag to update. Windows and Linux remain beta; their packaged formats are installed and launched in
+CI, but unsigned packages are not published as consumer downloads.
 
 ## Development checkout
 
@@ -105,9 +120,10 @@ Artifacts land in `release/`.
 **Build on the target platform.** The native llama.cpp binaries are platform-specific, so a working
 Windows build must be produced on Windows, macOS on macOS, and Linux on Linux. That's exactly what
 CI does: the [GitHub Actions workflow](../.github/workflows/ci.yml) lint/tests/builds on all three
-platforms for every push to `main` and tests the documented macOS installer. CI's unsigned packages
-are short-lived verification artifacts, not supported downloads. A `v*` tag creates a source-only
-GitHub Release after every required job passes.
+platforms for every push to `main`, tests the documented macOS installer, and installs and launches
+the Windows NSIS package, Linux Debian package and AppImage, and local macOS app in clean profiles.
+CI's unsigned packages are short-lived verification artifacts, not supported downloads. A `v*` tag
+creates a source-only GitHub Release after every required job passes.
 
 **Signing & releases.** The supported macOS installation is built and ad-hoc signed on the user's
 own Mac. The project does not publish `.dmg`, `.zip`, `.exe`, `.AppImage` or `.deb` files as consumer

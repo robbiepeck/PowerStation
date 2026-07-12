@@ -3,7 +3,7 @@
   "productName": "PowerStation",
   "desktopName": "powerstation.desktop",
   "private": true,
-  "version": "0.19.0",
+  "version": "0.19.1",
   "description": "Local AI for your computer: guided model choice, an agent harness built for small models, and honest resource monitoring.",
   "author": "Robbie Peck",
   "license": "MIT",

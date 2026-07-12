@@ -110,7 +110,7 @@ on your own Mac—no paid Apple Developer account and no downloaded, unnotarized
 ## Quick Start (macOS)
 
 ```bash
-git clone --depth 1 --branch v0.19.0 https://github.com/robbiepeck/PowerStation.git
+git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
 npm run doctor
 npm run install:mac
@@ -121,9 +121,10 @@ downloads your pick straight into a working chat. Full walkthrough in the
 [Quick Start guide](docs/quick-start.md); installation, updates, safe diagnostics and
 troubleshooting in the [Source Install guide](docs/source-install.md).
 
-Windows and Linux are beta and currently require a development source checkout; see the
-[Setup Guide](docs/setup.md). CI packages on all three platforms to catch regressions, but its
-unsigned artifacts are not public releases.
+Windows and Linux are beta and currently run from a stable source checkout; see the exact commands
+in the [Setup Guide](docs/setup.md). CI installs and launches the Windows installer, Linux Debian
+package and AppImage, and locally built macOS app on clean target-platform runners. Those unsigned
+artifacts verify the project but are not public releases.
 
 ## Documentation
 
