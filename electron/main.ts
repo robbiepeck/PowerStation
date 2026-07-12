@@ -35,7 +35,7 @@ const appEntryUrl = pathToFileURL(appEntryPath).toString()
 app.enableSandbox()
 
 let mainWindow: BrowserWindow | null = null
-let quitFallbackStarted = false
+let quitCleanupStarted = false
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
@@ -146,14 +146,16 @@ app.on('window-all-closed', () => {
   }
 })
 
-app.on('before-quit', () => {
-  if (!quitFallbackStarted) {
-    quitFallbackStarted = true
-    setTimeout(() => app.exit(0), 5_000).unref()
-  }
+app.on('before-quit', (event) => {
+  event.preventDefault()
+  if (quitCleanupStarted) return
+  quitCleanupStarted = true
   stopTelemetry()
   stopScheduler()
   shutdownLlm()
-  void disconnectMcp()
-  void stopApiServer()
+  const forceExit = setTimeout(() => app.exit(0), 5_000)
+  void Promise.allSettled([disconnectMcp(), stopApiServer()]).finally(() => {
+    clearTimeout(forceExit)
+    app.exit(0)
+  })
 })
