@@ -68,6 +68,15 @@ jobs:
       - run: npm run build
       - name: Build unsigned CI verification packages
         run: npx electron-builder --win --x64 --publish never
+      - name: Install and launch the Windows package
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem release/*Windows-Setup-x64.exe | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer was not created.' }
+          $installDir = Join-Path $env:RUNNER_TEMP 'PowerStationInstalled'
+          $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Windows installer exited with code $($process.ExitCode)." }
+          npm run test:packaged -- "$installDir\PowerStation.exe"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: PowerStation-windows-x64-unsigned-ci
@@ -90,6 +99,14 @@ jobs:
       - run: npm run build
       - name: Build unsigned CI verification packages
         run: npx electron-builder --linux --x64 --publish never
+      - name: Install and launch the Debian package
+        run: |
+          sudo apt-get install -y ./release/PowerStation-*-Linux-x64.deb
+          xvfb-run -a npm run test:packaged -- /usr/bin/powerstation
+      - name: Launch the AppImage
+        run: |
+          chmod +x ./release/PowerStation-*-Linux-AppImage-x64.AppImage
+          APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a npm run test:packaged -- ./release/PowerStation-*-Linux-AppImage-x64.AppImage
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: PowerStation-linux-x64-unsigned-ci
@@ -118,6 +135,8 @@ jobs:
           POWERSTATION_INSTALL_SKIP_LAUNCH: '1'
           POWERSTATION_INSTALL_DIR: ${{ runner.temp }}/PowerStation Applications
         run: npm run install:mac
+      - name: Launch the locally installed macOS app
+        run: npm run test:packaged -- "$RUNNER_TEMP/PowerStation Applications/PowerStation.app/Contents/MacOS/PowerStation"
       - name: Verify local signature
         run: |
           codesign --verify --deep --strict --verbose=2 release/mac-arm64/PowerStation.app

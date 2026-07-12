@@ -1,5 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import os from 'node:os'
 import path from 'node:path'
 import fixPath from 'fix-path'
 import { loadState } from './config.js'
@@ -13,10 +14,16 @@ import { startScheduler, stopScheduler } from './scheduledJobs.js'
 import { isTrustedExternalUrl, isTrustedRendererNavigation, trustedLoopbackDevUrl } from './security.js'
 
 if (process.platform === 'darwin') fixPath()
-if (!app.isPackaged && process.env.POWERSTATION_TEST_USER_DATA) {
-  app.setPath('userData', path.resolve(process.env.POWERSTATION_TEST_USER_DATA))
+const smokeTest = app.commandLine.hasSwitch('powerstation-smoke-test')
+if (process.env.POWERSTATION_TEST_USER_DATA && (!app.isPackaged || smokeTest)) {
+  const requested = path.resolve(process.env.POWERSTATION_TEST_USER_DATA)
+  const relativeToTemp = path.relative(path.resolve(os.tmpdir()), requested)
+  if (app.isPackaged && (relativeToTemp === '' || relativeToTemp.startsWith('..') || path.isAbsolute(relativeToTemp))) {
+    throw new Error('Packaged smoke-test profiles must be inside the operating system temporary directory.')
+  }
+  app.setPath('userData', requested)
 }
-if (!app.requestSingleInstanceLock()) app.exit(0)
+if (!smokeTest && !app.requestSingleInstanceLock()) app.exit(0)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const devServerUrl = trustedLoopbackDevUrl(process.env.VITE_DEV_SERVER_URL)?.toString() ?? null
