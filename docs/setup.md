@@ -1,11 +1,12 @@
-# Setup Guide
+# Setup and development guide
 
-Prerequisites, building, packaging, where data lives, and troubleshooting. For the fastest path to a
-running app, see the [Quick Start](quick-start.md).
+Use this guide to run PowerStation from source, prepare a contributor environment, create local
+packages, and locate application data. For the shortest installation path, use the
+[quick start](quick-start.md).
 
 ## Prerequisites
 
-**macOS (primary platform)**
+### macOS (primary platform)
 
 - macOS on Apple Silicon (M-series), 16 GB unified memory or more.
 - **Node.js 22+** and **npm**.
@@ -13,7 +14,7 @@ running app, see the [Quick Start](quick-start.md).
   prebuilt binary, so a source compile is usually unnecessary, but the CLT are required if it ever
   falls back to building from source.
 
-**Windows (beta)**
+### Windows (beta)
 
 - Windows 10/11 x64, 16 GB RAM or more. A discrete GPU (NVIDIA/AMD, 8 GB+ VRAM) is strongly
   recommended — models run on CUDA/Vulkan when available and fall back to CPU otherwise.
@@ -23,7 +24,7 @@ running app, see the [Quick Start](quick-start.md).
   install automatically; Visual Studio Build Tools are only needed if a source build is ever forced.
 - Keep your GPU drivers current — the CUDA/Vulkan runtimes use them directly.
 
-**Linux (beta)**
+### Linux (beta)
 
 - Linux x64 on a desktop distribution with 16 GB RAM or more. Ubuntu/Debian derivatives are the
   tested packaging target; the AppImage should also run on many other mainstream desktop distros.
@@ -32,7 +33,7 @@ running app, see the [Quick Start](quick-start.md).
 - Keep NVIDIA/AMD GPU drivers current when using GPU acceleration. Without a supported discrete
   GPU, inference runs on CPU from system RAM.
 
-## Install on macOS
+## Install a stable release on macOS
 
 ```bash
 git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
@@ -44,7 +45,7 @@ npm run install:mac
 See the [Source Install guide](source-install.md) for updating, diagnostics, installation
 destinations, data preservation and troubleshooting.
 
-## Run from source on Windows or Linux
+## Run a stable checkout on Windows or Linux
 
 Windows PowerShell and Linux shells use the same stable checkout:
 
@@ -59,7 +60,7 @@ Keep that terminal open while PowerStation is running. Use a fresh checkout of t
 tag to update. Windows and Linux remain beta; their packaged formats are installed and launched in
 CI, but unsigned packages are not published as consumer downloads.
 
-## Development checkout
+## Create a development checkout
 
 ```bash
 git clone https://github.com/robbiepeck/PowerStation.git
@@ -71,7 +72,7 @@ npm run desktop:dev
 `desktop:dev` selects a free loopback port, starts Vite, builds the Electron main process, then
 launches the app pointed at that exact port. It will not attach to an unrelated dev server.
 
-### Running on a custom port
+### Use a custom development port
 
 `desktop:dev` handles occupied ports automatically. To run the two halves yourself on a specific
 port, use:
@@ -85,7 +86,7 @@ npm run build:electron
 VITE_DEV_SERVER_URL=http://127.0.0.1:5180 npx electron .
 ```
 
-## Scripts
+## Available commands
 
 | Command | What it does |
 | --- | --- |
@@ -97,14 +98,14 @@ VITE_DEV_SERVER_URL=http://127.0.0.1:5180 npx electron .
 | `npm run build` | Typecheck and build the renderer and the Electron main process. |
 | `npm run build:renderer` | Renderer only (`tsc -b` + `vite build`). |
 | `npm run build:electron` | Electron main only (`tsc` + copy preload). |
-| `npm test` | Run the unit tests (admission-control math, via Vitest). |
-| `npm run lint` | ESLint. |
+| `npm test` | Run the Vitest unit suite. |
+| `npm run lint` | Run ESLint across the repository. |
 | `npm run package:mac:local` | Build the Apple Silicon app used by the local installer. |
 | `npm run package:win` | Package the Windows NSIS installer and portable exe on Windows. |
 | `npm run package:win:signed` | Package Windows artifacts and fail if code signing credentials are missing. |
 | `npm run package:linux` | Package the Linux x64 AppImage and deb on Linux. |
 
-## Building a distributable
+## Build application packages
 
 ```bash
 npm run package:mac        # universal macOS build
@@ -117,7 +118,9 @@ npm run package:linux:dir  # unpacked Linux app directory
 
 Artifacts land in `release/`.
 
-**Build on the target platform.** The native llama.cpp binaries are platform-specific, so a working
+### Build on the target platform
+
+The native llama.cpp binaries are platform-specific, so a working
 Windows build must be produced on Windows, macOS on macOS, and Linux on Linux. That's exactly what
 CI does: the [GitHub Actions workflow](../.github/workflows/ci.yml) lint/tests/builds on all three
 platforms for every push to `main`, tests the documented macOS installer, and installs and launches
@@ -125,16 +128,22 @@ the Windows NSIS package, Linux Debian package and AppImage, and local macOS app
 CI's unsigned packages are short-lived verification artifacts, not supported downloads. A `v*` tag
 creates a source-only GitHub Release after every required job passes.
 
-**Signing & releases.** The supported macOS installation is built and ad-hoc signed on the user's
+### Signing and releases
+
+The supported macOS installation is built and ad-hoc signed on the user's
 own Mac. The project does not publish `.dmg`, `.zip`, `.exe`, `.AppImage` or `.deb` files as consumer
 releases without the appropriate platform trust chain. This avoids asking users to bypass security
 warnings. Release tags must point to a commit already on `main`.
 
-**Updates.** A locally installed macOS build checks GitHub Releases and opens the source update
+### Updates
+
+A locally installed macOS build checks GitHub Releases and opens the source update
 guide when a newer source-only release exists. Run `npm run update:mac` from the checkout to perform
 the update. Windows and Linux currently use a fresh development checkout.
 
-**Native module packaging.** `node-llama-cpp` ships native binaries that must be unpacked from the
+### Native module packaging
+
+`node-llama-cpp` ships native binaries that must be unpacked from the
 asar archive at build time — this is already configured under `build.asarUnpack` in `package.json`.
 The model catalogue (`catalog/**`) is also included in the packaged app as the offline fallback.
 
@@ -146,7 +155,7 @@ Everything PowerStation writes stays on your machine, under the app's user-data 
 
 - **Models** — the managed models folder (each model is revealable in the OS file manager from the Models view).
 - **`powerstation-config.json`** — settings, tool permissions, onboarding state, benchmark results.
-- **`catalog-cache.json`** — the last validated catalogue fetched from the repo.
+- **`catalog-cache.json`** — the last validated catalogue fetched from the repository.
 - **`chats/`** — saved conversations, one plain JSON file each (including any attached-file text,
   so resumed chats keep their documents). Revealable and deletable from Settings; turn off "Save
   chats on this device" to stop new writes.
@@ -160,13 +169,14 @@ Everything PowerStation writes stays on your machine, under the app's user-data 
 - **`scheduled-jobs.json`** — validated job definitions and the bounded local run ledger.
 - **Backups** — single JSON archives written wherever you choose from Settings → Backup & restore.
 
-Network traffic is limited to model downloads and catalogue updates from `huggingface.co` / this
-GitHub repo, plus update checks against GitHub Releases. See [Security](../SECURITY.md).
+Core network traffic is limited to model downloads and catalogue updates from Hugging Face, plus
+catalogue and release checks from GitHub. Optional network-enabled MCP connectors communicate with
+their configured services when enabled and invoked. See [Security](../SECURITY.md).
 
-## Updating the model catalogue
+## Update the model catalogue
 
 The catalogue is data, not code. To refresh it in a running app, use **Update catalog** in the
-Models view — it re-fetches `catalog/models.json` from the repo. To change what's offered, edit that
+Models view — it re-fetches `catalog/models.json` from the repository. To change what is offered, edit that
 file (see [Contributing](../CONTRIBUTING.md) for the required fields) and the change reaches users
 without an app release.
 
@@ -181,4 +191,4 @@ without an app release.
 - **Local installation fails** — run `npm run doctor`, then `npm run diagnostics`; see the
   [Source Install guide](source-install.md).
 
-Next: [Architecture](architecture.md) · [Contributing](../CONTRIBUTING.md)
+Continue with [Architecture](architecture.md) or [Contributing](../CONTRIBUTING.md).

@@ -1,17 +1,17 @@
-# Models & devices
+# Models and devices
 
-This page lists the computer devices PowerStation caters for and the full catalogue of models
-it recommends and installs. It is generated from [`catalog/models.json`](../catalog/models.json)
-— the same manifest the app fetches at launch — so treat that file as the source of truth if
-this page ever drifts.
+This guide describes supported hardware, memory tiers, catalogue models, imported models, and
+performance measurement. [`catalog/models.json`](../catalog/models.json) is the machine-readable
+source of truth if the tables in this page fall out of date.
 
-> **At a glance:** macOS on Apple Silicon (primary), Windows x64 (beta), and Linux x64 (beta),
-> **16 GB memory minimum**. 12 curated open-weight models spanning the 16 GB → 64 GB tiers, all verified
-> against Hugging Face.
+> [!NOTE]
+> The current baseline is macOS on Apple Silicon (primary), Windows x64 (beta), or Linux x64
+> (beta), with at least 16 GB memory. The catalogue contains 12 open-weight models across the
+> 16 GB to 64 GB tiers.
 
 ---
 
-## Devices PowerStation supports
+## Supported devices
 
 PowerStation's primary platform is **macOS on Apple Silicon (M-series)**, with **Windows 10/11
 x64** and **Linux x64** supported in beta. On a Mac the CPU and GPU share one pool of **unified
@@ -22,7 +22,7 @@ use for a model.
   budget (from the actual Metal backend that will run inference) and free disk on first launch.
 - **Usable-for-AI budget.** Metal lets the GPU use roughly two-thirds to three-quarters of
   unified memory; PowerStation then leaves ~10% OS headroom on top. On a 24 GB Mac that lands
-  around **~15 GB genuinely usable for a model** — the number the fit math and the onboarding
+  around **~15 GB available for a model** — the number the fit math and the onboarding
   screen both quote.
 - **16 GB floor.** Below 16 GB, PowerStation says plainly that local AI isn't realistic on the
   machine rather than hand you a model that will swap and beachball.
@@ -37,8 +37,8 @@ use for a model.
 | **32 GB** | ~21–22 GB | 30–35B MoE models at a comfortable context — the sweet spot for agents and coding. |
 | **64 GB+** | ~40–46 GB | 80B MoE and 120B models — the strongest local options short of a workstation. |
 
-Apple Silicon is the cheapest way to run 70B–120B-class models locally, because unified memory
-doubles as GPU memory.
+Apple Silicon can run models larger than the dedicated VRAM available on many consumer GPUs because
+its unified memory is shared by the CPU and GPU.
 
 ### Windows and Linux PCs (beta)
 
@@ -50,14 +50,14 @@ On Windows and Linux the picture splits in two:
   so multi-GPU laptops do not get judged by the integrated GPU. Models that fit entirely in VRAM
   run at full speed.
   Models larger than VRAM but within ~80% of your system RAM still run — llama.cpp offloads the
-  overflow layers to the CPU — and PowerStation marks these honestly as **"Runs on CPU · slower"**
+  overflow layers to the CPU — and PowerStation marks these as **"Runs on CPU · slower"**
   rather than pretending they're fast or blocking them outright.
 - **No discrete GPU.** Inference runs on the CPU out of system RAM. Everything works, but expect a
   fraction of the speeds listed below; stick to the smaller models.
 
 The same 16 GB system-RAM floor applies. Rough guidance: 16 GB RAM + 8 GB VRAM handles the 16 GB
 tier at full speed and the 24 GB tier via offload; 32 GB RAM + 12–16 GB VRAM makes the 24–32 GB
-tiers practical. One honest caveat: the per-model notes below are written for Apple Silicon's
+tiers practical. The per-model notes below are written for Apple Silicon's
 unified memory — on Windows/Linux, trust the app's live fit badges, which are computed from your
 actual measured VRAM and RAM.
 
@@ -76,7 +76,7 @@ Treat VRAM as the fast lane, and system RAM as the slower safety net for CPU off
 The app's fit badge is still the authority because it includes the exact GGUF size, KV-cache cost,
 context setting, and the backend-reported memory when available.
 
-### Speed, honestly
+### Performance guidance
 
 The tokens-per-second figures below are rough expectations for a mid-tier M4-class Mac. Bandwidth
 is the bottleneck for local inference, so a higher-bandwidth chip (M-series Pro/Max) runs the same
@@ -123,9 +123,9 @@ tier PowerStation gates agent features on:
 
 - **Devstral Small 2 24B** — agentic coding specialist: explores a codebase, edits files and drives
   tools in a loop. Dense, so slower per token; 32 GB is recommended for large contexts.
-- **Gemma 4 26B-A4B** — high-quality general chat and reasoning at near-frontier scores with only
-  4B active. Tight on 24 GB; 32 GB is comfortable.
-- **GLM-4.7 Flash** — best-in-class multi-step agent loops and coding for its size, MIT-licensed,
+- **Gemma 4 26B-A4B** — strong general chat and reasoning with only 4B active. Tight on 24 GB;
+  32 GB is comfortable.
+- **GLM-4.7 Flash** — strong multi-step agent loops and coding for its size, MIT-licensed and
   memory-efficient. Text only.
 - **Qwen3 Coder 30B-A3B** — strong agentic coding across many languages with very long context.
   No thinking mode, so weaker at deep math.
@@ -168,9 +168,9 @@ tier PowerStation gates agent features on:
 The model landscape turns over every few months, so the catalogue is **not** baked into the app
 binary:
 
-1. `catalog/models.json` in this repo is the source of truth. A bundled copy ships with the app
+1. `catalog/models.json` in this repository is the source of truth. A bundled copy ships with the app
    as an offline fallback.
-2. On launch, the app fetches the latest `models.json` from the repo. The **Update catalog** button
+2. On launch, the app fetches the latest `models.json` from the repository. The **Update catalog** button
    in the Models view re-fetches on demand.
 3. Remote catalogue data is treated as untrusted: every field is validated and download URLs are
    pinned to `huggingface.co` before anything reaches the UI.
@@ -198,7 +198,7 @@ are priced as the whole set).
 
 ## Choosing between models
 
-Three tools answer "which model should I keep?" with measurements rather than vibes:
+PowerStation provides three ways to compare models on the current computer:
 
 - **Benchmarks** — one click per model measures real write speed *and* prompt-ingestion (read)
   speed on your exact machine; results appear on every card and recommendation.
@@ -207,4 +207,4 @@ Three tools answer "which model should I keep?" with measurements rather than vi
   candidate gets the whole machine — fair timings, no memory gamble.
 - **"Why this over that"** — every alternate recommendation explains itself against the top pick
   on the axes that differ: fit, measured or likely speed, knowledge capacity, and tool-calling
-  strength — honest in both directions when the alternate wins an axis.
+  strength, including cases where the alternate is stronger on a particular axis.

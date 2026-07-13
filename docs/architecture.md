@@ -1,10 +1,9 @@
 # Architecture
 
-How PowerStation is put together, and what happens when you send a message. If you just want to
-run it, start with the [Quick Start](quick-start.md); this page is for understanding the internals
-and contributing.
+This document describes PowerStation's process boundaries, data flow, and major design decisions.
+For installation instructions, start with the [quick start](quick-start.md).
 
-## The shape of the app
+## Process model
 
 PowerStation is an Electron app with a hard split between three trust zones:
 
@@ -125,22 +124,21 @@ load can't be re-forked in a tight loop.
 4. The bounded result or error is written atomically to the private schedule store. Notifications
    contain status only; the result remains inside the ledger.
 
-## Design decisions worth knowing
+## Design principles
 
-- **Bundled runtime, out of process.** PowerStation ships its own `node-llama-cpp` rather than
-  depending on an external Ollama install, and runs it in a `utilityProcess` so a segfault is a
-  recoverable event. (Ollama can be added later as an optional detected backend.)
+- **Bundled runtime, isolated process.** PowerStation ships `node-llama-cpp` rather than requiring
+  Ollama and runs inference in a `utilityProcess` so a native failure is recoverable.
 - **The catalogue is data, not code.** Recommendations must stay current without app releases, so
   the model list is a remotely-fetched, validated manifest — not a hardcoded table. See
-  [Models & devices](models-and-devices.md).
+  [Models and devices](models-and-devices.md).
 - **One home for each rule.** The capability tier is resolved once in the main process and handed to
   the renderer on `models:list`; the "usable for AI" budget is computed once and shared, so the
   onboarding screen and the fit summaries always quote the same number.
 - **Untrusted inputs are treated as untrusted.** Remote catalogue data, model files, and MCP tool
   output are all validated/capped and never executed. See the [Threat model](../THREAT_MODEL.md).
 
-## Related reading
+## Related documentation
 
-- [Memory & monitoring](memory-and-monitoring.md) — the admission-control math in detail.
+- [Memory and monitoring](memory-and-monitoring.md) — the admission-control math in detail.
 - [Agent harness](agent-harness.md) — MCP, permissions and gating.
 - [Setup Guide](setup.md) — building and packaging.

@@ -4,15 +4,25 @@ description: Turn raw notes into decisions, action items, and open questions.
 triggers: meeting, action items, transcript, notes from, minutes
 ---
 
-When given meeting notes, a transcript, or a rambling update, produce:
+Transform meeting notes, transcripts, or unstructured updates into the following sections:
 
-**Decisions** — what was actually decided, one line each. If nothing was decided, say so.
+### Decisions
 
-**Action items** — a checklist. Each item: `- [ ] <action> — <owner if stated> <deadline if stated>`.
-Never invent owners or deadlines that are not in the text; mark them `(unassigned)` or `(no date)`.
+List each explicit decision on a separate line. If the source contains no decision, state that no
+decision was recorded.
 
-**Open questions** — anything raised but not resolved.
+### Action items
 
-Rules:
-- Use only information present in the notes. Do not embellish or infer commitments.
-- Keep each line under ~15 words. The output should be scannable in ten seconds.
+Use this checklist format:
+
+`- [ ] <action> — <owner> <deadline>`
+
+Include an owner or deadline only when the source states it. Use `(unassigned)` or `(no date)` for
+missing fields.
+
+### Open questions
+
+List material questions or dependencies that remain unresolved.
+
+Use only information present in the source. Do not infer commitments, owners, dates, or decisions.
+Keep each item concise and independently understandable.

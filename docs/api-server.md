@@ -1,68 +1,89 @@
 # Local API server
 
-PowerStation can serve your running model as an **OpenAI-compatible HTTP endpoint** on this
-machine, so anything that speaks the OpenAI API — your IDE assistant, a Python/JS script, another
-app — can use your local model with a one-line `base_url` change, entirely offline. It's the
-complement to the Ollama/LM Studio *import*: now PowerStation can be the thing others call.
+PowerStation can expose an installed model through an OpenAI-compatible HTTP API for applications
+running on the same computer. The server is optional, disabled by default, and intentionally limited
+to local inference.
 
-## Turning it on
+## Enable the server
 
-Settings → **Local API server** → *Enable*. It's **off by default**. When on:
+Open **Settings → Local API server** and select **Enable**.
 
-- It binds to **`127.0.0.1` only** — never `0.0.0.0`, so nothing off this machine can reach it.
-- It generates a **bearer token**. Copy it from Settings and send it as `Authorization: Bearer
-  <token>`. **Regenerate** rotates the token and instantly revokes the old one.
-- The base URL is `http://127.0.0.1:<port>/v1` (default port 4141, editable).
-- Every request shows up in a live log in Settings (method, path, model, status, duration).
+When enabled:
 
-## Endpoints
+- the server binds to `127.0.0.1`, never `0.0.0.0`;
+- every request requires a generated bearer token;
+- the default base URL is `http://127.0.0.1:4141/v1`;
+- the port can be changed in Settings;
+- requests appear in the Settings log with method, path, model, status, and duration.
 
-| Method & path | What it does |
+Copy the token from Settings and pass it as `Authorization: Bearer <token>`. Select **Regenerate**
+to revoke the current token and issue a replacement.
+
+## Supported endpoints
+
+| Method and path | Behaviour |
 | --- | --- |
-| `GET /v1/models` | Lists your installed models; each `id` is the model's file name. |
-| `POST /v1/chat/completions` | Chat completions, **streaming** (SSE) and non-streaming. |
-| `POST /v1/embeddings` | Embeddings from the bundled `nomic-embed-text-v1.5` model. |
+| `GET /v1/models` | Lists installed models. Each model ID is its filename. |
+| `POST /v1/chat/completions` | Creates streaming or non-streaming chat completions. |
+| `POST /v1/embeddings` | Creates embeddings with the bundled `nomic-embed-text-v1.5` model. |
 
-### Example
+The API implements the subset required by these workflows; it is not a complete implementation of
+the OpenAI platform.
+
+## Request examples
+
+### cURL
 
 ```bash
 curl http://127.0.0.1:4141/v1/chat/completions \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"model": "gemma-4-E4B-it-Q4_K_M.gguf",
-       "messages": [{"role": "user", "content": "Say hello in one word."}]}'
+  -d '{"model":"gemma-4-E4B-it-Q4_K_M.gguf","messages":[{"role":"user","content":"Say hello in one word."}]}'
 ```
 
-With the OpenAI SDK, point it at the server:
+### Python SDK
 
 ```python
 from openai import OpenAI
-client = OpenAI(base_url="http://127.0.0.1:4141/v1", api_key="YOUR_TOKEN")
-client.chat.completions.create(model="gemma-4-E4B-it-Q4_K_M.gguf",
-                               messages=[{"role": "user", "content": "Hi"}])
+
+client = OpenAI(
+    base_url="http://127.0.0.1:4141/v1",
+    api_key="YOUR_TOKEN",
+)
+
+response = client.chat.completions.create(
+    model="gemma-4-E4B-it-Q4_K_M.gguf",
+    messages=[{"role": "user", "content": "Say hello in one word."}],
+)
+
+print(response.choices[0].message.content)
 ```
 
-## How it behaves (by design)
+Use the exact model ID returned by `GET /v1/models` when selecting an installed model.
 
-- **Token required.** Any process on your Mac can reach localhost, so the token is what stops other
-  apps using your model unprompted. Keep it private.
-- **Honours the requested model.** If the request's `model` matches an installed model it's used
-  (loading it if needed); otherwise the app's selected model answers. Because only one model loads
-  at a time, switching models between requests costs a reload.
-- **Raw inference.** The endpoint is just the model: your app's system prompt, skills, and MCP
-  tools are **not** applied — the caller controls everything through the messages it sends, exactly
-  like the real OpenAI API. (Tool calling over the API may come in a later version.)
-- **One at a time.** The worker holds a single model and chat sequence, so requests — and any
-  in-app chat — are serialized rather than run in parallel. An API request never disturbs your
-  in-app conversation (it runs against an isolated copy of the session).
-- **Still admission-controlled.** Each request runs the same fit check as in-app chat, so an
-  over-large model or context returns a clear `422` instead of swapping your machine.
+## Runtime behaviour
 
-## What it is not
+- **Requested model:** when the request names an installed model, PowerStation loads and uses it.
+  An unknown model ID falls back to the model currently selected in the application.
+- **Raw inference:** application system prompts, skills, projects, agents, retrieval, and MCP tools
+  are not added. The calling application controls the request messages.
+- **Serial execution:** API, chat, comparison, and scheduled inference share one worker and execute
+  sequentially. Switching models requires a reload.
+- **Conversation isolation:** an API request does not modify the active in-app chat session.
+- **Admission control:** model and context requirements are checked before execution. Requests that
+  do not fit return a clear error rather than loading unsafely.
 
-- **Not exposed off-machine.** There is no option to bind to a public interface. If you need remote
-  access, put your own reverse proxy in front — deliberately your call, not the app's.
-- **Not the agent harness.** Permission prompts, skills, and audit logging live in the app's chat;
-  the API path is bare inference.
+## Security considerations
 
-*Related: [Agent harness](agent-harness.md) · [Models & devices](models-and-devices.md).*
+Loopback binding prevents direct access from other computers, but any local process can attempt to
+connect to localhost. Keep the bearer token private and regenerate it if it may have been disclosed.
+
+PowerStation does not provide TLS, remote authentication, user accounts, quotas, or public rate
+limiting. Placing a reverse proxy or tunnel in front of the server changes its threat model; the user
+is then responsible for transport encryption, authentication, access control, and abuse prevention.
+
+The endpoint is inference-only and does not expose the agent harness. Tool permissions, previews,
+and audit logs apply to interactive app chats, not to API requests.
+
+See [Security](../SECURITY.md), the [threat model](../THREAT_MODEL.md), and
+[Models and devices](models-and-devices.md).

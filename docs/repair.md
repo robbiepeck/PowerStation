@@ -1,65 +1,85 @@
-# Repair — storage & health, without the snake oil
+# Repair and storage health
 
-The "Mac cleaner" category earned its bad reputation by deleting things it didn't understand.
-PowerStation's Repair tab is built on the opposite premise, stated in the UI and enforced in code:
+The Repair view reports storage use, identifies conservative duplicate candidates, checks model
+integrity, and removes selected rebuildable PowerStation data. Its enforced boundary is:
 
-> **PowerStation never deletes, moves, or edits anything outside its own data folder.**
-> Everything else is measured read-only and *revealed* — you decide, in Finder, where deletes go
-> to the recoverable Trash.
+> PowerStation does not delete, move, or edit data outside its own user-data directory.
 
-## What it does
+External locations are inspected read-only and can be revealed in the operating-system file manager
+for manual review.
 
-**Where the space is (read-only).** A curated list of the well-known homes of AI-related files —
-Downloads, Trash, the Hugging Face cache, Ollama's blob store, LM Studio's models, and
-PowerStation's own data — each measured with a bounded, symlink-ignoring walk (figures that hit
-the scan cap say *at least*). The only button is **Reveal**, which opens the location in the OS
-file manager. The scan list is fixed in the main process; the UI cannot ask it to scan or reveal
-arbitrary paths.
+## Storage inspection
 
-**Duplicate models across apps.** The same GGUF sitting in both LM Studio and PowerStation is pure
-wasted disk — PowerStation can use another app's copy in place (Models tab), so the spare is safe
-to remove in that app. Detection is deliberately conservative: exact file name *and* exact size,
-so two different quantizations are never called duplicates. Ollama's content-addressed blobs are
-excluded rather than guessed at.
+Repair measures a fixed set of common AI storage locations, including Downloads, Trash, the Hugging
+Face cache, Ollama, LM Studio, and PowerStation's own data. Scans use bounded filesystem walks, do not
+follow symbolic links, and report **at least** when the entry limit is reached.
 
-**Reclaim space in PowerStation.** The only deletes in the tab, scoped to data the app itself
-created and can recreate: indexes of knowledge folders that no longer exist, the re-downloadable
-embeddings model, and catalogue caches. Each item shows its exact size and consequence, asks for
-confirmation, and is recorded in a removal log shown in the tab.
+The location list is defined in the main process. The renderer cannot provide an arbitrary path to
+scan or reveal.
 
-**Model file health (read-only).** Every local model is checked for a valid GGUF signature and a
-plausible size against the catalogue — catching corrupt or incomplete downloads *before* they
-crash a chat. Fixes are honest: re-download from the Models tab.
+## Duplicate candidates
 
-## How safety is enforced (not just promised)
+PowerStation identifies possible duplicate GGUF files across supported applications using both exact
+filename and exact size. This deliberately conservative rule avoids treating different quantisations
+as duplicates. Content-addressed Ollama blobs are excluded when they cannot be matched safely.
 
-- Every mutating operation resolves its target **server-side from an allowlist of ids** — the
-  renderer never supplies a path — and must pass a containment guard that resolves symlinks
-  (`realpath`) before checking the path sits inside the app's data folder. The guard is
-  unit-tested against `..` traversal and against symlinks planted inside the data folder that
-  point outside it.
-- External locations are read with `stat` walks only: no shell commands, no elevation, nothing
-  executed, symlinks never followed, entry counts capped.
-- Every removal is appended to `repair-log.json` in the data folder — the tab shows everything it
-  has ever deleted.
+A duplicate result is informational. Use the owning application's controls or the operating-system
+file manager to decide which copy to remove. PowerStation can register supported external models in
+place, which may avoid another download.
 
-## Repair as an agent skill
+## Reclaimable application data
 
-The same toolset is available to the model through the bundled **Storage repair** skill (Utilities
-→ Skills; ships off, enable to opt in). When active, the model can call
-`powerstation:storage_report`, `list_reclaimables`, `clean_reclaimable`, and
-`check_model_integrity` — through the **same permission prompts, previews, and audit log** as any
-MCP tool. The one mutating tool resolves its target through the same id allowlist and containment
-guard as the tab's buttons, so the model cannot express an out-of-contract delete no matter what
-it generates; the approval dialog shows exactly what would be removed and the consequence. The
-skill's instructions bind it to this page's contract: diagnose first, report real numbers only,
-propose and wait for consent, and never suggest deleting anything PowerStation didn't create.
+Repair can remove only selected data that PowerStation created and can recreate:
 
-## What Repair will never do
+- indexes for knowledge folders that no longer exist;
+- the downloadable local embedding model;
+- validated catalogue caches.
 
-- Delete or edit system files, caches, or anything in `~/Library` beyond PowerStation's own folder.
-- Change plists, permissions, daemons, or startup items; run elevated commands.
-- Claim to "speed up your Mac". The Monitor tab shows the real signals, labelled measured or
-  estimated; the honest speed fix on a memory-tight machine is a smaller model, and the app says so.
+Each item displays its size and consequence before confirmation. Successful removals are appended to
+`repair-log.json` and displayed in the Repair view.
 
-*Related: [Memory & monitoring](memory-and-monitoring.md) · [Threat model](../THREAT_MODEL.md).*
+Managed model deletion is handled separately in the Models view because model files are large and
+not treated as transient repair data.
+
+## Model integrity checks
+
+Repair checks local models for a valid GGUF signature and a plausible size relative to catalogue
+metadata. The check is read-only and is intended to detect incomplete or corrupt downloads before
+the model is loaded. Use the Models view to remove and re-download an invalid managed model.
+
+## Enforcement controls
+
+- Mutating operations accept an allowlisted item ID rather than a path supplied by the renderer or
+  model.
+- The main process resolves the target and uses `realpath` before enforcing containment inside the
+  PowerStation user-data directory.
+- Unit tests cover traversal and symbolic-link escape attempts.
+- External scans use filesystem metadata calls only: no shell, elevation, execution, or symlink
+  following.
+- Every completed removal is recorded in the repair log.
+
+## Storage repair skill
+
+The bundled **Storage repair** skill exposes the same workflow to a compatible model. It is disabled
+by default and must be enabled from **Utilities → Skills**. When active, the model may request:
+
+- `powerstation:storage_report`;
+- `powerstation:list_reclaimables`;
+- `powerstation:clean_reclaimable`;
+- `powerstation:check_model_integrity`.
+
+These built-in tools use the standard permission, preview, and audit path. The mutating tool accepts
+the same allowlisted identifiers as the Repair UI, so a model cannot supply an arbitrary deletion
+path. The skill instructs the model to diagnose first, report measured values, propose an action,
+and wait for consent.
+
+## Explicit non-goals
+
+Repair does not:
+
+- delete system files, third-party caches, or files outside PowerStation's own data directory;
+- change permissions, launch agents, daemons, startup items, or system configuration;
+- run privileged commands;
+- claim that general cache deletion will improve system performance.
+
+See [Memory and monitoring](memory-and-monitoring.md) and the [threat model](../THREAT_MODEL.md).

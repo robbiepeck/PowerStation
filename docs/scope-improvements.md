@@ -1,173 +1,132 @@
-# Scope improvements
+# Product roadmap
 
-Items discussed in the original product critique that were deferred for scope, tracked here as the
-working backlog. Each entry notes where it came from, what it takes, and its status.
+This roadmap summarises delivered capabilities, active design proposals, deferred work, and explicit
+non-goals. It is directional rather than a release commitment. Version history remains authoritative
+in the [changelog](../CHANGELOG.md).
 
-| # | Item | Origin | Effort | Status |
-| --- | --- | --- | --- | --- |
-| 1 | Real skills & connector gallery | Original goal #2 | Medium | **Shipped v0.3** |
-| 2 | On-device speed micro-benchmark | Critique recommendation | Small | **Shipped v0.2** |
-| 3 | Conversation persistence | Daily-use gap | Medium | **Shipped v0.2** |
-| 4 | Catalogue freshness CI | Critique: "stale catalogue is fatal" | Small | **Shipped v0.4** |
-| 5 | First-run demo moment | UX critique | Small | **Shipped v0.4** |
-| 6 | Storage cleanup / repair (tab + agent skill) | Cut feature, approved return path | Medium | **Shipped v0.12 + v0.14** |
-| 7 | Ollama as detected optional backend | Critique runtime recommendation | Medium | **Shipped v0.4** (model import) |
-| 8 | MLX engine pack (Apple Silicon) | Critique performance chapter | Large | **Designed** — [plan](mlx-engine-plan.md), staged behind safe pack verification |
-| 9 | Web-based recommender funnel | Product critique | Small–medium | Later |
-| 10 | Signing & notarization (macOS + Windows) | Critique pre-release prerequisite | Small (needs credentials) | **Deferred; source-only releases selected** |
+## Status definitions
 
-## The items in detail
+| Status | Meaning |
+| --- | --- |
+| Shipped | Available in a tagged release. |
+| Designed | A public technical proposal exists, but implementation has not started or completed. |
+| Blocked | Groundwork may exist, but a named external or architectural dependency prevents delivery. |
+| Deferred | Potentially valuable, but not prioritised for the current product scope. |
+| Not planned | Explicitly outside the current product direction. |
 
-### 1. Real skills & connectors — *shipped v0.3*
-Skills are real: markdown files in the data folder, seeded with five starters, editable in-app,
-token-metered, and injected into the system prompt while enabled (they work on every model,
-including chat-only ones). The **connector gallery** offers six curated, npm-verified MCP servers —
-local files (folder-picker scoped), memory, web reading, web search, sequential thinking, and a
-demo server — added with one click and remotely updatable via `catalog/connectors.json`. Completes
-original goal #2. The relevance-triggered upgrade shipped in v0.6 (Off/Auto/Always modes with per-skill triggers).
+## Current roadmap
 
-### 2. On-device speed micro-benchmark — *shipped v0.2*
-After a model is set up, run a short standard generation and record **measured tokens/sec on this
-exact machine**, shown on model cards and in recommendations instead of hand-curated estimates.
-The competitive research found no other local-AI app does this; it makes every speed claim
-verifiable. Runs automatically after a catalogue download and on demand per model.
+| Capability | Status | Release or next condition |
+| --- | --- | --- |
+| Hardware-aware model recommendations | Shipped | v0.1, with continued catalogue maintenance. |
+| On-device read/write benchmark | Shipped | v0.2. |
+| Persistent local conversations | Shipped | v0.2. |
+| Skills and MCP connector gallery | Shipped | v0.3; relevance modes added in v0.6. |
+| Catalogue freshness automation | Shipped | v0.4. |
+| Ollama model import | Shipped | v0.4. |
+| Attachments and local folder retrieval | Shipped | v0.5. |
+| Tool diffs, artifacts, and skill activation modes | Shipped | v0.6. |
+| Automatic conversation compaction | Shipped | v0.7. |
+| Skill gallery | Shipped | v0.8. |
+| Tool audit log | Shipped | v0.9. |
+| LM Studio import and chat organisation | Shipped | v0.10. |
+| Turn-scoped tool approval | Shipped | v0.10. |
+| Battery and energy indicators | Shipped | v0.10. |
+| Projects and backup/restore | Shipped | v0.11. |
+| Repair and storage health | Shipped | v0.12; model-driven skill added in v0.14. |
+| Side-by-side model comparison | Shipped | v0.13. |
+| Agent trust profiles | Shipped | v0.13. |
+| Reusable agents | Shipped | v0.15; import/export and connector scope added in v0.16. |
+| Plan preview for tool turns | Shipped | v0.16. |
+| Local OpenAI-compatible API | Shipped | v0.18. |
+| Stable source installation and platform package smoke tests | Shipped | v0.18.1–v0.19.1. |
+| Scheduled local inference | Shipped | v0.19. |
+| Vision input | Blocked | Re-evaluate when the packaged runtime exposes compatible multimodal APIs. |
+| Optional MLX engine | Designed | Requires secure runtime-pack delivery and engine-specific admission data. |
+| Public web model recommender | Deferred | Revisit after desktop distribution and documentation mature. |
+| Signed macOS and Windows binaries | Deferred | Requires maintained platform signing and notarisation infrastructure. |
 
-### 3. Conversation persistence — *shipped v0.2*
-Chats survive restarts: a sidebar of recent conversations, stored as plain JSON files in the app's
-user-data folder (revealable in the OS file manager — goal #4 transparency), with a Settings toggle,
-"delete all", and model-side history replay so a resumed chat actually remembers its context.
+## Delivered foundations
 
-### 4. Catalogue freshness CI — *shipped v0.4*
-A weekly GitHub Action (plus on every catalogue edit) re-verifies every Hugging Face URL — and the
-advertised file sizes — in `catalog/models.json`, and every npm package in
-`catalog/connectors.json`, opening/updating an issue on failure. Addresses the critique's core
-warning (a stale catalogue kills a recommendation product).
+### Model selection and performance
 
-### 5. First-run demo moment — *shipped v0.4*
-The empty-chat welcome offers four curated starter chips (tiny poem, explain-like-I'm-ten, dinner
-ideas, tone rewrite) chosen to be squarely within small-model competence, so the first impression
-is what the model does well. One click sends the prompt.
+PowerStation detects hardware, estimates model fit, and provides catalogue recommendations for a
+selected workload. Installed models can be benchmarked on the current device and compared
+sequentially with first-token latency, read speed, write speed, and total time. Existing GGUF models
+can be imported directly or registered in place from supported Ollama and LM Studio stores.
 
-### 6. Storage cleanup / repair — *shipped: tab in v0.12, agent skill in v0.14*
-Robbie called it back into scope (2026-07-06), in a deliberately narrow form: a deterministic
-**Repair tab** built on a hard contract — read-only diagnostics for anything PowerStation didn't
-create (reveal-in-Finder only), deletes scoped strictly to the app's own data behind a
-symlink-resolving containment guard, model-file integrity checks, and an explicit "won't do"
-list. v0.14 added the **agent-skill variant**: an opt-in bundled skill whose built-in tools ride
-the same permission/preview/audit rails and the same delete allowlist, so the model can diagnose
-and (with consent) reclaim app-owned space but cannot express an out-of-contract delete. See
-[repair.md](repair.md). General device-repair stays out.
+### Local workspace
 
-### 7. Ollama as a detected optional backend — *shipped v0.4 (model import)*
-PowerStation detects Ollama (daemon or install) and lists its models by reading the manifest
-store; one click registers the underlying GGUF blob as an imported model — no re-download, no
-extra disk. Inference runs in PowerStation's own runtime with the same admission checks; Ollama is
-never a dependency. (Chatting *through* the Ollama daemon remains out of scope.)
+Chats persist as readable local files and support attachments, indexed folders, source citations,
+editing, regeneration, search, export, artifacts, and automatic compaction. Projects apply shared
+instructions, knowledge, skills, connectors, and a preferred model. Backups include portable
+configuration and user content while excluding model weights and derived indexes.
 
-### 12. LM Studio import — *shipped v0.10*
-The Ollama pattern applied to the other big model manager: PowerStation walks
-`~/.lmstudio/models` (and the pre-0.3 cache location), lists the GGUFs it finds, and one click
-registers a file in place — no re-download, no extra disk, same admission checks. Split GGUF
-series are priced as the whole set, which is what actually loads.
+### Agent controls
 
-### 13. Chat pin & rename — *shipped v0.10*
-Pin chats to the top of the sidebar; rename inline. A renamed title is locked (saves stop
-re-deriving it from the first message); clearing the name unlocks it again.
+Skills apply reusable instructions. Compatible models can invoke MCP or built-in tools through
+per-tool permissions, file-change previews, turn-scoped grants, trust profiles, plan preview, loop
+limits, and a durable audit log. Reusable agents combine instructions, multiple knowledge folders,
+and connector scope without binding a model.
 
-### 14. Turn-scoped tool approval — *shipped v0.10*
-"Allow rest of turn" in the permission dialog: one approval covers the model's remaining
-ask-gated calls in the current reply. Reduces prompt fatigue on multi-step tasks without touching
-standing permissions — the grant expires with the turn and every call is still audit-logged.
+### Operations and reliability
 
-### 15. Battery & energy awareness — *shipped v0.10*
-Battery state in the monitor and telemetry; a status-pill nudge below 25% on battery (lighter
-models draw less power); an estimated per-chat watt-hours figure in the chat header, labelled as
-the ballpark it is (the power reading is itself an estimate).
+Admission control evaluates memory requirements before model loading. Telemetry distinguishes
+measured values from estimates. Repair checks storage and model integrity while restricting deletion
+to allowlisted, rebuildable PowerStation data. Scheduled jobs execute bounded inference without tools,
+connectors, project context, or retrieval.
 
-### 16. Projects (workspaces) — *shipped v0.11*
-The sidebar switcher bundles per-context setup: instructions appended to the system prompt, a
-knowledge folder auto-attached to new chats, per-project skill-mode overrides, a connector
-selection that scopes which MCP servers run, and a preferred model. Chats are stamped with their
-project; Personal shows unassigned history. One JSON file per project, next to the chats. See
-[projects.md](projects.md).
+### Distribution
 
-### 17. Backup & restore — *shipped v0.11*
-One readable JSON archive (settings, tool permissions, benchmarks, skills, chats, projects) from
-Settings; restore replaces settings/permissions, overwrites same-id content, and passes everything
-through the same sanitizers as a normal config read. Model weights stay out by design.
+Stable releases are currently source-only. macOS users can build, verify, ad-hoc sign, and install a
+tagged release through project scripts. CI builds and launch-tests platform packages, but unsigned
+artifacts are not distributed as supported consumer downloads.
 
-### 18. Multi-model compare — *shipped v0.13*
-One prompt, two models, measured side by side with "use this model" on the winner. Sequential by
-design (one model in memory at a time → fair timings, no memory gamble); each side goes through
-normal admission and can honestly refuse.
+## Designed or blocked work
 
-### 19. Agent trust profiles — *shipped v0.13*
-Trusted (remembered allows apply) vs Cautious (every call asks; remembered allows suspended, not
-deleted; allow-rest-of-turn still works; denies still block). Chat-header chip when cautious.
+### Vision input
 
-### 20. Recommendation "why this over that" — *shipped v0.13*
-Alternates explain themselves against the top pick on fit, measured/likely speed, capacity, and
-tool tier — honest in both directions. Pure `explainVersusPrimary`, unit-tested.
+Vision metadata and freshness checks are present for compatible catalogue models. The current
+`node-llama-cpp` API does not expose the required multimodal path, so no image-input UI or projector
+download ships. See the [vision input proposal](vision-plan.md).
 
-### 21. Custom agents (M365-style) — *shipped v0.15, extended v0.16*
-Robbie's ask, modelled on the Microsoft 365 agent builder and scoped via explicit product
-decisions: agents are a **separate concept from projects** (an assistant you summon per chat vs a
-workspace you switch into), invoked by **Start chat** from the Agents tab, configured with
-**instructions + up to eight knowledge folders**, and chats carry a **badge** that survives agent
-deletion. Multi-folder retrieval merges chunks across folders with folder-prefixed citations. See
-[agents.md](agents.md).
+### Optional MLX engine
 
-### 22. Agent export/import — *shipped v0.16*
-An agent is one JSON file; **Export…** writes a versioned `*.agent.json`, **Import** reads one back
-under a fresh id (never overwriting). Knowledge/connector references travel and degrade gracefully
-where they don't resolve. Pure share format, unit-tested.
+An MLX engine may improve throughput on Apple Silicon, but it requires a verified runtime pack, an
+engine abstraction, separate model variants, engine-specific memory modelling, and comparable
+benchmarks. See the [MLX engine proposal](mlx-engine-plan.md).
 
-### 23. Agent connectors — *shipped v0.16*
-Agents can name the MCP servers they may use (the one thing deliberately left out of v0.15). An
-in-memory active-agent id drives reconcile precedence: agent → project → global; empty inherits
-rather than silencing. Tool calls stay permission-gated.
+## Deferred work
 
-### 24. Agent plan preview — *shipped v0.16*
-Opt-in (Settings → Agent trust). A tool-capable model proposes a turn's steps via an isolated
-planning pass (snapshots/restores the session so the conversation is untouched); approving runs the
-whole turn with tools pre-authorized, cancelling runs nothing. Reuses the turn-scoped grant and the
-audit log.
+### Public web recommender
 
-### 25. Local API server — *shipped v0.18*
-Robbie's idea: expose the running model as an OpenAI-compatible HTTP endpoint so other local apps
-and scripts can call it. Confirmed design: token-required auth, honour the requested model (fall
-back to selected), raw inference (no app prompt/skills), inference-only (no tools) for v1. Bound to
-127.0.0.1, off by default, serialized through the single worker, admission-controlled per request,
-with a request log. Zero new deps (node:http). See [api-server.md](api-server.md).
+A static, browser-based version of the model-selection questionnaire could help prospective users
+understand hardware requirements before installing the application. It remains secondary to desktop
+distribution, documentation, and catalogue quality.
 
-### 11. Vision models — *groundwork shipped, runtime-blocked (2026-07-06)*
-Verified: the catalogue's Gemma 4 models have real ~1 GB mmproj vision files on Hugging Face
-(schema + data + weekly CI verification shipped, plus an honest "vision-capable model" badge) —
-but `node-llama-cpp` 3.19.0, the newest release, exposes no multimodal API, and no server binary
-ships to shell out to. Full gap analysis and the two delivery paths in
-[vision-plan.md](vision-plan.md); a freshness-CI watchdog flags every new runtime release so the
-unblock is evaluated the week it lands. No vision UI ships until the runtime runs it.
+### Signed consumer binaries
 
-### 8. MLX engine pack — *designed, staged behind safe pack verification*
-Research showed MLX runs 1.2–3× faster than llama.cpp on Apple Silicon. The full engineering plan
-— engine registry, managed Python subprocess, parallel MLX catalogue variants, per-engine
-benchmarks — lives in [mlx-engine-plan.md](mlx-engine-plan.md). Deliberately staged until engine
-packs have authenticated, integrity-checked delivery rather than half-shipped.
+Developer ID signing, notarisation, and Windows code signing would permit conventional downloads.
+Until the required credentials, secure CI secrets, renewal process, and release ownership are in
+place, the project will continue publishing source-only releases.
 
-### 9. Web-based recommender funnel — *later*
-The onboarding questionnaire as a free static web page (same catalogue JSON, browser-detectable
-hints) that funnels visitors to the app download. Marketing surface more than product.
+## Not planned
 
-### 10. Signing & notarization — *deferred; source-only releases selected*
-Paid signing accounts are not part of the current distribution plan. Stable tags create source-only
-GitHub Releases, and macOS users build and ad-hoc sign the app locally. CI packages are explicitly
-unsigned verification artifacts and are not supported public downloads.
+- **Cloud inference fallback:** the current product is designed around local models and explicit
+  user-configured connectors.
+- **Fine-tuning:** training workflows add substantial hardware, data, and support scope outside the
+  application's current purpose.
+- **Unbounded unattended agents:** scheduled jobs remain inference-only and cannot acquire tools or
+  expand their own authority.
+- **General-purpose system cleanup:** Repair remains limited to inspection and allowlisted app-owned
+  data.
+- **Additional Linux package formats:** formats beyond AppImage and Debian packages remain
+  demand-driven.
 
-## Still excluded, by decision
+## Proposing roadmap changes
 
-- **Cloud fallback (BYOK)** — strictly-local was an explicit product decision; stays out unless
-  that decision changes.
-- **Fine-tuning** — from the earliest project notes; heavy scope, niche audience, and the product's
-  wedge is elsewhere. Consciously not planned.
-- **Additional Linux package formats** — AppImage and deb are the supported beta artifacts; rpm,
-  tarballs, and distro-specific packaging stay demand-driven.
+Open a GitHub issue describing the user problem, target platforms, security and privacy effects,
+dependencies, and a testable definition of done. A focused design document is preferred for changes
+that introduce a new execution engine, trust boundary, data format, or network destination.
+
+See [Contributing](../CONTRIBUTING.md) and the [documentation index](README.md).

@@ -28,7 +28,7 @@
     "test:schedules-ui": "npm run build && node scripts/smoke-schedules.mjs",
     "package:mac": "npm run build && electron-builder --mac --universal -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
     "package:mac:dir": "npm run build && electron-builder --mac --universal --dir -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
-    "package:mac:local": "npm run build && electron-builder --mac --arm64 --dir --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
+    "package:mac:local": "npm run build && electron-builder --mac --arm64 --dir --publish never -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false && codesign --force --deep --sign - release/mac-arm64/PowerStation.app",
     "package:mac:signed": "npm run build && electron-builder --mac --universal -c.forceCodeSigning=true",
     "package:win": "npm run build && electron-builder --win --x64",
     "package:win:signed": "npm run build && electron-builder --win --x64 -c.forceCodeSigning=true",

@@ -1,112 +1,189 @@
 # Threat model
 
-A plain-language threat model for PowerStation. The point of a local AI app with an agent harness is
-that you can trust it with your machine and your data — this document is honest about what it defends
-against, how, and what remains your responsibility. For reporting and the high-level posture, see
-[Security](SECURITY.md).
+This document describes PowerStation's security assumptions, principal attack surfaces, controls,
+and residual risks. It should be updated whenever the application gains a new source of untrusted
+input or a new side-effecting capability.
 
-## Assets we protect
+## Scope and assets
 
-- **Your data** — files, documents and anything a tool can reach; your prompts and conversations.
-- **Your machine** — its stability (not swapping/crashing) and its integrity (no unauthorised writes
-  or command execution).
-- **Your trust** — the numbers and claims the app shows you are accurate.
+PowerStation is a local desktop application that loads model files, processes user documents, and
+can invoke tools through MCP servers. Assets that require protection include:
 
-## Trust boundaries
+- user files accessible to configured tools;
+- chats, attachments, indexes, projects, agents, skills, schedules, and backups;
+- tool permissions, API tokens, and other application settings;
+- host availability, memory, storage, and compute resources;
+- the integrity of downloaded models, catalogues, and application updates.
 
-1. **Renderer ↔ main process.** The UI is untrusted-by-design: sandboxed, no Node access, limited to a
-   typed IPC allowlist.
-2. **Main process ↔ inference worker.** The model runtime is isolated in its own process so a native
-   crash can't take down the app.
-3. **App ↔ MCP servers.** Tool servers are external programs you configure; they run with your OS
-   permissions and are outside the app's control once trusted.
-4. **App ↔ the network.** Only Hugging Face and this GitHub repo, over HTTPS, for downloads/catalogue/
-   updates.
+## Trust zones
+
+| Zone | Trust level | Responsibilities |
+| --- | --- | --- |
+| React renderer | Untrusted presentation layer | Displays content and requests allowlisted operations through preload. |
+| Preload bridge | Narrow trusted interface | Exposes a fixed IPC surface; does not provide general Node.js access. |
+| Electron main process | Trusted policy boundary | Validates input, persists data, enforces permissions, and manages external processes. |
+| Inference utility process | Isolated native workload | Loads GGUF models and performs generation; may crash without terminating the UI. |
+| MCP servers | User-trusted external programs | Run with the user's OS permissions and may access network or filesystem resources. |
+| Models, documents, tool output, and catalogues | Untrusted data | May be malformed, adversarial, or contain prompt injection. |
+
+## Security assumptions
+
+- The operating system and signed-in user account are not already compromised.
+- Users protect their account and application data with appropriate OS security controls.
+- Users install MCP servers and imported models only from sources they are prepared to trust.
+- Loop limits and permission prompts reduce the impact of model mistakes; they do not establish
+  that model output is correct or safe.
+- A persistent **Always allow** decision deliberately grants more authority and weakens interactive
+  protection for that tool.
 
 ## Threats and mitigations
 
-### Unattended scheduled inference
-A saved prompt runs while nobody is present and attempts to turn model output into an action, leak
-content through a notification, exhaust resources, or replay after sleep.
+### Prompt injection through documents or tool output
 
-- **Mitigations:** scheduled runs are inference-only and receive no tools, connectors, shell,
-  retrieval, or secrets; outputs stay in a private bounded ledger; notifications contain status
-  only; cadence, duration, output, overlap, battery, memory pressure, missed runs, and duplicate DST
-  minutes are bounded explicitly. PowerStation installs no privileged scheduler or system cron
-  entry.
-- **Residual risk:** the saved prompt and generated result are sensitive local data. Anyone with
-  access to the user's PowerStation data directory can read them, just as they can read saved chats.
+A file, retrieved page, or tool response may instruct the model to ignore user intent, disclose
+data, or invoke a dangerous tool.
 
-### Prompt injection via tool output
-A poisoned file, web page, or API response read by a tool tries to steer the agent (e.g. "ignore
-previous instructions and delete X"). Small local models are especially susceptible.
-- **Mitigations:** tool output is capped and framed to the model as *data, not instructions*, and is
-  never executed; every side-effecting tool call still requires permission; loop guards limit damage
-  from a call that keeps retrying. **Residual risk:** a user who has granted "always allow" to a
-  powerful tool reduces these protections — grant it sparingly.
+Controls:
 
-### Malicious or careless MCP server
-A configured server could try to exfiltrate data or run harmful commands.
-- **Mitigations:** servers run in the main process over stdio (never exposed to the renderer);
-  per-tool permissions gate what the model can invoke; the app fixes PATH but doesn't grant elevated
-  rights. **Residual risk:** the server itself runs with your permissions — only add servers you
-  trust. This is the largest residual risk in the product and is stated plainly in-app.
+- tool output is capped and explicitly framed as untrusted data;
+- side-effecting calls remain subject to permission policy;
+- file mutations include a change preview;
+- call budgets and repeated-call detection limit automated retries;
+- tool decisions and outcomes are recorded in the chat audit log.
 
-### Malicious model file
-A crafted GGUF could try to crash the runtime or exploit the loader.
-- **Mitigations:** inference runs in an isolated process, so a crash is contained and recoverable; the
-  app never executes model-provided content as code. **Residual risk:** you are responsible for the
-  provenance of models you import yourself; catalogue models are verified against Hugging Face.
+Residual risk: a model can still produce misleading output or request an unsafe operation. A user
+who has granted persistent permission to a powerful tool may not receive another prompt.
 
-### Resource exhaustion (OOM / swap)
-Loading a model too large for the machine could hang or crash it.
-- **Mitigations:** pre-load admission control refuses or shrinks loads that won't fit (summing
-  multi-part models); runtime memory-pressure monitoring auto-pauses generation; crashes yield a
-  recovery card with a respawn cooldown. See [Memory & monitoring](docs/memory-and-monitoring.md).
+### Malicious or compromised MCP server
 
-### Compromised renderer / injected web content
-If untrusted content ran in the UI, it could try to reach the OS or open malicious links.
-- **Mitigations:** `contextIsolation` + `sandbox` + `nodeIntegration: false`; a preload allowlist the
-  renderer can't extend; navigation is blocked away from the bundled UI; external-link opening is
-  allowlisted to Hugging Face and this repo's paths (with a path boundary, so look-alike repo names
-  are rejected).
+An MCP server may read accessible data, execute harmful operations, or communicate externally.
 
-### Download integrity / supply chain
-A tampered download could deliver a bad model or catalogue.
-- **Mitigations:** downloads and catalogue fetches are HTTPS and pinned to `huggingface.co` / this
-  repo; remote catalogue JSON is strictly validated (and download URLs re-checked) before use; native
-  binaries are packaged from the pinned `node-llama-cpp` dependency. **Residual risk:** trust in
-  Hugging Face and the npm/dependency chain, as with any app.
+Controls:
 
-### Data at rest
-Config, permissions, downloaded models and saved chats live in the app's user-data directory.
-- **Mitigations:** everything stays local; chats are plain, inspectable JSON files with an in-app
-  off switch and delete-all. **Residual risk:** anyone with access to your user account can read
-  the user-data directory (including chat contents) — standard OS-level trust applies. Files are
-  not encrypted at rest beyond OS disk encryption (e.g. FileVault/BitLocker).
+- servers are spawned by the main process over stdio and are not exposed to the renderer;
+- model invocation of each discovered tool is controlled by per-tool permissions;
+- curated connector metadata and arguments are validated before launch.
 
-### Repair surface (tab and agent skill)
-The Repair tab reads sizes from a curated set of well-known directories and deletes only
-app-created data. The same operations are exposed to the model as built-in tools when the
-Storage repair skill is enabled.
-- **Mitigations:** scan and reveal targets are resolved in the main process from a fixed allowlist
-  of ids — neither the renderer nor the model ever supplies a path; scans are read-only `stat`
-  walks (no shell, no elevation, symlinks not followed, entry-capped); every delete must pass a
-  `realpath`-based containment guard proving the target is inside the app's data directory,
-  unit-tested against `..` traversal and symlink-escape attacks; all removals are logged to
-  `repair-log.json`. Model-initiated calls additionally go through the standard tool-permission
-  prompts and audit log, and the approval dialog states exactly what would be removed. A
-  prompt-injected model can at worst *ask* to delete rebuildable app-owned data, with the user
-  seeing precisely what before it runs. **Residual risk:** none identified beyond the app's
-  existing write access to its own data folder.
+Residual risk: the server process itself runs with the current user's permissions. PowerStation
+cannot sandbox or attest arbitrary third-party servers. This is the largest intentional extension
+of the application's local trust boundary.
+
+### Malformed or malicious model file
+
+A crafted GGUF may crash the native runtime or exploit a defect in the model loader.
+
+Controls:
+
+- inference runs in a separate utility process;
+- worker failure rejects active requests and presents a recoverable UI state;
+- repeated crash-on-load attempts are rate-limited;
+- catalogue downloads are restricted to validated Hugging Face URLs.
+
+Residual risk: native parser vulnerabilities may still affect the host process environment. Users
+are responsible for the provenance of imported models.
+
+### Resource exhaustion
+
+A model, context, tool loop, or scheduled job may exhaust memory, storage, CPU, or battery.
+
+Controls:
+
+- admission control estimates model weights, KV cache, and compute buffers before loading;
+- context is reduced or a load is refused when it does not fit;
+- memory-pressure monitoring can pause generation;
+- tool calls have per-turn budgets and repeated-call limits;
+- scheduled jobs are serialized and bounded by context, token, and time limits.
+
+Residual risk: estimates and platform telemetry are imperfect, particularly with imported models
+or heterogeneous GPU backends. Native runtimes may fail despite a successful estimate.
+
+### Renderer compromise or injected web content
+
+Rendered content may attempt to access Node.js, navigate to hostile origins, or invoke privileged
+application operations.
+
+Controls:
+
+- `contextIsolation`, renderer sandboxing, and `nodeIntegration: false`;
+- a fixed preload API rather than general IPC access;
+- navigation away from the bundled application is blocked;
+- external link handling is allowlisted and validated;
+- rendered artifacts are sandboxed from the application.
+
+Residual risk: a vulnerability in Electron, Chromium, or an exposed IPC handler may cross the
+boundary. Electron and dependencies should be kept current.
+
+### Download and catalogue supply chain
+
+A compromised upstream service or dependency may provide malicious data or native code.
+
+Controls:
+
+- catalogue and model downloads use HTTPS and approved hosts;
+- remote catalogue fields and download URLs are validated before use;
+- a bundled catalogue is available as an offline fallback;
+- locked npm dependencies are used for reproducible installs;
+- catalogue targets are checked by scheduled CI.
+
+Residual risk: the project ultimately trusts GitHub, Hugging Face, npm, and the dependency supply
+chain. HTTPS and schema validation do not establish that an upstream artifact is benign.
+
+### Local API misuse
+
+Another local process may attempt to consume inference capacity or access the local API without the
+user's knowledge.
+
+Controls:
+
+- the API is disabled by default and binds only to `127.0.0.1`;
+- every request requires a generated bearer token;
+- regenerating the token immediately revokes the previous value;
+- requests are logged and pass normal admission control.
+
+Residual risk: malware or another process running as the same user may be able to read application
+memory or configuration. Users who place a reverse proxy in front of the API assume responsibility
+for remote authentication, encryption, and rate limiting.
+
+### Data at rest and backup disclosure
+
+Anyone with access to the user account or an exported backup may read stored content.
+
+Controls:
+
+- data locations are documented and revealable;
+- chat persistence can be disabled and stored chats can be deleted;
+- privacy-safe diagnostics exclude content, identifiers, secrets, and user paths;
+- scheduled result history and model weights are omitted from normal backups.
+
+Residual risk: application data is stored in readable local files and relies on OS account controls
+and disk encryption. Backups must be protected by the user.
+
+### Repair and cleanup operations
+
+Cleanup functionality could delete unintended files or be manipulated through path traversal or
+symlinks.
+
+Controls:
+
+- external locations are inspection-only;
+- deletions accept fixed item identifiers rather than arbitrary paths;
+- the main process resolves targets from an allowlist;
+- `realpath` containment checks prevent traversal and symlink escape;
+- cleanup is restricted to rebuildable PowerStation-owned data and recorded in `repair-log.json`;
+- model-initiated cleanup uses the same permission, preview, and audit path as MCP tools.
+
+Residual risk: approved cleanup permanently removes the described app-owned data. Users should
+review the preview before proceeding.
 
 ## Out of scope
 
-- A fully compromised host OS or user account.
-- The behaviour of third-party MCP servers and self-imported models once you've chosen to trust them.
-- Physical access to an unlocked machine.
+- a compromised operating system, administrator account, or physical session;
+- correctness, safety, or availability guarantees for third-party models and MCP servers;
+- remote deployment of the localhost API behind user-managed infrastructure;
+- protection against a user intentionally granting broad authority to untrusted software.
 
-## Reporting
+## Reporting and maintenance
 
-Found a gap in this model or a concrete vulnerability? Use the private reporting flow in
-[Security](SECURITY.md). This document evolves as the agent surface grows.
+Report suspected vulnerabilities through the private process in [Security](SECURITY.md). Update
+this threat model when adding new IPC methods, model formats, network destinations, tool classes,
+data stores, or execution engines.

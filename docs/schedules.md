@@ -1,13 +1,13 @@
 # Scheduled jobs
 
-PowerStation can run recurring prompts against an installed local model. Open **Schedules** in the
-sidebar to create, pause, test, edit, or delete a job and inspect its local run ledger.
+PowerStation can run bounded recurring prompts against an installed local model. Open **Schedules**
+to create, pause, test, edit, or delete a job and inspect its local run history.
 
-Scheduled jobs are deliberately **inference-only**. They can generate text, but PowerStation never
+Scheduled jobs are deliberately **inference-only**. They generate text, but PowerStation never
 attaches MCP tools, built-in tools, skills, project context, knowledge folders, the local API, or a
 shell to an unattended run. A prompt cannot expand its own permissions.
 
-## Create a job
+## Create and test a job
 
 Choose **New job**, then set:
 
@@ -30,7 +30,7 @@ Use **Run now** to test the exact saved job. Its result enters the same ledger a
 
 PowerStation accepts standard five-field numeric cron expressions:
 
-```
+```text
 minute hour day-of-month month day-of-week
 ```
 
@@ -48,7 +48,7 @@ The minimum cadence is five minutes. Timezones use IANA names such as `Australia
 `Europe/London`. During daylight-saving fallback, a repeated wall-clock minute runs at most once;
 a nonexistent spring-forward time is naturally skipped.
 
-## Runtime behaviour
+## Execution model
 
 - Runs use the same isolated native worker and model-fit admission control as chat and the local API.
 - Chat, API, comparison, and scheduled inference are serialized. If another generation owns the
@@ -61,7 +61,7 @@ a nonexistent spring-forward time is naturally skipped.
 - Each ledger entry records status, timestamps, model, speed, output or a bounded error. An
   interrupted `running` record becomes a failure the next time PowerStation starts.
 
-## Background operation
+## Application lifecycle
 
 On macOS, closing PowerStation's window leaves the app running, so jobs continue until you choose
 **PowerStation → Quit**. A packaged source installation can enable **Start PowerStation at login**
@@ -83,6 +83,8 @@ private user-data directory. Writes are atomic and the file is permissioned for 
 Prompts and results stay local. A standard PowerStation backup includes job definitions but not run
 history; restored jobs whose model is missing are paused. Model weights are never included.
 
-Because scheduled outputs can contain sensitive material, review the ledger before sharing a
-backup, screenshot, or diagnostic report. PowerStation's privacy-safe diagnostics do not include
-schedule prompts or results.
+Scheduled outputs can contain sensitive material. Review the ledger before sharing screenshots or
+support material. PowerStation's privacy-safe diagnostics exclude schedule prompts and results.
+
+See [Projects and backup](projects.md), [Memory and monitoring](memory-and-monitoring.md), and
+[Security](../SECURITY.md).

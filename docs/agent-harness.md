@@ -1,15 +1,13 @@
 # Agent harness
 
-PowerStation's agent layer lets a local model use tools — files, search, APIs — through
-[Model Context Protocol](https://modelcontextprotocol.io) servers, with guardrails designed for the
-reality that small local models are less reliable and more injectable than frontier models.
-
-The three ideas that make it work: **permissions on every call**, **capability gating by model**, and
-**loop guards**.
+PowerStation allows compatible local models to invoke tools through
+[Model Context Protocol](https://modelcontextprotocol.io) servers. The harness is designed around
+three controls: explicit permissions, model capability gating, and bounded tool loops. These controls
+reduce the effect of model errors and prompt injection but do not make third-party tools trustworthy.
 
 ## Skills
 
-Skills are reusable instruction packs — plain markdown files in PowerStation's data folder — added to
+Skills are reusable instruction packs: plain Markdown files in PowerStation's data folder, added to
 the system prompt while enabled. They work with **every** model, including chat-only ones, and are
 the fastest way to make a small model reliably good at one job.
 
@@ -27,7 +25,7 @@ the fastest way to make a small model reliably good at one job.
   [`catalog/skills.json`](../catalog/skills.json) — remotely updatable and CI-validated, same as
   the model and connector catalogues.
 
-```
+```markdown
 ---
 name: Concise answers
 description: Short, direct replies — no filler.
@@ -35,7 +33,7 @@ description: Short, direct replies — no filler.
 Answer as briefly as the question allows...
 ```
 
-## The connector gallery
+## Connector gallery
 
 Utilities → **Connector gallery** offers curated MCP servers — one click, no commands to paste. Every
 entry is a verified npm package, spawned as `npx -y <package>` with validated arguments only:
@@ -49,16 +47,17 @@ entry is a verified npm package, spawned as `npx -y <package>` with validated ar
 | **Sequential thinking** | A structured reasoning scratchpad | Official · measurably helps small models |
 | **Kitchen sink (demo)** | 13 harmless sample tools | Official · for trying out the harness |
 
-The gallery is data, not code — [`catalog/connectors.json`](../catalog/connectors.json) in this repo,
-fetched alongside the model catalogue and strictly validated (npm package-name pattern, no flag
+The gallery is data rather than executable application code. It is defined in
+[`catalog/connectors.json`](../catalog/connectors.json), fetched alongside the model catalogue and
+strictly validated (npm package-name pattern, no flag
 injection, folder arguments only from the OS folder picker).
 
-## Connecting a custom server
+## Connect a custom server
 
 Anything not in the gallery: open **Utilities** and add an MCP server by name and command, for
 example:
 
-```
+```text
 npx -y @modelcontextprotocol/server-filesystem ~/Documents
 ```
 
@@ -66,10 +65,11 @@ PowerStation spawns it over **stdio** (in the main process, never the renderer),
 shows a live status badge — *connected · N tools*, *connecting*, or *error* with the message. Servers
 can be toggled on/off individually.
 
-> **PATH note:** GUI apps on macOS don't inherit your shell's PATH, so `npx`/`uvx`/`node` would
-> otherwise fail with ENOENT. PowerStation fixes the PATH at startup before spawning any server.
+> [!NOTE]
+> GUI applications on macOS do not inherit the interactive shell's `PATH`. PowerStation resolves a
+> suitable path at startup before spawning commands such as `npx`, `uvx`, or `node`.
 
-## Permissions: allow / ask / deny
+## Tool permissions
 
 Every tool call the model makes is gated. The default for any new tool is **ask**:
 
@@ -98,7 +98,7 @@ Tool **output is treated as untrusted data**: it's capped in size, framed to the
 than instructions, and never executed. This matters because a poisoned file or web page read by a
 tool is a classic prompt-injection vector — see the [Threat model](../THREAT_MODEL.md).
 
-## Trust profiles
+## Trust profiles and plan preview
 
 Settings → **Agent trust** switches how remembered choices behave:
 
@@ -132,8 +132,8 @@ ships **off** — enable it in Utilities → Skills.
 
 ## Capability gating
 
-Not every model can drive tools, and a model flailing at broken tool calls reads as a broken app.
-PowerStation resolves each model's **tool-calling tier** — from the catalogue, or from the GGUF's
+Not every model can produce valid tool calls. PowerStation resolves each model's
+**tool-calling tier** from the catalogue, or from the GGUF's
 embedded chat template for imported models — and gates accordingly:
 
 | Tier | Meaning | In the app |
@@ -142,8 +142,8 @@ embedded chat template for imported models — and gates accordingly:
 | **single** | Reliable single/parallel calls | Tools enabled, capped at **3** tool calls per turn. |
 | **chat** | Not tool-trained | MCP tools **greyed out**, with the reason stated. |
 
-This is the differentiator: rather than exposing tools on every model and letting weak ones fail,
-PowerStation shows honestly what your selected model can do.
+Capability gating prevents the interface from offering an agent workflow to a model that is not
+expected to produce valid tool calls.
 
 ## Context budget metering
 
@@ -162,7 +162,7 @@ errors. The inference worker enforces two hard guards:
 
 When either fires, the chat shows a clear note explaining what happened and how to continue.
 
-## Under the hood
+## Implementation references
 
 - `electron/mcp.ts` — the MCP client manager: single-flight connects (no duplicate child processes),
   tool discovery, and `tools/call` with timeouts.

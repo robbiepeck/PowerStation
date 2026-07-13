@@ -1,84 +1,120 @@
 # Contributing to PowerStation
 
-Thanks for your interest. PowerStation is MIT-licensed and contributions are welcome — code, docs,
-and especially keeping the model catalogue current.
+Thank you for helping improve PowerStation. Contributions are welcome across the application,
+documentation, tests, model catalogue, and connector catalogue.
 
-## Development setup
+## Before you begin
 
-See the [Setup Guide](docs/setup.md) for full detail. In short:
+- Use [GitHub Issues](https://github.com/robbiepeck/PowerStation/issues) to report reproducible bugs
+  or propose substantial changes.
+- Report vulnerabilities privately by following [Security](SECURITY.md). Do not open a public issue
+  for a suspected security problem.
+- Keep pull requests focused. Unrelated changes are easier to review when submitted separately.
+- Confirm that a dependency or catalogue addition has a compatible licence and a clear maintenance
+  purpose.
+
+## Development environment
+
+Requirements:
+
+- Node.js 22 or newer and npm;
+- macOS on Apple Silicon, Windows 10/11 x64, or Linux x64;
+- at least 16 GB system memory;
+- Xcode Command Line Tools on macOS when a native dependency must build from source.
+
+Set up a development checkout:
 
 ```bash
 git clone https://github.com/robbiepeck/PowerStation.git
 cd PowerStation
-npm install
+npm ci
 npm run desktop:dev
 ```
 
-Requirements: macOS on Apple Silicon, Windows 10/11 x64, or Linux x64 (16 GB+), Node.js 22+; on
-macOS the Xcode Command Line Tools. CI runs lint, tests and builds on all supported platforms for
-every PR.
+The [setup guide](docs/setup.md) contains platform notes, packaging commands, and troubleshooting.
 
-## Before you open a PR
+## Repository structure
 
-Run the full check locally — CI expects all of these green:
+| Path | Purpose |
+| --- | --- |
+| `electron/` | Electron main process, inference worker, IPC, persistence, and operating-system integrations. |
+| `src/` | Sandboxed React renderer and shared renderer types. |
+| `catalog/` | Validated model, connector, and skill catalogues. |
+| `skills/` | Bundled skill definitions seeded into user data. |
+| `scripts/` | Development, installation, diagnostics, packaging, and smoke-test helpers. |
+| `docs/` | User, architecture, feature, and roadmap documentation. |
+| `.github/workflows/` | CI and catalogue-freshness automation. |
+
+For process boundaries and data flow, see [Architecture](docs/architecture.md).
+
+## Making a change
+
+1. Create a branch from `main`.
+2. Make the smallest coherent change that solves the problem.
+3. Add or update tests for observable behaviour.
+4. Update relevant documentation and changelog entries when user-facing behaviour changes.
+5. Run the required checks.
+6. Open a pull request that explains the motivation, behaviour change, risks, and validation.
+
+### Required checks
 
 ```bash
-npm run build   # typecheck + build renderer and electron
-npm run lint    # eslint
-npm test        # unit tests
+npm run build
+npm run lint
+npm test
 ```
 
-If your change touches the app UI, also run it (`npm run desktop:dev`) and confirm the flow works
-end to end.
+Run `npm run desktop:dev` and exercise the affected workflow when changing the UI, Electron IPC,
+model loading, permissions, persistence, or packaging. Platform-specific packaging changes should
+also be tested on the target operating system where possible.
 
-## Project layout
+## Engineering conventions
 
-A quick orientation; the [Architecture](docs/architecture.md) guide goes deeper.
+- Keep TypeScript strict and avoid `any` when the type can be expressed.
+- Follow the naming, formatting, and module structure of the surrounding code.
+- Write comments for constraints and design intent, not as a restatement of the next line.
+- Keep the renderer sandboxed. New filesystem, process, or network capabilities must be exposed
+  through narrow, typed preload and IPC interfaces.
+- Treat catalogues, model metadata, tool output, imported files, and restored backups as untrusted.
+- Preserve the local-first design. New network behaviour must be explicit, documented, and scoped.
+- Keep security-sensitive parsing and policy decisions in pure functions where practical, with tests
+  for malformed input and boundary conditions.
+- Avoid logging prompts, attachment contents, credentials, tokens, or user file paths.
 
-- `electron/` — main process, the isolated inference worker, and the message protocol between them.
-- `src/` — the React renderer (chat, onboarding, models, monitor, utilities, settings).
-- `catalog/models.json` — the model catalogue (data, not code — see below).
-- `docs/` — these guides.
+## Catalogue contributions
 
-## Coding conventions
+The catalogue is application data and is validated independently of the application build. A model
+entry in `catalog/models.json` must include accurate download metadata, memory characteristics,
+capability notes, tool-use tier, and licence information.
 
-- **TypeScript, strict.** No `any` escapes where a real type is knowable.
-- **Match the surrounding style.** Comment density, naming and idiom should look like the file you're
-  editing. Comments explain *why* / constraints, not *what* the next line does.
-- **The trust boundary is real.** The renderer never gets direct Node/filesystem access — new
-  capabilities go through a typed IPC channel in `electron/ipc.ts`, the preload allowlist
-  (`electron/preload.cjs`), and the `PowerStationBridge` type in `src/types.ts`. All three must agree.
-- **Treat external input as untrusted.** Remote catalogue data, model files, and MCP tool output are
-  validated/capped and never executed.
-- **One home for each rule.** Prefer resolving a fact once in the main process over re-deriving it in
-  the renderer.
+When proposing a model:
 
-## Proposing a model for the catalogue
+1. Use an official or well-established Hugging Face repository.
+2. Pin the exact GGUF filename and URL; include every shard for split models.
+3. Verify download sizes and any vision projector metadata.
+4. Provide KV-cache geometry or a defensible measured bytes-per-token value.
+5. Assign the catalogue tool tier conservatively: `multi`, `single`, or `none`.
+6. Write specific strengths and limitations without benchmark hype.
+7. Confirm the model licence permits the intended distribution and use.
 
-The catalogue is the product's editorial heart, and it goes stale fast — model additions are among the
-most valuable contributions. Add an entry to [`catalog/models.json`](catalog/models.json) with all
-fields populated and **verified**:
+Run the relevant checks after editing a catalogue:
 
-- `downloadUrl` / `websiteUrl` must be on `huggingface.co` and return 200/302 (the app pins to that
-  host). `fileName` and `sizeBytes` must match the actual GGUF (for multi-part models, point at part
-  `00001`).
-- `geometry` (`nLayers`, `nKvHeads`, `headDim`) and, for hybrid-attention models, `kvBytesPerToken`
-  — these feed admission control. Getting KV cost wrong makes the fit check lie.
-- `toolCalling` — `multi` / `single` / `none`, based on the model's documented tool training (not a
-  guess).
-- `minRamGb` (16 / 24 / 32 / 64), `license`, `expectedTps`, `useCases`, and honest `goodAt` /
-  `strugglesWith` notes.
+```bash
+node scripts/check-catalog-freshness.mjs
+npm test
+```
 
-Bump `updatedAt`. See [Models & devices](docs/models-and-devices.md) for the current set and the
-verification bar. In your PR, note how you verified the URL and the geometry.
+Catalogue freshness is also checked by GitHub Actions on relevant changes and on a schedule.
 
-## Commits and PRs
+## Pull request expectations
 
-- Keep commits focused and messages descriptive.
-- Reference any issue the PR addresses.
-- Describe what you changed, why, and how you tested it.
+A useful pull request description includes:
 
-## Reporting bugs and security issues
+- the problem or opportunity;
+- the chosen approach and important trade-offs;
+- user-visible and compatibility effects;
+- security, privacy, or performance considerations;
+- the checks and manual workflows used for validation.
 
-- **Bugs / features:** open a GitHub issue with steps to reproduce and your OS + chip/GPU + memory.
-- **Security:** please don't file a public issue — see [SECURITY.md](SECURITY.md).
+Maintainers may request a narrower scope, additional tests, or documentation before merging. By
+contributing, you agree that your work will be licensed under the repository's [MIT License](LICENSE).
