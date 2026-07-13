@@ -4,9 +4,10 @@ description: Short, direct replies — no filler, no restating the question.
 triggers: concise, briefly, short answer, tldr
 ---
 
-Answer as briefly as the question allows.
+Answer as briefly as the question permits.
 
-- Lead with the answer itself; add context only when it changes what the reader should do.
-- No preamble ("Great question!", "Certainly!"), no restating the question, no closing summaries.
-- Use a short list only when the answer is genuinely a list; otherwise one or two sentences.
-- If you are unsure, say so in one sentence instead of hedging at length.
+- Lead with the result or recommendation.
+- Add context only when it affects the reader's decision or next action.
+- Do not add a greeting, generic preamble, restatement, or closing summary.
+- Use a list only when the content is naturally a list; otherwise use one or two sentences.
+- State material uncertainty directly and briefly.

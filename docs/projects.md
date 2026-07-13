@@ -1,46 +1,62 @@
-# Projects (workspaces) & backup
+# Projects and backup
+
+Projects collect reusable workspace context. Backups export PowerStation configuration and content
+in a readable JSON archive for recovery or migration.
 
 ## Projects
 
-A project bundles the context you'd otherwise rebuild per chat. The switcher at the top of the
-sidebar moves between **Personal** (your global setup, untouched) and any project you create.
+The workspace switcher in the sidebar moves between **Personal** and user-created projects. Personal
+uses the global configuration. Each project may define:
 
-A project can hold, all optional except the name:
+- **Instructions** — appended to the global system prompt for chats in the project.
+- **Knowledge folder** — locally indexed and attached to new project chats, with source citations.
+- **Skill modes** — project-specific `Off`, `Auto`, or `Always here` overrides. Skills without an
+  override retain their global mode.
+- **Connectors** — the configured MCP servers available while the project is active.
+- **Preferred model** — selected automatically when the project becomes active.
 
-- **Instructions** — appended to the global system prompt for every chat in the project. The
-  model-side effect is identical to typing them into Utilities → System prompt, but scoped.
-- **Knowledge folder** — indexed locally (same engine as chat-with-a-folder); every new chat in
-  the project starts with it attached and answers cite sources. If the index is missing — say,
-  after restoring on a new machine — it rebuilds quietly in the background.
-- **Skills** — per-project mode overrides (*Off / Auto / Always here*). Skills you don't override
-  keep their global mode.
-- **Connectors** — a checklist of your configured MCP servers; only checked ones run while the
-  project is active. Adding a connector while a project is active enables it there too.
-- **Model** — selected automatically when you switch to the project.
+Chats retain the project ID assigned when they are created and do not move automatically between
+workspaces. The sidebar displays the active project's history; Personal displays chats without a
+project. Deleting a project preserves its existing chats.
 
-Chats are stamped with the project they were started in and never migrate; the sidebar lists the
-active workspace's history (Personal shows unassigned chats). Deleting a project keeps its chats.
+Each project is stored as a readable JSON file in the `projects/` directory under PowerStation's
+user-data directory. Project files can be revealed and inspected outside the application.
 
-On disk a project is one JSON file in the app's data folder (`projects/`), the same transparent
-storage as chats — revealable, readable, yours.
+## Backup contents
 
-## Backup & restore
+Open **Settings → Backup & restore** to write one versioned JSON archive containing:
 
-Settings → **Backup & restore** writes a single JSON archive containing settings, tool
-permissions, benchmarks, skills, chats, projects, agents, and scheduled-job definitions. Restore
-on any machine:
+- settings and tool permissions;
+- model registrations and benchmark records, but not model weights;
+- skills, chats, projects, and agents;
+- scheduled-job definitions, but not scheduled run history.
 
-- **Settings and permissions are replaced** by the backup's values.
-- **Scheduled jobs are imported under fresh ids.** Jobs whose pinned model is absent are paused;
-  run history is intentionally not included.
-- **Chats, skills and projects overwrite items with the same id**; everything else you already
-  have stays.
-- **Model weights never travel** — they're huge and re-downloadable. Their catalogue entries and
-  import paths restore, and models appear again as soon as the files exist locally.
-- Every restored value passes the **same sanitizers as a normal config read** — a hand-edited
-  archive can't smuggle in states the app would never write itself.
+Knowledge-folder indexes are derived, machine-specific data and are not included. PowerStation
+rebuilds an index when the referenced folder is available on the restored computer.
 
-Knowledge-folder indexes are rebuilt rather than backed up (they're derived data and
-machine-specific); a restored project re-indexes its folder on first use.
+## Restore behaviour
 
-*Related: [Agent harness](agent-harness.md) · [Memory & monitoring](memory-and-monitoring.md).*
+Restore applies the following merge rules:
+
+- settings and tool permissions are replaced by the archive values;
+- chats, skills, projects, and agents with matching IDs are overwritten;
+- unrelated existing items remain in place;
+- scheduled jobs are imported with new IDs;
+- jobs whose pinned model is unavailable are restored in a paused state;
+- model registrations reappear when their referenced files exist locally.
+
+Every restored value passes the same validation and sanitisation used for normal configuration
+reads. Hand-editing an archive cannot introduce an unsupported application state through fields the
+parser rejects.
+
+## Security and portability
+
+A backup may contain sensitive chats, instructions, attachment text, permissions, and configuration.
+Store and transmit it as a sensitive file. PowerStation does not independently encrypt backup
+archives.
+
+Folder paths, imported model paths, and connector IDs may not resolve on another computer. Missing
+resources degrade safely: indexes can be rebuilt, models can be downloaded or re-imported, and
+connectors can be configured again.
+
+See [Agents](agents.md), [Schedules](schedules.md), and [Security](../SECURITY.md).

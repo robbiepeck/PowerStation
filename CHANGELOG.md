@@ -1,6 +1,10 @@
 # Changelog
 
-The "See what's new" card in the app links here.
+This file records notable user-facing changes to PowerStation. The in-app **See what's new** card
+links to this history. Releases follow the version tags published in this repository.
+
+PowerStation is currently beta software. Unless a release entry states otherwise, macOS on Apple
+Silicon is the primary platform and Windows/Linux support remains beta.
 
 ## v0.19.1 — Verified platform installs
 

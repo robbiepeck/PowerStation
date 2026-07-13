@@ -1,46 +1,48 @@
 # PowerStation documentation
 
-Start here. These guides explain how PowerStation works, how to run and extend it, and what it can
-run on your machine.
+This documentation covers installation, day-to-day use, architecture, security, and contribution
+workflows. PowerStation is beta software: macOS on Apple Silicon is the primary platform, while
+Windows and Linux support remains beta.
 
-## Getting started
+## Start here
 
-- **[Quick Start](quick-start.md)** — clone to first local chat in a few minutes.
-- **[Source Install](source-install.md)** — safe macOS installation, updates and diagnostics.
-- **[Setup Guide](setup.md)** — prerequisites, building, packaging, data locations, troubleshooting.
-
-## How it works
-
-- **[Architecture](architecture.md)** — the process model, the isolated inference worker, IPC, and
-  what happens when you send a message.
-- **[Memory & monitoring](memory-and-monitoring.md)** — pre-load admission control, memory-pressure
-  auto-pause, and honest measured-vs-estimated telemetry (including battery and energy).
-- **[Agent harness](agent-harness.md)** — MCP tools, the permission model (trust profiles,
-  turn-scoped grants, audit log), capability gating, loop guards, and the built-in repair tools.
+| Guide | Audience | Purpose |
+| --- | --- | --- |
+| [Quick start](quick-start.md) | New users | Install PowerStation and complete the first local chat. |
+| [Source installation](source-install.md) | macOS users | Install, update, diagnose, and remove build artifacts safely. |
+| [Setup](setup.md) | Contributors and beta users | Configure development environments, run from source, and package the app. |
 
 ## Features
 
-- **[Projects & backup](projects.md)** — workspaces that bundle instructions, knowledge, skills and
-  connectors; one-file backup & restore.
-- **[Agents](agents.md)** — reusable assistants: instructions + multiple knowledge folders,
-  started with one click.
-- **[Schedules](schedules.md)** — recurring inference-only jobs with cron timing and a local ledger.
-- **[API server](api-server.md)** — serve your model as a localhost OpenAI-compatible endpoint
-  for other apps and scripts.
-- **[Repair](repair.md)** — storage & health for AI workloads, as a tab and as an agent skill;
-  the diagnose-don't-operate contract.
+| Guide | Purpose |
+| --- | --- |
+| [Models and devices](models-and-devices.md) | Supported hardware, catalogue models, imports, benchmarks, and model comparison. |
+| [Agent harness](agent-harness.md) | Skills, MCP connectors, permissions, capability gating, audit logs, and loop guards. |
+| [Projects and backup](projects.md) | Reusable workspace context and portable local backups. |
+| [Agents](agents.md) | Reusable assistants with instructions, knowledge folders, and connector scope. |
+| [Schedules](schedules.md) | Bounded, recurring local inference and run history. |
+| [Local API server](api-server.md) | OpenAI-compatible localhost endpoints, authentication, and limitations. |
+| [Repair](repair.md) | Storage inspection, model integrity checks, and conservative app-owned cleanup. |
 
-## Models & hardware
+## Internals and security
 
-- **[Models & devices](models-and-devices.md)** — the full model catalogue, which Mac each model
-  needs, Windows/Linux VRAM tiers, imports from Ollama/LM Studio, benchmarks and side-by-side
-  compare.
+| Guide | Purpose |
+| --- | --- |
+| [Architecture](architecture.md) | Process isolation, IPC, inference, retrieval, persistence, and scheduling. |
+| [Memory and monitoring](memory-and-monitoring.md) | Admission-control calculations, runtime protection, and telemetry sources. |
+| [Security policy](../SECURITY.md) | Private vulnerability reporting, supported versions, and security boundaries. |
+| [Threat model](../THREAT_MODEL.md) | Assets, trust zones, threats, controls, and residual risks. |
 
-## Project
+## Project development
 
-- **[Contributing](../CONTRIBUTING.md)** — dev setup, conventions, and how to propose a model.
-- **[Scope improvements](scope-improvements.md)** — the detailed backlog of deferred items and their status.
-- **[Security](../SECURITY.md)** · **[Threat model](../THREAT_MODEL.md)** — the local-first posture and
-  the agent attack surface.
+- [Contributing](../CONTRIBUTING.md) — development workflow, conventions, tests, and catalogue changes.
+- [Changelog](../CHANGELOG.md) — notable user-facing changes by release.
+- [Product roadmap](scope-improvements.md) — shipped capabilities, planned work, and explicit non-goals.
+- [MLX engine proposal](mlx-engine-plan.md) — design for an optional Apple Silicon inference engine.
+- [Vision support proposal](vision-plan.md) — current runtime blocker and implementation paths.
 
-← Back to the [project README](../README.md).
+Documentation corrections are welcome. If instructions do not match the current application,
+please [open an issue](https://github.com/robbiepeck/PowerStation/issues) or submit a focused pull
+request.
+
+[Back to the project README](../README.md)

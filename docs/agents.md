@@ -1,63 +1,84 @@
-# Agents — reusable assistants
+# Agents
 
-The **Agents** tab is PowerStation's take on the Microsoft-365 agent-builder idea, scoped to what
-a strictly-local app can honestly deliver: a named, reusable assistant made of **instructions**
-and the **knowledge folders** it answers from. Build one once, start chats with it whenever.
+An agent is a reusable assistant configuration that applies instructions, local knowledge folders,
+and an optional connector scope to a new chat. Agents are separate from projects and do not bind a
+specific model.
 
-## What an agent is
+## Agent configuration
 
-- **A face and a name** — an emoji and a one-line description, shown on its card and on every
-  chat it powers.
-- **Instructions** — appended to the system prompt for every message in the agent's chats, after
-  the global prompt and any active project's instructions (most specific last).
-- **Knowledge folders (up to 8)** — indexed locally with the same engine as chat-with-a-folder.
-  At question time the agent retrieves across *all* its folders at once: the query is embedded
-  once and chunks from every folder compete for the same top-k slots, so the best evidence wins
-  no matter where it lives. With more than one folder, citations are folder-prefixed
-  (`finance-notes/budget.md`) so sources stay unambiguous.
-- **Connectors (optional)** — the MCP servers the agent may use. Leave all unchecked and the agent
-  uses whatever connectors are normally on; check some and its chats are scoped to exactly those
-  while active (an empty list never silences tools, it just inherits). Every tool call stays
-  permission-gated and audit-logged as always. Precedence when several things are in play: an
-  active agent's connectors win over a project's, which win over the global enabled set.
+Each agent can define:
 
-Deliberately **not** part of an agent: model binding. An agent shapes the conversation; the model
-stays whatever you've selected.
+- **Name, icon, and description** — shown in the Agents view, chat header, and chat history.
+- **Instructions** — appended to the effective system prompt after global and project instructions.
+- **Knowledge folders** — up to eight locally indexed directories. Retrieval searches all selected
+  folders together and returns the highest-ranking chunks across the combined result set.
+- **Connectors** — an optional list of configured MCP servers available in the agent's chats.
 
-## Using agents
+When several connector scopes apply, precedence is:
 
-**Start chat** on an agent's card opens a fresh conversation with that agent applied; the chat
-header shows its chip, and the sidebar row carries its emoji so agent chats are recognisable
-later. Reopening a saved agent chat restores the agent (and its connector scope). **New chat**
-always starts plain.
+```text
+agent → project → globally enabled connectors
+```
 
-Agents and **projects** compose: a project is a workspace you switch into (scoping your chat
-list); an agent is an assistant you summon per chat. Inside a project, an agent chat gets both
-sets of instructions — project first, agent second.
+Leaving the agent's connector list empty inherits the next available scope. Selecting connectors
+restricts the agent to that exact set. Every tool invocation remains subject to the normal permission,
+preview, and audit workflow.
 
-Deleting an agent keeps every chat made with it (the badge stays, denormalized); only the
-reusable definition goes away.
+Agents do not select or package a model. A chat created from an agent uses the model currently
+selected in PowerStation.
 
-## Share an agent
+## Start and resume agent chats
 
-An agent is one JSON file, so it travels: **Export…** in the agent editor writes a
-`*.agent.json` file; **Import** on the Agents tab reads one back in under a fresh id (so importing
-never overwrites an existing agent). Knowledge-folder references travel too — on another machine
-they simply retrieve nothing until those folders exist and are re-indexed, and connector ids that
-don't resolve there just connect nothing. Nothing errors; the agent degrades gracefully.
+Select **Start chat** on an agent card to create a conversation with that configuration. The chat
+header displays the agent, and the sidebar uses its icon to distinguish the conversation. Reopening a
+saved chat restores the associated agent and connector scope. Selecting the standard **New chat**
+action creates an unconfigured conversation.
+
+Projects and agents can be combined. A project supplies workspace context and filters the visible
+chat history; an agent supplies assistant-specific context to an individual chat. Project instructions
+are applied before agent instructions.
+
+Deleting an agent does not delete its existing chats. The saved chat retains denormalised display
+metadata, while the reusable agent definition is removed.
+
+## Knowledge retrieval
+
+At question time, PowerStation embeds the query once and searches all of the agent's indexed folders.
+Chunks compete for the same result limit so that evidence quality determines selection rather than
+folder order. When an agent uses multiple folders, citations include the folder prefix, for example
+`finance-notes/budget.md`.
+
+If a folder is unavailable or has not yet been indexed, the remaining agent configuration continues
+to work. Re-index the folder on the destination computer to restore retrieval.
+
+## Export and import
+
+Select **Export** in the agent editor to create a versioned `*.agent.json` file. Select **Import** in
+the Agents view to add an exported definition. Import assigns a new internal ID and never overwrites an
+existing agent.
+
+Folder references and connector IDs are included. On another computer, unavailable folders return no
+retrieval results and unknown connectors remain inactive until matching resources are configured. The
+export does not include model weights or folder contents.
+
+Treat imported agent files as untrusted configuration. PowerStation validates them through the same
+format parser used for stored definitions.
 
 ## Plan preview
 
-Independently of agents, Settings → Agent trust has **Preview the plan before tool use**. When on,
-a tool-capable model first proposes the steps it intends to take before a multi-tool turn; you
-approve the plan once (every tool call in the turn then runs without a prompt) or cancel and
-nothing runs. Every call is still audit-logged. It pairs naturally with agents that have
-connectors. See the [Agent harness](agent-harness.md).
+**Settings → Agent trust → Preview the plan before tool use** adds an optional planning step for
+multi-tool turns. A capable model proposes its intended steps in an isolated pass. Approving the plan
+authorises tool calls for that turn; cancelling prevents execution. Calls are still recorded in the
+audit log.
 
-## Where they live
+Plan preview reduces repeated confirmation prompts but grants authority to the approved turn as a
+whole. Review the proposed scope carefully, especially for file-writing or network-enabled tools.
 
-One JSON file per agent in the app's data folder (`agents/`) — revealable from the tab, editable
-outside the app, included in [backups](projects.md), and restored with everything else.
+## Storage and backup
 
-*Related: [Projects & backup](projects.md) · [Agent harness](agent-harness.md) (permissions and
-tools) · [Memory & monitoring](memory-and-monitoring.md).*
+Agents are stored as individual JSON files in the `agents/` directory under PowerStation's user-data
+directory. They can be revealed from the application, are included in normal backups, and can be
+edited outside the app if their schema is preserved.
+
+See [Projects and backup](projects.md), [Agent harness](agent-harness.md), and
+[Security](../SECURITY.md).

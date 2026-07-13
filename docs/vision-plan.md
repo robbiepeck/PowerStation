@@ -1,61 +1,86 @@
-# Vision (image input) — status and plan
+# Vision input proposal
 
-**Status: blocked on the runtime, groundwork shipped.** This page records what was verified, what
-is already in place, and exactly what remains — so vision ships the week the blocker lifts, not a
-quarter later.
+- **Status:** Runtime-blocked; catalogue groundwork implemented
+- **Last reviewed:** 6 July 2026
 
-## What was verified (2026-07-06)
+PowerStation does not currently accept image input. This document records the implemented groundwork,
+the current runtime limitation, and the supported implementation paths. Vision controls should not
+appear in the product until the packaged inference runtime can process them reliably.
 
-- **The models are real.** Both Gemma 4 entries in the catalogue have genuine vision projector
-  files on Hugging Face, verified by size:
-  - `gemma-4-E4B` — `mmproj-gemma-4-E4B-it-BF16.gguf` (991 MB)
-  - `gemma-4-26B-A4B` — `mmproj-gemma-4-26B-A4B-it-BF16.gguf` (1.19 GB)
-- **The runtime cannot run them.** `node-llama-cpp@3.19.0` — the latest release — exposes **no
-  multimodal API**: `ChatUserMessage` is text-only, there are no mmproj load options, and nothing
-  image-related exists anywhere in its type surface. llama.cpp itself supports these models (via
-  `libmtmd`), but the Node bindings don't expose it, and the binding packages ship only library
-  binaries — no `llama-server` executable to shell out to.
+## Current limitation
 
-Per this project's standing rule (see the [MLX plan](mlx-engine-plan.md)): the app never ships a
-feature the installed runtime can't actually execute. So there is no image picker, no mmproj
-download, and no vision toggle in the app today — only honest metadata.
+The catalogue includes Gemma model variants with verified multimodal projector files, but
+`node-llama-cpp@3.19.0` does not expose the required multimodal API for these models. Its public chat
+types are text-only, it provides no projector-loading option, and its packaged dependencies do not
+include a `llama-server` executable that PowerStation can manage as a fallback.
 
-## What is already in place (shipped as groundwork)
+Although upstream llama.cpp supports these models through `libmtmd`, that capability is not currently
+available through PowerStation's installed Node.js binding. Consequently, the application does not
+show an image picker, download projector files, or advertise image inference as available.
 
-1. **Catalogue schema + verified data** — `CatalogModel.vision { mmprojUrl, mmprojFileName,
-   mmprojSizeBytes }`, sanitized with the same huggingface.co pinning as model downloads, populated
-   for the two Gemma entries. Catalogue cards show a neutral *vision-capable model* badge with a
-   tooltip stating plainly that PowerStation doesn't run images yet.
-2. **Freshness CI covers vision files** — mmproj URLs and sizes are re-verified weekly alongside
-   everything else, and a **runtime watchdog** warns whenever a newer `node-llama-cpp` ships, so
-   the unblock gets evaluated immediately.
-3. **The attachment pipeline** (v0.5) already handles picking, drag-and-drop, per-chat persistence
-   and replay — images slot in as a new attachment kind rather than a new system.
+## Implemented groundwork
 
-## The two viable paths
+### Catalogue metadata
 
-**Path A — upstream multimodal in node-llama-cpp (preferred).** When the bindings expose mmproj
-loading and image content in prompts, the work remaining here is small and local:
+The model schema supports an optional vision block containing projector URL, filename, and size.
+Remote values pass the same host validation as model downloads. Catalogue cards may identify a model
+as vision-capable while clearly stating that image input is not yet supported by PowerStation.
 
-- Worker: load the mmproj alongside the model (`ensureModelLoaded` gains a projector path);
-  accept `images` in `ChatRequest` and pass them into the prompt.
-- Downloads: fetch the mmproj next to the model file (URL and size already in the catalogue);
-  admission control adds `mmprojSizeBytes` to the weights term and an estimated per-image token
-  cost to the context term.
-- Renderer: enable image files in the existing attachment picker/drop (gated on the selected
-  model's `vision` field), thumbnail chips, image display in the user bubble.
+### Freshness checks
 
-**Path B — engine registry + `llama-server` subprocess.** Ship llama.cpp's server binary as a
-managed engine (OpenAI-style multimodal API over localhost). Viable but heavy: per-platform binary
-distribution, a second chat path, and its own crash/recovery handling. This is the same
-architecture as the [MLX engine pack](mlx-engine-plan.md) — if the engine registry gets built for
-MLX, vision-by-server comes nearly free, and vice versa.
+Scheduled catalogue validation verifies projector URLs and sizes. A dependency watchdog also reports
+new `node-llama-cpp` releases so multimodal support can be re-evaluated promptly.
 
-## Explicitly rejected
+### Attachment architecture
 
-- A vision UI that appears before the runtime works.
-- Downloading mmproj files "in advance" — a gigabyte of disk for a feature that can't run.
-- Shelling out to a user-installed llama.cpp/Ollama for images only — split-brain inference with
-  inconsistent admission control (and Ollama import users would reasonably expect parity).
+The existing attachment system already handles file selection, drag-and-drop, persistence, and replay.
+Images can be introduced as another validated attachment kind without redesigning chat persistence.
 
-*Related: [scope improvements](scope-improvements.md) · [MLX plan](mlx-engine-plan.md).*
+## Preferred implementation: upstream Node.js support
+
+When `node-llama-cpp` exposes projector loading and image prompt content for the relevant model
+families, the implementation should include:
+
+- loading the projector alongside the selected model in the inference worker;
+- extending the worker protocol with validated image attachments;
+- downloading the projector next to managed model files;
+- including projector allocation and image token cost in admission control;
+- enabling image selection only for models with a compatible installed projector;
+- rendering bounded thumbnails and persisted image attachments in chat;
+- tests for unsupported formats, missing projectors, corrupted files, cancellation, and replay.
+
+This path preserves the existing isolated worker and avoids introducing a second inference transport.
+
+## Alternative implementation: managed server engine
+
+A managed `llama-server` subprocess could expose multimodal inference through an OpenAI-compatible
+loopback interface. This requires per-platform binary distribution, integrity verification, process
+lifecycle management, streaming correlation, cancellation, admission control, and crash recovery.
+
+The work overlaps with the engine registry described in the [MLX proposal](mlx-engine-plan.md). If
+that abstraction is implemented first, a server-backed multimodal engine becomes more practical.
+
+## Acceptance criteria
+
+- Image controls appear only when the selected model, projector, and engine are compatible.
+- Projector and image memory costs are included in the pre-load fit decision.
+- Images remain local except when a user explicitly sends them through a configured network tool.
+- Supported formats, dimensions, and file sizes are validated before reaching the native runtime.
+- Chat persistence and export clearly represent image attachments without embedding unsafe content.
+- Worker crashes remain isolated and recoverable.
+- Catalogue claims and UI labels distinguish model capability from currently available runtime support.
+
+## Rejected approaches
+
+- Shipping a non-functional image picker before the runtime supports image prompts.
+- Downloading approximately one gigabyte of projector data before the feature can run.
+- Routing images through a user-installed Ollama or llama.cpp process while text uses PowerStation's
+  managed runtime, which would create inconsistent admission control and support behaviour.
+
+## Re-evaluation trigger
+
+Revisit this proposal when the packaged `node-llama-cpp` version exposes multimodal projector loading
+and typed image messages, or when PowerStation gains a validated multi-engine abstraction.
+
+See the [product roadmap](scope-improvements.md), [Architecture](architecture.md), and
+[threat model](../THREAT_MODEL.md).

@@ -4,14 +4,13 @@ description: Tighten prose while keeping the author's voice.
 triggers: edit, rewrite, proofread, tone, tighten, improve this
 ---
 
-When given text to edit:
+When editing supplied text:
 
-1. Return the edited version first, in full.
-2. Then list the significant changes in a short bulleted list, each with a one-line reason.
+1. Return the complete edited version first.
+2. Follow it with a short list of material changes and one-line reasons.
 
-Editing rules:
-- Preserve the author's voice, register, and intent — you are an editor, not a ghostwriter.
-- Cut filler words, redundancy, and throat-clearing. Prefer active voice and concrete verbs.
-- Fix grammar and punctuation silently; only list changes that alter meaning or structure.
-- Keep the original length unless asked to shorten or expand.
-- British or American spelling: follow whichever the original uses.
+Preserve the author's intent, voice, register, point of view, and spelling convention. Remove filler,
+repetition, and unnecessary preamble; prefer active voice and specific verbs where they fit. Correct
+grammar and punctuation without listing every mechanical edit. Mention only changes that affect
+meaning, organisation, or tone. Keep approximately the original length unless the user requests a
+shorter or expanded version.

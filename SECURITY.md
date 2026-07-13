@@ -1,70 +1,83 @@
-# Security
+# Security policy
 
-PowerStation is a local-first app whose entire pitch is "your machine, your data." This page covers
-what that means in practice and how to report a vulnerability. For the deeper analysis of the agent
-attack surface, see the [Threat model](THREAT_MODEL.md).
+PowerStation runs models and user-configured tools on a local computer. Security reports are taken
+seriously, particularly when they involve tool permissions, path containment, model or catalogue
+validation, IPC boundaries, backup restoration, or unintended network access.
 
 ## Reporting a vulnerability
 
-Please **do not** open a public issue for security reports. Instead, use GitHub's private
-[**Report a vulnerability**](https://github.com/robbiepeck/PowerStation/security/advisories/new)
-flow on this repository. Include steps to reproduce, affected version/commit, and impact. You'll get
-an acknowledgement and a fix timeline; please allow reasonable time to remediate before any public
+Do not open a public issue for a suspected vulnerability.
+
+Use GitHub's private vulnerability reporting flow:
+
+1. Open the repository's **Security** tab.
+2. Select **Report a vulnerability**.
+3. Include the affected version or commit, operating system, reproduction steps, expected behaviour,
+   observed behaviour, and potential impact.
+
+If private vulnerability reporting is unavailable, contact the maintainer through the contact
+details on the GitHub profile and request a private reporting channel. Do not include exploit details
+in the initial public message.
+
+You should receive an acknowledgement within seven days. Timing for validation and remediation
+depends on severity and reproducibility. Please allow a reasonable remediation window before public
 disclosure.
-
-## What runs, and what leaves your machine
-
-- **Inference is local.** Models run on-device via a bundled `node-llama-cpp` runtime. Prompts and
-  responses are never sent anywhere.
-- **Chats stay on your machine.** Conversations are saved as plain JSON files in the app's
-  user-data folder — never transmitted. Saving can be disabled in Settings, and files can be
-  revealed or deleted there at any time.
-- **Network is minimal and pinned.** The only outbound traffic is: model downloads and catalogue
-  updates from `huggingface.co` / this GitHub repo (download URLs are validated and pinned to
-  `huggingface.co`), and update checks against this repo's GitHub Releases. External-link opening is
-  allowlisted to Hugging Face and this repository's paths.
-
-## The renderer is sandboxed
-
-The UI runs with `contextIsolation`, `sandbox`, and `nodeIntegration: false`. It has no direct access
-to Node, the filesystem, or the model runtime — only a small, typed API exposed through a preload
-`contextBridge` allowlist. It cannot invent new IPC channels or reach the OS directly.
-
-## The agent surface is the real attack surface
-
-An agent that can run tools on your machine is more powerful — and more dangerous — than a chat box,
-and small local models are more susceptible to prompt injection than frontier models. PowerStation's
-mitigations:
-
-- **Every tool call is gated** by an allow / ask / deny permission model; side-effecting tools default
-  to asking.
-- **Tool output is treated as untrusted data** — capped in size, framed to the model as data rather
-  than instructions, and never executed.
-- **Capability gating** keeps tools off models that can't use them reliably.
-- **MCP servers run in the main process over stdio**, never reachable from the renderer.
-- **Loop guards** stop runaway or repeated tool calls.
-
-The full analysis — assets, trust boundaries, threats and residual risk — is in the
-[Threat model](THREAT_MODEL.md).
-
-## Scheduled jobs
-
-Scheduled jobs execute without a person present, so their authority is intentionally narrower than
-chat. They receive only the saved prompt and optional system instructions; no MCP tools, built-in
-tools, skills, retrieval context, API credentials, or shell are attached. Jobs cannot change their
-own schedule or permissions. Model presence, fit, overlap, battery state, memory pressure, response
-size, and runtime are bounded before or during every run. Notifications never contain generated
-text. Definitions and results remain in the private local schedule store and are visible in the run
-ledger.
-
-## Your responsibilities
-
-- **MCP servers run with your permissions.** Only add servers you trust, and only grant "always allow"
-  to tools you understand. A malicious or careless server is outside PowerStation's control.
-- **Model licences and provenance.** You are responsible for reviewing and complying with each model's
-  licence, and for the trustworthiness of any model you import yourself.
 
 ## Supported versions
 
-PowerStation is pre-1.0; security fixes target the latest `main`. Please test against the current
-`main` before reporting.
+PowerStation is beta software and currently supports the latest tagged release and the current
+`main` branch. Security fixes are not routinely backported to older releases.
+
+| Version | Security support |
+| --- | --- |
+| Latest tagged release | Supported |
+| Current `main` branch | Supported for development reports |
+| Older releases | Update before reporting unless the issue is known to persist |
+
+## Security boundaries
+
+PowerStation uses the following core controls:
+
+- The React renderer runs with `contextIsolation`, sandboxing, and no Node.js integration.
+- A narrow preload allowlist exposes typed operations to the renderer.
+- Native model inference runs in a separate Electron utility process.
+- Remote catalogue data is validated before use, and model downloads are restricted to approved
+  Hugging Face URLs.
+- New tools require confirmation by default; persistent allow/deny choices are scoped per tool.
+- File mutations show a preview, and all tool decisions and outcomes are audit-logged.
+- Built-in cleanup operations resolve fixed identifiers in the main process and enforce real-path
+  containment within PowerStation-owned data.
+- The optional API server is disabled by default, bound to `127.0.0.1`, and protected by a generated
+  bearer token.
+
+These controls reduce risk but do not make untrusted models, documents, or MCP servers safe by
+themselves. Review the [threat model](THREAT_MODEL.md) for assumptions and residual risks.
+
+## Data and network behaviour
+
+By default, model inference, chats, attachments, folder indexes, projects, agents, skills, and
+schedules are stored and processed locally. PowerStation makes network requests for:
+
+- model downloads from Hugging Face;
+- catalogue updates and release checks from GitHub;
+- network-enabled MCP connectors explicitly configured and invoked by the user.
+
+Custom MCP servers are separate programs that run with the current user's operating-system
+permissions. Their behaviour is outside PowerStation's security boundary. Install only servers you
+trust and grant each tool the minimum authority required.
+
+Application data is not independently encrypted at rest. It relies on operating-system account
+security and full-disk encryption such as FileVault or BitLocker. Backups may contain chats,
+settings, permissions, skills, projects, agents, and scheduled-job definitions; protect them as
+sensitive files.
+
+## Security-related contributions
+
+Changes that affect the renderer boundary, IPC, file access, process execution, tool permissions,
+catalogue validation, backup parsing, API authentication, or cleanup containment should include:
+
+- tests for malformed and adversarial input;
+- a description of the trust boundary being changed;
+- documentation updates when user expectations or residual risks change.
+
+See [Contributing](CONTRIBUTING.md) for the general development workflow.
