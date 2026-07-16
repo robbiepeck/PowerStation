@@ -2062,12 +2062,12 @@
 
 .settings-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 1.1rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.35rem;
 }
 
 .settings-section {
-  padding: 1.2rem 1.3rem;
+  padding: 1.45rem 1.55rem;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: var(--surface);
