@@ -44,7 +44,7 @@ in the [changelog](../CHANGELOG.md).
 | Vision input | Blocked | Re-evaluate when the packaged runtime exposes compatible multimodal APIs. |
 | Optional MLX engine | Designed | Requires secure runtime-pack delivery and engine-specific admission data. |
 | Public web model recommender | Deferred | Revisit after desktop distribution and documentation mature. |
-| Signed macOS and Windows binaries | Deferred | Requires maintained platform signing and notarisation infrastructure. |
+| Signed stable releases | Shipped workflow | Maintainers publish them manually after platform signing and notarisation. |
 
 ## Delivered foundations
 
@@ -78,9 +78,10 @@ connectors, project context, or retrieval.
 
 ### Distribution
 
-Stable releases are currently source-only. macOS users can build, verify, ad-hoc sign, and install a
-tagged release through project scripts. CI builds and launch-tests platform packages, but unsigned
-artifacts are not distributed as supported consumer downloads.
+Every commit merged to `main` has a source-only Nightly prerelease. Stable releases are published
+manually only after their packages meet the platform trust requirements. macOS users can still build,
+verify, ad-hoc sign, and install a tagged release through project scripts; CI's unsigned packages
+remain verification artifacts rather than supported consumer downloads.
 
 ## Designed or blocked work
 
@@ -106,9 +107,9 @@ distribution, documentation, and catalogue quality.
 
 ### Signed consumer binaries
 
-Developer ID signing, notarisation, and Windows code signing would permit conventional downloads.
-Until the required credentials, secure CI secrets, renewal process, and release ownership are in
-place, the project will continue publishing source-only releases.
+The release workflow supports signed stable packages while keeping platform credentials and
+notarisation under maintainer control. Automated publishing remains out of scope until secure CI
+secrets, renewal processes, and release ownership are established.
 
 ## Not planned
 

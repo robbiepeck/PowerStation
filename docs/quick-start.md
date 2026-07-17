@@ -15,8 +15,9 @@ at least 8 GB VRAM is recommended on those platforms.
 
 ## Install on macOS
 
-PowerStation publishes source-only releases. The supported macOS installer builds and ad-hoc signs
-the application on the destination computer.
+Nightly prereleases are source-only. The supported macOS source installer builds and ad-hoc signs
+the application on the destination computer. When a signed stable macOS package is published, its
+packaged app can update itself directly instead.
 
 ```bash
 git clone --depth 1 --branch v0.19.1 https://github.com/robbiepeck/PowerStation.git
@@ -31,6 +32,7 @@ models, chats, and settings are preserved.
 
 For update commands, data-preservation details, and diagnostics, use the
 [source installation guide](source-install.md).
+See [Release channels](releases.md) for the distinction between Nightly and stable releases.
 
 ## Run on Windows or Linux
 

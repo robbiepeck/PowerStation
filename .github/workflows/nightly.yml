@@ -1,0 +1,34 @@
+# Each main commit is available as a deliberately source-only prerelease.
+# Consumer packages belong only on manually published, signed stable releases.
+
+name: Publish Nightly source release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-nightly:
+    name: Publish source-only Nightly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Create source-only prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          tag="nightly-$(date -u +'%Y%m%d')-${short_sha}"
+          gh release create "$tag" \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --latest=false \
+            --generate-notes \
+            --title "PowerStation Nightly — ${short_sha}" \
+            --notes "Source-only Nightly from \`${GITHUB_SHA}\`. This is not a signed consumer release and is never offered through the in-app stable updater."

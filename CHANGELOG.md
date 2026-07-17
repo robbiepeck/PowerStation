@@ -6,6 +6,15 @@ links to this history. Releases follow the version tags published in this reposi
 PowerStation is currently beta software. Unless a release entry states otherwise, macOS on Apple
 Silicon is the primary platform and Windows/Linux support remains beta.
 
+## Unreleased
+
+- **Release channels** — every commit merged to `main` now creates a source-only Nightly prerelease.
+  Stable releases are prepared manually with signed platform packages; the in-app updater ignores
+  Nightlies and uses stable releases only.
+- **Visible update control** — supported packaged apps now always show **Check for updates**. The
+  button downloads only a suitable signed stable package and leaves source-built installations on
+  the documented source-update workflow.
+
 ## v0.19.1 — Verified platform installs
 
 - **Installed-app launch coverage** — CI now installs and launches the Windows NSIS package, Linux
