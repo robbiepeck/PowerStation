@@ -68,9 +68,10 @@ packages are built and launch-tested in CI but are not currently published as co
 
 ## Installation
 
-Public releases are source-only. On macOS, the supported installation command builds and ad-hoc
-signs PowerStation on the destination Mac. This avoids distributing an unsigned, unnotarized
-application and does not require an Apple Developer account.
+Nightly prereleases are source-only. Signed stable releases may include supported consumer packages;
+when one is available, a packaged app can check for it and install the update in-app. The source
+installation path remains available for contributors and for stable releases without a signed
+package.
 
 ### macOS
 
@@ -83,7 +84,8 @@ npm run install:mac
 
 The installer checks prerequisites, installs locked dependencies, builds and verifies the app,
 then places it in `/Applications` or `~/Applications`. Existing settings, chats, and models are
-preserved. See [Install from source](docs/source-install.md) for updates and troubleshooting.
+preserved. See [Install from source](docs/source-install.md) for source updates and troubleshooting,
+or [Release channels](docs/releases.md) for the stable-release workflow.
 
 ### Windows and Linux
 
@@ -122,6 +124,7 @@ and the [threat model](THREAT_MODEL.md).
 | [Documentation index](docs/README.md) | All user, contributor, architecture, and roadmap documentation. |
 | [Quick start](docs/quick-start.md) | Install PowerStation and complete the first local chat. |
 | [Source installation](docs/source-install.md) | Supported macOS install, update, and diagnostics workflow. |
+| [Release channels](docs/releases.md) | Source-only Nightlies and the signed stable-release process. |
 | [Setup](docs/setup.md) | Development prerequisites, scripts, packaging, and troubleshooting. |
 | [Architecture](docs/architecture.md) | Process isolation, IPC, inference, retrieval, and scheduled execution. |
 | [Models and devices](docs/models-and-devices.md) | Supported hardware, catalogue models, imports, and benchmarks. |

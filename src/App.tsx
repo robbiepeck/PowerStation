@@ -1636,13 +1636,10 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
   if (!state) return null
 
   const downloading = state.phase === 'downloading'
+  const checking = state.phase === 'checking'
   const configurationError =
     state.phase === 'error' && Boolean(state.message?.match(/private|release feed|update metadata/i))
-  const shouldShow =
-    state.phase === 'available' ||
-    state.phase === 'downloading' ||
-    state.phase === 'downloaded' ||
-    (state.phase === 'error' && Boolean(state.latestVersion) && !configurationError)
+  const shouldShow = state.phase !== 'unsupported'
 
   if (!shouldShow) return null
 
@@ -1653,20 +1650,24 @@ function UpdateButton({ onUpdate, state }: { onUpdate: () => void; state: Update
         : state.latestVersion
         ? `Update ${state.latestVersion}`
         : 'Update'
-      : state.phase === 'downloaded'
-        ? 'Restart to update'
-        : state.phase === 'error'
-          ? configurationError
-            ? 'Updates unavailable'
-            : 'Retry update'
-          : `Updating ${Math.round(state.progressPct ?? 0)}%`
+      : state.phase === 'idle'
+        ? 'Check for updates'
+        : state.phase === 'checking'
+          ? 'Checking for updates'
+          : state.phase === 'downloaded'
+            ? 'Restart to update'
+            : state.phase === 'error'
+              ? configurationError
+                ? 'Updates unavailable'
+                : 'Retry update'
+              : `Updating ${Math.round(state.progressPct ?? 0)}%`
 
   return (
     <button
       className={`update-button ${state.phase}`}
       type="button"
       onClick={onUpdate}
-      disabled={downloading || configurationError}
+      disabled={downloading || checking || configurationError}
       title={
         state.message ??
         (state.latestVersion ? `Latest version ${state.latestVersion}` : 'Check for PowerStation updates')

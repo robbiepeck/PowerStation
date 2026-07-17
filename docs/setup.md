@@ -125,21 +125,23 @@ Windows build must be produced on Windows, macOS on macOS, and Linux on Linux. T
 CI does: the [GitHub Actions workflow](../.github/workflows/ci.yml) lint/tests/builds on all three
 platforms for every push to `main`, tests the documented macOS installer, and installs and launches
 the Windows NSIS package, Linux Debian package and AppImage, and local macOS app in clean profiles.
-CI's unsigned packages are short-lived verification artifacts, not supported downloads. A `v*` tag
-creates a source-only GitHub Release after every required job passes.
+CI's unsigned packages are short-lived verification artifacts, not supported downloads. Each commit
+merged to `main` creates a source-only Nightly prerelease. Version tags are validated in CI but do
+not create a public stable release automatically.
 
 ### Signing and releases
 
-The supported macOS installation is built and ad-hoc signed on the user's
-own Mac. The project does not publish `.dmg`, `.zip`, `.exe`, `.AppImage` or `.deb` files as consumer
-releases without the appropriate platform trust chain. This avoids asking users to bypass security
-warnings. Release tags must point to a commit already on `main`.
+The supported macOS source installation is built and ad-hoc signed on the user's own Mac. Consumer
+packages are published only in manually prepared signed stable releases, after the appropriate
+platform trust checks. This avoids asking users to bypass security warnings. Release tags must point
+to a commit already on `main`; follow [Release channels](releases.md) for the publication checklist.
 
 ### Updates
 
-A locally installed macOS build checks GitHub Releases and opens the source update
-guide when a newer source-only release exists. Run `npm run update:mac` from the checkout to perform
-the update. Windows and Linux currently use a fresh development checkout.
+A packaged app exposes **Check for updates** and only accepts published stable releases. On macOS,
+a signed and notarized stable package is downloaded and installed in-app; source-built installations
+continue to use `npm run update:mac`. Windows needs its signed NSIS installer and update metadata,
+and Linux needs an AppImage plus its update metadata, before their packaged builds can update.
 
 ### Native module packaging
 

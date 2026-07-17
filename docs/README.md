@@ -10,6 +10,7 @@ Windows and Linux support remains beta.
 | --- | --- | --- |
 | [Quick start](quick-start.md) | New users | Install PowerStation and complete the first local chat. |
 | [Source installation](source-install.md) | macOS users | Install, update, diagnose, and remove build artifacts safely. |
+| [Release channels](releases.md) | Maintainers and users | Understand source-only Nightlies and signed stable releases. |
 | [Setup](setup.md) | Contributors and beta users | Configure development environments, run from source, and package the app. |
 
 ## Features

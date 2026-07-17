@@ -1,8 +1,9 @@
 # Install PowerStation on macOS from source
 
-PowerStation's public releases contain source code rather than downloadable consumer binaries. The
-supported installer builds and ad-hoc signs the application on the destination Mac, avoiding the
-need to bypass Gatekeeper for an unsigned binary downloaded from the internet.
+Nightly releases contain source code only. This supported installer builds and ad-hoc signs
+PowerStation on the destination Mac, avoiding the need to bypass Gatekeeper for an unsigned binary
+downloaded from the internet. Signed stable releases can instead provide consumer packages and
+seamless in-app updates; see [Release channels](releases.md).
 
 ## Requirements
 
@@ -45,8 +46,8 @@ npm run update:mac
 
 The updater resolves the latest stable GitHub release, clones that exact tag into a temporary
 directory, and runs the same verified installer. It does not modify the current checkout or the
-PowerStation user-data directory. The in-app update action opens these instructions when a newer
-source release is available.
+PowerStation user-data directory. A signed stable packaged app downloads and installs its matching
+update in-app; a source-built app uses this documented source-update path instead.
 
 ## Collect privacy-safe diagnostics
 
@@ -64,12 +65,12 @@ configuration values, and secrets.
 When opening an issue, include the diagnostic output, the exact command that failed, the PowerStation
 version, and the macOS version.
 
-## Why downloadable DMGs are not published
+## Why the source installer remains supported
 
 An application built locally is handled differently by macOS from an unnotarized application
-downloaded from the internet. Publishing a consumer DMG without Developer ID signing and Apple
-notarization would introduce security warnings and encourage unsafe workarounds. PowerStation
-therefore publishes source archives only.
+downloaded from the internet. A consumer DMG is published only after Developer ID signing and Apple
+notarization; otherwise the source installer remains the supported route. This avoids security
+warnings and unsafe workarounds.
 
 CI still builds unsigned packages to detect packaging regressions. Those artifacts are temporary
 verification outputs and are not supported installations. Do not copy a locally built `.app` to
