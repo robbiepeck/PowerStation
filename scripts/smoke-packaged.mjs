@@ -61,6 +61,15 @@ try {
   }
   console.log('Primary packaged navigation is responsive.')
 
+  const processSnapshot = await window.evaluate(() => Promise.race([
+    globalThis.powerStation.telemetry.processes('ram'),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Process telemetry IPC timed out.')), 30_000)),
+  ]))
+  if (!processSnapshot.supported || processSnapshot.metric !== 'ram' || !Array.isArray(processSnapshot.groups)) {
+    throw new Error('Packaged process telemetry returned an invalid snapshot.')
+  }
+  console.log('Packaged process telemetry returned a valid RAM ranking.')
+
   const scheduleSnapshot = await window.evaluate(() => Promise.race([
     globalThis.powerStation.schedules.get(),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Scheduler IPC timed out.')), 60_000)),

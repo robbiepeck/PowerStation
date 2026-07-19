@@ -14,6 +14,7 @@ import * as repair from './repair.js'
 import * as customAgents from './customAgents.js'
 import * as apiServer from './apiServer.js'
 import * as scheduledJobs from './scheduledJobs.js'
+import { getProcessUsage, isProcessMetric } from './processTelemetry.js'
 import { REPAIR_SKILL_SLUG } from './builtinTools.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
@@ -702,6 +703,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const profile = await getHardwareProfile(device?.vram?.total ?? null)
 
     return { ...profile, usableBudgetBytes: Math.round(profile.gpuBudgetBytes * USABLE_BUDGET_FRACTION) }
+  })
+
+  handle('telemetry:processes', (_event, metric: unknown) => {
+    if (!isProcessMetric(metric)) throw new Error('Unknown process telemetry metric.')
+    return getProcessUsage(metric)
   })
 
   handle('catalog:get', () => getCatalog())

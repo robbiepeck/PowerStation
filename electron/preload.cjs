@@ -190,6 +190,7 @@ contextBridge.exposeInMainWorld('powerStation', {
   },
   telemetry: {
     onUpdate: (callback) => subscribe('telemetry:update', callback),
+    processes: (metric) => ipcRenderer.invoke('telemetry:processes', metric),
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

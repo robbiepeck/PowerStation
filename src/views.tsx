@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   BadgeCheck,
   BookOpenCheck,
   Brain,
+  ChevronDown,
   Code2,
   Cpu,
   Database,
@@ -17,6 +18,7 @@ import {
   Globe,
   HardDrive,
   ListOrdered,
+  LoaderCircle,
   Microchip,
   Plug,
   Plus,
@@ -28,6 +30,7 @@ import {
   Thermometer,
   Trash2,
   Wrench,
+  X,
   Zap,
 } from 'lucide-react'
 import type { LucideIcon as LucideIconType } from 'lucide-react'
@@ -48,6 +51,8 @@ import type {
   McpServerStatus,
   McpToolInfoResponse,
   ModelInfo,
+  ProcessMetricKey,
+  ProcessUsageSnapshot,
   IntegrityResult,
   LmStudioStatus,
   OllamaStatus,
@@ -126,6 +131,204 @@ const METRIC_INFO: Record<MetricKey, MetricInfo> = {
     title: 'Thermal headroom',
     body: 'Thermal headroom is how much cooling room your computer has left. A lower number means the machine is getting closer to heat limits.',
   },
+}
+
+const PROCESS_METRIC_LABELS: Record<ProcessMetricKey, string> = {
+  cpu: 'CPU',
+  ram: 'RAM',
+  gpu: 'GPU',
+  vram: 'VRAM',
+  storage: 'Storage I/O',
+}
+
+function formatProcessMetricValue(metric: ProcessMetricKey, value: number): string {
+  if (metric === 'cpu' || metric === 'gpu') return `${formatNumber(value, value < 10 ? 1 : 0)}%`
+  if (metric === 'storage') return `${formatBytes(value)}/s`
+  return formatBytes(value)
+}
+
+function ProcessUsageDrawer({ metric, onClose }: { metric: ProcessMetricKey; onClose: () => void }) {
+  const drawerRef = useRef<HTMLElement>(null)
+  const [snapshot, setSnapshot] = useState<ProcessUsageSnapshot | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const focusable = [...(drawerRef.current?.querySelectorAll<HTMLElement>('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])') ?? [])]
+      if (!focusable.length) return
+      const first = focusable[0]
+      const last = focusable[focusable.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  useEffect(() => {
+    let disposed = false
+    let refreshTimer: number | undefined
+
+    const refresh = async () => {
+      setLoading(true)
+      try {
+        const next = await bridge.telemetry.processes(metric)
+        if (!disposed) {
+          setSnapshot(next)
+          setError(null)
+        }
+      } catch (reason) {
+        if (!disposed) setError(reason instanceof Error ? reason.message : 'Process telemetry is unavailable.')
+      } finally {
+        if (!disposed) {
+          setLoading(false)
+          refreshTimer = window.setTimeout(refresh, 2_000)
+        }
+      }
+    }
+
+    setSnapshot(null)
+    setError(null)
+    setExpanded(new Set())
+    void refresh()
+    return () => {
+      disposed = true
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer)
+    }
+  }, [metric])
+
+  const topValue = snapshot?.groups[0]?.value ?? 0
+  const toggleGroup = (id: string) => {
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  return (
+    <div className="process-drawer-layer" onMouseDown={onClose}>
+      <aside
+        ref={drawerRef}
+        className="process-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="process-drawer-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header className="process-drawer-header">
+          <div>
+            <span>Process attribution</span>
+            <h3 id="process-drawer-title">{PROCESS_METRIC_LABELS[metric]} usage by app</h3>
+          </div>
+          <button className="icon-button process-drawer-close" type="button" onClick={onClose} aria-label="Close process usage" autoFocus>
+            <X size={17} />
+          </button>
+        </header>
+
+        <div className="process-drawer-status" aria-live="polite">
+          <span className={`process-live-dot ${loading ? 'sampling' : ''}`} />
+          <span>{loading && !snapshot ? 'Sampling processes…' : 'Refreshes every 2 seconds'}</span>
+          {snapshot ? (
+            <Badge tone={snapshot.quality === 'measured' ? 'real' : 'estimated'}>
+              {snapshot.quality === 'measured' ? 'measured' : snapshot.quality === 'best-effort' ? 'best effort' : 'unavailable'}
+            </Badge>
+          ) : null}
+        </div>
+
+        <p className="process-drawer-intro">
+          Applications are ranked by their current {PROCESS_METRIC_LABELS[metric].toLowerCase()} use. Expand an app to see its individual processes and PIDs.
+        </p>
+
+        {error ? (
+          <div className="process-unavailable" role="alert">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>Process data unavailable</strong>
+              <span>{error}</span>
+            </div>
+          </div>
+        ) : snapshot && !snapshot.supported ? (
+          <div className="process-unavailable">
+            <AlertTriangle size={20} />
+            <div>
+              <strong>Not available on this device</strong>
+              <span>{snapshot.message}</span>
+            </div>
+          </div>
+        ) : snapshot?.groups.length ? (
+          <div className="process-ranking">
+            {snapshot.groups.map((group, index) => {
+              const open = expanded.has(group.id)
+              const relativePct = topValue > 0 ? (group.value / topValue) * 100 : 0
+              return (
+                <section className={`process-group ${group.isPowerStation ? 'powerstation' : ''}`} key={group.id}>
+                  <button
+                    className="process-group-summary"
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => toggleGroup(group.id)}
+                  >
+                    <span className="process-rank">{index + 1}</span>
+                    <span className="process-app-mark" aria-hidden="true">{group.name.slice(0, 1).toLocaleUpperCase()}</span>
+                    <span className="process-app-copy">
+                      <strong>{group.name}</strong>
+                      <span>{group.processes.length} {group.processes.length === 1 ? 'process' : 'processes'}{group.isPowerStation ? ' · this app' : ''}</span>
+                    </span>
+                    <span className="process-group-value">
+                      <strong>{formatProcessMetricValue(metric, group.value)}</strong>
+                      {group.sharePct != null ? (
+                        <span>
+                          {formatNumber(group.sharePct, 1)}% of {metric === 'storage' || metric === 'vram' ? 'reported use' : 'device'}
+                        </span>
+                      ) : null}
+                    </span>
+                    <ChevronDown className={open ? 'open' : ''} size={16} />
+                  </button>
+                  <div className="process-usage-track" aria-hidden="true">
+                    <span style={{ width: `${clamp(relativePct, 0, 100)}%` }} />
+                  </div>
+                  {open ? (
+                    <div className="process-children">
+                      <div className="process-child-head"><span>Process</span><span>PID</span><span>Usage</span></div>
+                      {group.processes.map((processInfo) => (
+                        <div className="process-child-row" key={processInfo.pid}>
+                          <span title={processInfo.name}>{processInfo.name}</span>
+                          <code>{processInfo.pid}</code>
+                          <strong>{formatProcessMetricValue(metric, processInfo.value)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </section>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="process-empty-state">
+            {loading ? <LoaderCircle className="spin-icon" size={22} /> : <RefreshCw size={22} />}
+            <strong>{loading ? 'Reading current activity…' : 'No measurable activity'}</strong>
+            <span>{snapshot?.message ?? 'PowerStation will keep sampling while this panel is open.'}</span>
+          </div>
+        )}
+
+        {snapshot ? <footer className="process-drawer-source">Source: {snapshot.sourceLabel}</footer> : null}
+      </aside>
+    </div>
+  )
 }
 
 export type DownloadState = {
@@ -324,6 +527,9 @@ export function MonitorView({
   series: MetricSeries
   snapshot: TelemetrySnapshot | null
 }) {
+  const [processMetric, setProcessMetric] = useState<ProcessMetricKey | null>(null)
+  const closeProcessDrawer = useCallback(() => setProcessMetric(null), [])
+
   if (!snapshot) {
     return (
       <div className="monitor-view">
@@ -430,6 +636,7 @@ export function MonitorView({
           icon={Cpu}
           info={METRIC_INFO.cpu}
           label="CPU"
+          onInspect={() => setProcessMetric('cpu')}
           series={series.cpu}
           sub={<Badge tone="real">live</Badge>}
           tone="teal"
@@ -440,6 +647,7 @@ export function MonitorView({
           icon={HardDrive}
           info={METRIC_INFO.ram}
           label="RAM"
+          onInspect={() => setProcessMetric('ram')}
           series={series.ram}
           sub={<Badge tone="real">live</Badge>}
           tone="blue"
@@ -450,6 +658,7 @@ export function MonitorView({
           icon={Microchip}
           info={METRIC_INFO.gpu}
           label="GPU"
+          onInspect={() => setProcessMetric('gpu')}
           series={series.gpu}
           sub={<Badge tone={snapshot.gpu.real ? 'real' : 'estimated'}>{snapshot.gpu.real ? 'live' : 'n/a on this OS'}</Badge>}
           tone="teal"
@@ -460,6 +669,7 @@ export function MonitorView({
           icon={Database}
           info={METRIC_INFO.vram}
           label="VRAM"
+          onInspect={() => setProcessMetric('vram')}
           series={series.vram}
           sub={<Badge tone={snapshot.vram.real ? 'real' : 'estimated'}>{snapshot.vram.real ? 'live' : 'n/a'}</Badge>}
           tone="blue"
@@ -470,6 +680,7 @@ export function MonitorView({
           icon={HardDrive}
           info={METRIC_INFO.storage}
           label="Storage"
+          onInspect={() => setProcessMetric('storage')}
           series={series.storage}
           sub={
             <Badge tone={snapshot.storage.real ? 'real' : 'estimated'}>
@@ -519,6 +730,7 @@ export function MonitorView({
           </div>
         ))}
       </div>
+      {processMetric ? <ProcessUsageDrawer metric={processMetric} onClose={closeProcessDrawer} /> : null}
     </div>
   )
 }

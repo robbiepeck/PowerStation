@@ -402,6 +402,33 @@ export type TelemetrySnapshot = {
   model: { loaded: boolean; path: string | null }
 }
 
+export type ProcessMetricKey = 'cpu' | 'ram' | 'storage' | 'gpu' | 'vram'
+
+export type ProcessUsageProcess = {
+  pid: number
+  name: string
+  value: number
+}
+
+export type ProcessUsageGroup = {
+  id: string
+  name: string
+  value: number
+  sharePct: number | null
+  isPowerStation: boolean
+  processes: ProcessUsageProcess[]
+}
+
+export type ProcessUsageSnapshot = {
+  metric: ProcessMetricKey
+  timestamp: number
+  supported: boolean
+  quality: 'measured' | 'best-effort' | 'unavailable'
+  sourceLabel: string
+  message?: string
+  groups: ProcessUsageGroup[]
+}
+
 export type DeviceInfo = {
   gpuType: string | false
   gpuNames: string[]
@@ -856,7 +883,10 @@ export type PowerStationBridge = {
   runtimeEvents: {
     onEvent: (callback: (payload: RuntimeEventPayload) => void) => Unsubscribe
   }
-  telemetry: { onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe }
+  telemetry: {
+    onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe
+    processes: (metric: ProcessMetricKey) => Promise<ProcessUsageSnapshot>
+  }
   settings: { get: () => Promise<Settings>; update: (patch: Partial<Settings>) => Promise<Settings> }
   device: { info: () => Promise<DeviceInfo> }
   updates: {

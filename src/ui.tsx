@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
-import { Check, Copy, Info } from 'lucide-react'
+import { Check, Copy, Info, ListTree } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
@@ -173,6 +173,7 @@ export function MetricTile({
   info,
   label,
   onClick,
+  onInspect,
   series,
   sub,
   tone,
@@ -183,6 +184,7 @@ export function MetricTile({
   info?: MetricInfo
   label: string
   onClick?: () => void
+  onInspect?: () => void
   series: number[]
   sub?: ReactNode
   tone: 'amber' | 'blue' | 'green' | 'teal'
@@ -209,6 +211,20 @@ export function MetricTile({
           <Icon size={15} />
           {label}
           {info ? <MetricInfoButton info={info} /> : null}
+          {onInspect ? (
+            <button
+              className="metric-process-button"
+              type="button"
+              aria-label={`Show applications and processes using ${label}`}
+              title={`Show applications and processes using ${label}`}
+              onClick={(event) => {
+                event.stopPropagation()
+                onInspect()
+              }}
+            >
+              <ListTree size={12} />
+            </button>
+          ) : null}
         </span>
         <strong>{display}</strong>
       </div>
