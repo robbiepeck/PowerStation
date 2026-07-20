@@ -26,6 +26,8 @@ const desktop = await electron.launch({
   timeout: 60_000,
 })
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
 async function closeDesktop() {
   const child = desktop.process()
   const exited = child?.exitCode !== null
@@ -39,6 +41,25 @@ async function closeDesktop() {
   if (closed) return
   console.warn('Packaged smoke process required forced cleanup after all assertions passed.')
   child?.kill('SIGKILL')
+  const forcedClosed = await Promise.race([
+    exited,
+    wait(10_000).then(() => false),
+  ])
+  if (!forcedClosed) console.warn('Packaged smoke process did not report exit after forced cleanup.')
+}
+
+async function removeProfile() {
+  const retryableCodes = new Set(['EBUSY', 'ENOTEMPTY', 'EPERM'])
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      await fs.rm(profile, { recursive: true, force: true })
+      return
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? error.code : null
+      if (!retryableCodes.has(code) || attempt === 39) throw error
+      await wait(250)
+    }
+  }
 }
 
 let failure = null
@@ -112,7 +133,7 @@ try {
     if (!failure) failure = closeError
     else console.error(`Additional shutdown failure: ${closeError instanceof Error ? closeError.message : String(closeError)}`)
   }
-  await fs.rm(profile, { recursive: true, force: true })
+  await removeProfile()
 }
 if (failure) throw failure
 console.log(`Packaged PowerStation smoke test passed on ${process.platform}/${process.arch}.`)
