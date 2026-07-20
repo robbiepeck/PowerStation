@@ -86,10 +86,18 @@ try {
     globalThis.powerStation.telemetry.processes('ram'),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Process telemetry IPC timed out.')), 30_000)),
   ]))
-  if (!processSnapshot.supported || processSnapshot.metric !== 'ram' || !Array.isArray(processSnapshot.groups)) {
+  if (
+    typeof processSnapshot.supported !== 'boolean' ||
+    processSnapshot.metric !== 'ram' ||
+    !Array.isArray(processSnapshot.groups)
+  ) {
     throw new Error('Packaged process telemetry returned an invalid snapshot.')
   }
-  console.log('Packaged process telemetry returned a valid RAM ranking.')
+  console.log(
+    processSnapshot.supported
+      ? 'Packaged process telemetry returned a valid RAM ranking.'
+      : 'Packaged process telemetry returned a valid unavailable snapshot.',
+  )
 
   const scheduleSnapshot = await window.evaluate(() => Promise.race([
     globalThis.powerStation.schedules.get(),

@@ -58,6 +58,7 @@ type WindowsCounterSample = {
 }
 
 let previousLinuxIo: { timestamp: number; values: Map<number, number> } | null = null
+const PROCESS_TABLE_TIMEOUT_MS = 20_000
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -310,7 +311,28 @@ async function metricAttribution(metric: ProcessMetricKey, processes: BaseProces
 }
 
 export async function getProcessUsage(metric: ProcessMetricKey): Promise<ProcessUsageSnapshot> {
-  const processData = await si.processes()
+  let timeout: ReturnType<typeof setTimeout> | null = null
+  let processData: Awaited<ReturnType<typeof si.processes>>
+  try {
+    processData = await Promise.race([
+      si.processes(),
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error('Process table collection timed out.')), PROCESS_TABLE_TIMEOUT_MS)
+      }),
+    ])
+  } catch {
+    return {
+      metric,
+      timestamp: Date.now(),
+      supported: false,
+      quality: 'unavailable',
+      sourceLabel: 'Operating-system process table',
+      message: 'The operating system did not return process data in time. Try refreshing the process inspector.',
+      groups: [],
+    }
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
   const processes: BaseProcess[] = processData.list.map((processInfo) => ({
     pid: processInfo.pid,
     parentPid: processInfo.parentPid,
