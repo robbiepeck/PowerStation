@@ -29,6 +29,29 @@ export type BenchmarkRecord = {
   measuredAt: number
 }
 
+export type ImpactSource = 'chat' | 'api' | 'compare'
+
+export type ImpactUsageBucket = {
+  generationCount: number
+  elapsedMs: number
+  energyWh: number
+  outputTokenEstimate: number
+}
+
+export type ImpactModelUsage = ImpactUsageBucket & {
+  modelName: string
+  fileName: string
+  lastUsedAt: number
+}
+
+export type ImpactUsageStats = ImpactUsageBucket & {
+  schemaVersion: 1
+  startedAt: number
+  updatedAt: number
+  byModel: Record<string, ImpactModelUsage>
+  bySource: Record<ImpactSource, ImpactUsageBucket>
+}
+
 export type McpServerConfig = {
   id: string
   name: string
@@ -68,6 +91,8 @@ export type PersistedState = {
   seededSkillSlugs: string[]
 
   apiServer: ApiServerConfig
+  /** Cumulative local inference impact counters for this install. */
+  impactUsage: ImpactUsageStats
 }
 
 export type ApiServerConfig = {
@@ -96,6 +121,30 @@ const defaultSettings: Settings = {
   agentProfile: 'trusted',
   agentPlanPreview: false,
   utilities: defaultUtilities,
+}
+
+function emptyImpactBucket(): ImpactUsageBucket {
+  return {
+    generationCount: 0,
+    elapsedMs: 0,
+    energyWh: 0,
+    outputTokenEstimate: 0,
+  }
+}
+
+function defaultImpactUsage(now = Date.now()): ImpactUsageStats {
+  return {
+    schemaVersion: 1,
+    startedAt: now,
+    updatedAt: now,
+    byModel: {},
+    bySource: {
+      chat: emptyImpactBucket(),
+      api: emptyImpactBucket(),
+      compare: emptyImpactBucket(),
+    },
+    ...emptyImpactBucket(),
+  }
 }
 
 let state: PersistedState | null = null
@@ -235,6 +284,49 @@ function sanitizeBenchmarks(value: unknown): Record<string, BenchmarkRecord> {
   return out
 }
 
+function cleanImpactBucket(value: unknown): ImpactUsageBucket {
+  const r = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  return {
+    generationCount: clampNumber(r.generationCount, 0, 10_000_000, 0),
+    elapsedMs: clampNumber(r.elapsedMs, 0, Number.MAX_SAFE_INTEGER, 0),
+    energyWh: clampNumber(r.energyWh, 0, 1_000_000_000, 0),
+    outputTokenEstimate: clampNumber(r.outputTokenEstimate, 0, Number.MAX_SAFE_INTEGER, 0),
+  }
+}
+
+function sanitizeImpactUsage(value: unknown): ImpactUsageStats {
+  const now = Date.now()
+  const fallback = defaultImpactUsage(now)
+  const r = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  const bySourceRaw = typeof r.bySource === 'object' && r.bySource !== null ? (r.bySource as Record<string, unknown>) : {}
+  const byModelRaw = typeof r.byModel === 'object' && r.byModel !== null ? (r.byModel as Record<string, unknown>) : {}
+  const byModel: Record<string, ImpactModelUsage> = {}
+  for (const [key, raw] of Object.entries(byModelRaw).slice(0, 300)) {
+    const cleanKey = cleanString(key, 300)
+    if (!cleanKey) continue
+    const record = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {}
+    const bucket = cleanImpactBucket(record)
+    byModel[cleanKey] = {
+      ...bucket,
+      modelName: cleanString(record.modelName, 200) || cleanString(record.fileName, 200) || cleanKey,
+      fileName: cleanString(record.fileName, 200) || cleanKey,
+      lastUsedAt: clampNumber(record.lastUsedAt, 0, Number.MAX_SAFE_INTEGER, 0),
+    }
+  }
+  return {
+    schemaVersion: 1,
+    startedAt: clampNumber(r.startedAt, 0, Number.MAX_SAFE_INTEGER, fallback.startedAt),
+    updatedAt: clampNumber(r.updatedAt, 0, Number.MAX_SAFE_INTEGER, fallback.updatedAt),
+    byModel,
+    bySource: {
+      chat: cleanImpactBucket(bySourceRaw.chat),
+      api: cleanImpactBucket(bySourceRaw.api),
+      compare: cleanImpactBucket(bySourceRaw.compare),
+    },
+    ...cleanImpactBucket(r),
+  }
+}
+
 function configPath() {
   return path.join(app.getPath('userData'), 'powerstation-config.json')
 }
@@ -268,6 +360,7 @@ function normalize(parsed: Partial<PersistedState> | null): PersistedState {
       ? parsed!.seededSkillSlugs.filter((s): s is string => typeof s === 'string').slice(0, 200)
       : [],
     apiServer: sanitizeApiServer(parsed?.apiServer),
+    impactUsage: sanitizeImpactUsage(parsed?.impactUsage),
   }
 }
 

@@ -8,6 +8,10 @@ Silicon is the primary platform and Windows/Linux support remains beta.
 
 ## Unreleased
 
+- **Process-level Monitor insights** — CPU, RAM, GPU, VRAM, and Storage cards now open a live,
+  read-only ranking of the applications using that resource. App groups expand into individual
+  processes and PIDs, PowerStation's child processes stay grouped together, and unsupported
+  OS/driver metrics explain their limitation instead of estimating a value.
 - **Release channels** — every commit merged to `main` now creates a source-only Nightly prerelease.
   Stable releases are prepared manually with signed platform packages; the in-app updater ignores
   Nightlies and uses stable releases only.

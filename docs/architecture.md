@@ -79,6 +79,7 @@ flowchart LR
 | `electron/models.ts` | Indexes local GGUFs; reads header geometry; sums split parts. |
 | `electron/recommend.ts` | (hardware × intent) → ranked recommendations with reasons and versus-primary rationale. |
 | `electron/telemetry.ts` | Samples CPU/RAM/GPU/VRAM/storage/pressure/battery/tokens-per-sec. |
+| `electron/processTelemetry.ts` | Samples on-demand per-process CPU/RAM and platform-supported disk/GPU/VRAM attribution. |
 | `electron/config.ts` | Persisted state and strict sanitisation of everything on disk. |
 | `src/App.tsx` | App shell, hooks, chat state, modals (permission, audit, compare, project), recovery cards. |
 | `src/onboarding.tsx` | First-run scan-and-reveal flow. |

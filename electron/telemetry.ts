@@ -29,6 +29,7 @@ const round = (value: number, decimals = 0) => {
 
 let timer: ReturnType<typeof setInterval> | null = null
 let staticInfo: { gpuName: string | null; gpuType: string | null; tdpWatts: number } | null = null
+let lastSnapshot: TelemetrySnapshot | null = null
 
 async function getPrimaryStorage() {
   const disks = await si.fsSize().catch(() => [])
@@ -143,7 +144,8 @@ export function startTelemetry(send: (snapshot: TelemetrySnapshot) => void, inte
   if (timer) return
   const tick = async () => {
     try {
-      send(await sample())
+      lastSnapshot = await sample()
+      send(lastSnapshot)
     } catch {
       void 0
     }
@@ -157,4 +159,8 @@ export function stopTelemetry(): void {
     clearInterval(timer)
     timer = null
   }
+}
+
+export function getLastPowerWatts(): number | null {
+  return lastSnapshot?.power.watts ?? null
 }

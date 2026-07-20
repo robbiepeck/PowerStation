@@ -62,6 +62,12 @@ The Monitor tab shows live signals, and PowerStation is careful to label what's 
 **estimated** — because a monitoring tool that dresses up guesses as facts undermines the trust it's
 trying to build.
 
+CPU, RAM, GPU, VRAM, and Storage cards also include a process-inspector button. It opens a read-only
+drawer ranking the eight applications using the most of that resource, refreshed every two seconds.
+Applications can be expanded into individual process names and PIDs; PowerStation's renderer, model
+worker, and other child processes are grouped under one PowerStation entry. Process scanning only
+runs while the drawer is open.
+
 | Signal | Source |
 | --- | --- |
 | CPU load, RAM used/total | Measured (live). |
@@ -73,6 +79,13 @@ trying to build.
 | **Power draw (watts)** | **Estimated** — real wattage isn't readable on macOS without elevated access, so this is a labelled estimate derived from load, never presented as a sensor reading. |
 | **Battery** | Measured (percentage and charging state). |
 | Thermal headroom | Sensor where available, otherwise estimated (labelled). |
+
+Per-process attribution follows the same confidence rules. CPU and RAM come from the operating-system
+process table on every supported platform. Windows uses performance counters for disk I/O and
+best-effort GPU/VRAM attribution; Linux reads disk I/O from `/proc`. macOS does not expose reliable
+per-process disk, GPU, or unified-VRAM attribution to a sandboxed app without privileged diagnostics,
+so those drawers explain the limitation instead of displaying invented values. Power and thermal
+headroom are not given process inspectors because those totals cannot be attributed reliably.
 
 Two battery-aware touches follow the same honesty rules: below 25% on battery the status pill
 suggests a lighter model (smaller models draw less power), and the chat header shows an **estimated
@@ -88,6 +101,7 @@ is available for detailed inspection.
 - `electron/admission.ts` — the fit math and the degradation ladder.
 - `electron/hardware.ts` — hardware detection and the memory-pressure read.
 - `electron/telemetry.ts` — the sampling loop and the measured/estimated flags.
+- `electron/processTelemetry.ts` — on-demand application/process ranking and platform capability handling.
 - `electron/main.ts` — the auto-pause on critical pressure.
 
 See [Architecture](architecture.md) for how these fit into the whole, and
