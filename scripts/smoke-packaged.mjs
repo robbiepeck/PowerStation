@@ -82,23 +82,6 @@ try {
   }
   console.log('Primary packaged navigation is responsive.')
 
-  const processSnapshot = await window.evaluate(() => Promise.race([
-    globalThis.powerStation.telemetry.processes('ram'),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Process telemetry IPC timed out.')), 30_000)),
-  ]))
-  if (
-    typeof processSnapshot.supported !== 'boolean' ||
-    processSnapshot.metric !== 'ram' ||
-    !Array.isArray(processSnapshot.groups)
-  ) {
-    throw new Error('Packaged process telemetry returned an invalid snapshot.')
-  }
-  console.log(
-    processSnapshot.supported
-      ? 'Packaged process telemetry returned a valid RAM ranking.'
-      : 'Packaged process telemetry returned a valid unavailable snapshot.',
-  )
-
   const scheduleSnapshot = await window.evaluate(() => Promise.race([
     globalThis.powerStation.schedules.get(),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Scheduler IPC timed out.')), 60_000)),
@@ -132,6 +115,25 @@ try {
   for (const required of ['powerstation-config.json']) {
     if (!entries.includes(required)) throw new Error(`Packaged app did not create ${required} in its isolated profile.`)
   }
+
+  // Keep process enumeration last: slow Windows process-table collection can continue in the
+  // background after its bounded fallback, and must not interfere with unrelated UI assertions.
+  const processSnapshot = await window.evaluate(() => Promise.race([
+    globalThis.powerStation.telemetry.processes('ram'),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Process telemetry IPC timed out.')), 30_000)),
+  ]))
+  if (
+    typeof processSnapshot.supported !== 'boolean' ||
+    processSnapshot.metric !== 'ram' ||
+    !Array.isArray(processSnapshot.groups)
+  ) {
+    throw new Error('Packaged process telemetry returned an invalid snapshot.')
+  }
+  console.log(
+    processSnapshot.supported
+      ? 'Packaged process telemetry returned a valid RAM ranking.'
+      : 'Packaged process telemetry returned a valid unavailable snapshot.',
+  )
 } catch (error) {
   failure = error
 } finally {
