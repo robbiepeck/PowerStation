@@ -114,6 +114,9 @@ contextBridge.exposeInMainWorld('powerStation', {
     integrity: () => ipcRenderer.invoke('repair:integrity'),
     log: () => ipcRenderer.invoke('repair:log'),
   },
+  impact: {
+    report: () => ipcRenderer.invoke('impact:report'),
+  },
   skills: {
     list: () => ipcRenderer.invoke('skills:list'),
     save: (payload) => ipcRenderer.invoke('skills:save', payload),
@@ -190,6 +193,7 @@ contextBridge.exposeInMainWorld('powerStation', {
   },
   telemetry: {
     onUpdate: (callback) => subscribe('telemetry:update', callback),
+    processes: (metric) => ipcRenderer.invoke('telemetry:processes', metric),
   },
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

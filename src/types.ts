@@ -402,6 +402,33 @@ export type TelemetrySnapshot = {
   model: { loaded: boolean; path: string | null }
 }
 
+export type ProcessMetricKey = 'cpu' | 'ram' | 'storage' | 'gpu' | 'vram'
+
+export type ProcessUsageProcess = {
+  pid: number
+  name: string
+  value: number
+}
+
+export type ProcessUsageGroup = {
+  id: string
+  name: string
+  value: number
+  sharePct: number | null
+  isPowerStation: boolean
+  processes: ProcessUsageProcess[]
+}
+
+export type ProcessUsageSnapshot = {
+  metric: ProcessMetricKey
+  timestamp: number
+  supported: boolean
+  quality: 'measured' | 'best-effort' | 'unavailable'
+  sourceLabel: string
+  message?: string
+  groups: ProcessUsageGroup[]
+}
+
 export type DeviceInfo = {
   gpuType: string | false
   gpuNames: string[]
@@ -650,6 +677,34 @@ export type UpdateState = {
   sourceOnly?: boolean
 }
 
+export type ImpactSource = 'chat' | 'api' | 'compare'
+
+export type ImpactUsageBucket = {
+  generationCount: number
+  elapsedMs: number
+  energyWh: number
+  outputTokenEstimate: number
+}
+
+export type ImpactModelUsage = ImpactUsageBucket & {
+  modelName: string
+  fileName: string
+  lastUsedAt: number
+}
+
+export type ImpactUsageStats = ImpactUsageBucket & {
+  schemaVersion: 1
+  startedAt: number
+  updatedAt: number
+  byModel: Record<string, ImpactModelUsage>
+  bySource: Record<ImpactSource, ImpactUsageBucket>
+}
+
+export type ImpactReport = {
+  generatedAt: number
+  tracked: ImpactUsageStats
+}
+
 export type Unsubscribe = () => void
 
 export type PowerStationBridge = {
@@ -759,6 +814,9 @@ export type PowerStationBridge = {
     integrity: () => Promise<IntegrityResult[]>
     log: () => Promise<RepairLogEntry[]>
   }
+  impact: {
+    report: () => Promise<ImpactReport>
+  }
   compare: {
     run: (payload: { requestId: string; prompt: string; modelPaths: string[] }) => Promise<{ ok: boolean }>
     stop: (requestId: string) => Promise<boolean>
@@ -856,7 +914,10 @@ export type PowerStationBridge = {
   runtimeEvents: {
     onEvent: (callback: (payload: RuntimeEventPayload) => void) => Unsubscribe
   }
-  telemetry: { onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe }
+  telemetry: {
+    onUpdate: (callback: (snapshot: TelemetrySnapshot) => void) => Unsubscribe
+    processes: (metric: ProcessMetricKey) => Promise<ProcessUsageSnapshot>
+  }
   settings: { get: () => Promise<Settings>; update: (patch: Partial<Settings>) => Promise<Settings> }
   device: { info: () => Promise<DeviceInfo> }
   updates: {

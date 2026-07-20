@@ -11,9 +11,11 @@ import * as lmstudio from './lmstudio.js'
 import * as projects from './projects.js'
 import * as backup from './backup.js'
 import * as repair from './repair.js'
+import * as impact from './impact.js'
 import * as customAgents from './customAgents.js'
 import * as apiServer from './apiServer.js'
 import * as scheduledJobs from './scheduledJobs.js'
+import { getProcessUsage, isProcessMetric } from './processTelemetry.js'
 import { REPAIR_SKILL_SLUG } from './builtinTools.js'
 import * as rag from './rag.js'
 import { extractFile, TEXT_EXTENSIONS } from './files.js'
@@ -581,6 +583,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
   handle('repair:reveal', (_event, id: string) => repair.revealLocation(id))
   handle('repair:integrity', () => repair.checkModelIntegrity())
   handle('repair:log', () => repair.getRepairLog())
+  handle('impact:report', () => impact.getImpactReport())
 
   handle('backup:export', async () => {
     const result = await dialog.showSaveDialog({
@@ -702,6 +705,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const profile = await getHardwareProfile(device?.vram?.total ?? null)
 
     return { ...profile, usableBudgetBytes: Math.round(profile.gpuBudgetBytes * USABLE_BUDGET_FRACTION) }
+  })
+
+  handle('telemetry:processes', (_event, metric: unknown) => {
+    if (!isProcessMetric(metric)) throw new Error('Unknown process telemetry metric.')
+    return getProcessUsage(metric)
   })
 
   handle('catalog:get', () => getCatalog())
@@ -1098,6 +1106,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           contextUsed: result.contextUsed,
           contextSize: result.contextSize,
         })
+        void impact.recordGeneration({
+          source: 'chat',
+          modelPath,
+          elapsedMs: result.elapsedMs,
+          outputText: result.text,
+          tokensPerSec: result.tokensPerSec,
+        }).catch(() => undefined)
       } catch (error) {
         send('chat:error', { requestId, message: error instanceof Error ? error.message : String(error) })
       } finally {
@@ -1174,6 +1189,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
               elapsedMs: result.elapsedMs,
               aborted: result.aborted,
             })
+            void impact.recordGeneration({
+              source: 'compare',
+              modelPath,
+              elapsedMs: result.elapsedMs,
+              outputText: result.text,
+              tokensPerSec: result.tokensPerSec,
+            }).catch(() => undefined)
           } catch (error) {
             send('compare:status', {
               requestId,

@@ -101,6 +101,10 @@ as estimated or derived.
 - If `npm run doctor` reports a failed prerequisite, correct that item and run it again.
 - If every larger model is marked unable to fit, select a smaller model or context window; the fit
   result is based on the current memory budget.
+- If a development server is already using port 5173, stop it or configure a free port as described
+  in [Setup](setup.md).
+- Gatekeeper or Keychain prompts can occur with local ad-hoc builds. Supported consumer builds must
+  be Developer ID signed and notarized.
 - If installation or startup fails, run `npm run diagnostics` and include its privacy-safe output,
   the failing command, and the operating-system version in a GitHub issue.
 

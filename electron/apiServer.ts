@@ -5,6 +5,7 @@ import * as llm from './llm.js'
 import * as models from './models.js'
 import { admitModel } from './admitModel.js'
 import { embedForApi } from './rag.js'
+import * as impact from './impact.js'
 import {
   apiError,
   chatChunk,
@@ -182,13 +183,20 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
     res.write(`data: ${JSON.stringify(chatChunk({ id, created, model: resolved.id, role: true }))}\n\n`)
     try {
-      await llm.chat({
+      const result = await llm.chat({
         ...chatOptions,
         onToken: (token) => res.write(`data: ${JSON.stringify(chatChunk({ id, created, model: resolved.id, delta: token }))}\n\n`),
         onStatus: () => {},
         onToolCall: () => {},
         onCompacted: () => {},
       })
+      void impact.recordGeneration({
+        source: 'api',
+        modelPath: resolved.path,
+        elapsedMs: result.elapsedMs,
+        outputText: result.text,
+        tokensPerSec: result.tokensPerSec,
+      }).catch(() => undefined)
       res.write(`data: ${JSON.stringify(chatChunk({ id, created, model: resolved.id, finishReason: 'stop' }))}\n\n`)
       res.write('data: [DONE]\n\n')
       res.end()
@@ -204,6 +212,13 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
 
   try {
     const result = await llm.chat({ ...chatOptions, onToken: () => {}, onStatus: () => {}, onToolCall: () => {}, onCompacted: () => {} })
+    void impact.recordGeneration({
+      source: 'api',
+      modelPath: resolved.path,
+      elapsedMs: result.elapsedMs,
+      outputText: result.text,
+      tokensPerSec: result.tokensPerSec,
+    }).catch(() => undefined)
     sendJson(res, 200, chatCompletion({ id, created, model: resolved.id, content: result.text, promptText: parsed.prompt }))
     return { status: 200, model: resolved.id }
   } catch (error) {
