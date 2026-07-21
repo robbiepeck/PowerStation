@@ -731,6 +731,12 @@ export type PowerStationBridge = {
     pickFile: () => Promise<ModelInfo[]>
     pickFolder: () => Promise<ModelInfo[]>
     select: (filePath: string | null) => Promise<string | null>
+    replace: (filePath: string) => Promise<{
+      replaced: boolean
+      freedBytes: number
+      removedCount: number
+      detachedExternalCount: number
+    }>
     getSelected: () => Promise<string | null>
     remove: (filePath: string) => Promise<void>
     deleteFile: (filePath: string) => Promise<{ deleted: boolean; freedBytes: number; reason?: string }>
@@ -864,11 +870,11 @@ export type PowerStationBridge = {
   }
   lmstudio: {
     status: () => Promise<LmStudioStatus>
-    import: (path: string) => Promise<string>
+    import: (path: string) => Promise<string | null>
   }
   ollama: {
     status: () => Promise<OllamaStatus>
-    import: (name: string) => Promise<string>
+    import: (name: string) => Promise<string | null>
   }
   chat: {
     send: (payload: {

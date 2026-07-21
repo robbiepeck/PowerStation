@@ -39,7 +39,8 @@ network-enabled MCP connectors. See [Security](SECURITY.md) for the complete dat
 ## Key capabilities
 
 - **Hardware-aware model selection** — detects memory, accelerator capacity, and free storage;
-  recommends models with clear capability and performance trade-offs.
+  recommends models with clear capability and performance trade-offs, then keeps one current chat
+  model through an explicit replacement workflow.
 - **Pre-load admission control** — estimates weights, context cache, and compute buffers before a
   model is loaded; reduces context or refuses the load when necessary.
 - **Local chat and retrieval** — persistent conversations, text/code/PDF attachments, local folder

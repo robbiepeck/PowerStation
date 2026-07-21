@@ -219,6 +219,26 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     const win = getWindow()
     if (win && !win.isDestroyed()) win.webContents.send(channel, payload)
   }
+  const replaceActiveModel = async (filePath: string) => {
+    const loaded = llm.getLoadedPath()
+    if (loaded && path.resolve(loaded) !== path.resolve(filePath)) {
+      await llm.unloadModel().catch(() => undefined)
+    }
+    return models.replaceWithModel(filePath)
+  }
+  const confirmModelReplacement = async (targetLabel: string, targetPath: string): Promise<boolean> => {
+    const installed = await models.listModels()
+    const replacing = installed.filter((model) => path.resolve(model.path) !== path.resolve(targetPath))
+    if (!replacing.length) return true
+    const response = await showSecurityPrompt(getWindow(), {
+      message: `Replace the current model with “${targetLabel}”?`,
+      detail:
+        'PowerStation keeps one chat model at a time. Other PowerStation-downloaded model files will be deleted from disk. Models owned by Ollama, LM Studio, or another folder will only be disconnected and remain in their source app.',
+      buttons: ['Cancel', 'Replace model'],
+      cancelId: 0,
+    })
+    return response === 1
+  }
   // Paths are capabilities granted by a native file/folder picker. Renderer-
   // supplied absolute paths are never trusted on their own.
   const approvedAttachmentPaths = new Set<string>()
@@ -299,6 +319,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     return models.selectModel(filePath)
   })
+  handle('models:replace', async (_event, filePath: string) => {
+    if (typeof filePath !== 'string' || !(await models.isKnownModelPath(filePath))) {
+      throw new Error('Unknown model path.')
+    }
+    const info = await models.getModelInfo(filePath)
+    if (!(await confirmModelReplacement(info?.name ?? path.basename(filePath), filePath))) {
+      return { replaced: false, freedBytes: 0, removedCount: 0, detachedExternalCount: 0 }
+    }
+    return replaceActiveModel(filePath)
+  })
   handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
   handle('models:deleteFile', async (_event, filePath: string) => {
 
@@ -317,29 +347,21 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     if (!win) return models.listModels()
     const result = await dialog.showOpenDialog(win, {
       title: 'Add a GGUF model',
-      properties: ['openFile', 'multiSelections'],
+      properties: ['openFile'],
       filters: [{ name: 'GGUF model', extensions: ['gguf'] }],
     })
     if (!result.canceled) {
-      for (const filePath of result.filePaths) {
-        if (!filePath.toLowerCase().endsWith('.gguf')) throw new Error('Only GGUF model files can be imported.')
-        await models.importModelFile(filePath)
+      const filePath = result.filePaths[0]
+      if (!filePath?.toLowerCase().endsWith('.gguf')) throw new Error('Only GGUF model files can be imported.')
+      if (await confirmModelReplacement(path.basename(filePath, path.extname(filePath)), filePath)) {
+        await replaceActiveModel(filePath)
       }
     }
     return models.listModels()
   })
 
   handle('models:pickFolder', async () => {
-    const win = getWindow()
-    if (!win) return models.listModels()
-    const result = await dialog.showOpenDialog(win, {
-      title: 'Add a folder of GGUF models',
-      properties: ['openDirectory'],
-    })
-    if (!result.canceled) {
-      for (const dir of result.filePaths) await models.addModelFolder(dir)
-    }
-    return models.listModels()
+    throw new Error('PowerStation uses one chat model at a time. Import one GGUF file instead of adding a model folder.')
   })
 
   handle('models:download', async (_event, uri: string) => {
@@ -352,8 +374,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     await assertModelDownloadCapacity(normalizedUri, destination)
     const confirmation = await showSecurityPrompt(getWindow(), {
       message: 'Download this model?',
-      detail: `${normalizedUri}\n\nDownloaded model files are parsed by the local native runtime. Only download models you trust.`,
-      buttons: ['Cancel', 'Download'],
+      detail: `${normalizedUri}\n\nDownloaded model files are parsed by the local native runtime. Only download models you trust.\n\nWhen the download succeeds, it will replace the current PowerStation model and remove any other PowerStation-downloaded model files.`,
+      buttons: ['Cancel', 'Download and replace'],
       cancelId: 0,
     })
     if (confirmation !== 1) throw new Error('Download cancelled.')
@@ -378,14 +400,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         if (!isPathInside(realDestination, realFile) || !realFile.toLowerCase().endsWith('.gguf')) {
           throw new Error('Downloaded model resolved outside the managed model folder or was not a GGUF file.')
         }
-        await models.importModelFile(realFile)
-
         try {
           send('models:benchmarking', { id, filePath: realFile })
           await runModelBenchmark(realFile)
         } catch {
           void 0
         }
+        await replaceActiveModel(realFile)
         send('models:downloadDone', { id, filePath: realFile })
       } catch (error) {
         send('models:downloadError', { id, message: error instanceof Error ? error.message : String(error) })
@@ -401,7 +422,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     const model = await ollama.resolveOllamaModel(name)
     if (!model) throw new Error('That model was not found in Ollama.')
-    await models.importModelFile(model.blobPath)
+    if (!(await confirmModelReplacement(model.name, model.blobPath))) return null
+    await replaceActiveModel(model.blobPath)
     return model.blobPath
   })
 
@@ -410,7 +432,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     const model = await lmstudio.resolveLmStudioModel(filePath)
     if (!model) throw new Error('That model was not found in LM Studio.')
-    await models.importModelFile(model.path)
+    if (!(await confirmModelReplacement(model.name, model.path))) return null
+    await replaceActiveModel(model.path)
     return model.path
   })
 

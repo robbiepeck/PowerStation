@@ -525,7 +525,15 @@ export function CatalogGrid({
                 onClick={() => onDownload(model.downloadUrl)}
               >
                 <Download size={15} />
-                {wontFit ? "Won't fit" : busy && !active ? 'Download running' : failed ? 'Retry download' : 'Download'}
+                {wontFit
+                  ? "Won't fit"
+                  : busy && !active
+                    ? 'Download running'
+                    : failed
+                      ? 'Retry download'
+                      : selectedModel
+                        ? 'Replace current'
+                        : 'Download'}
               </button>
             )}
           </article>
@@ -1219,7 +1227,6 @@ export function ModelsView({
   lmstudio,
   models,
   ollama,
-  onAddFolder,
   onBenchmark,
   onDelete,
   onDownload,
@@ -1245,7 +1252,6 @@ export function ModelsView({
   lmstudio: LmStudioStatus | null
   models: ModelInfo[]
   ollama: OllamaStatus | null
-  onAddFolder: () => void
   onBenchmark: (model: ModelInfo) => void
   onDelete: (model: ModelInfo) => void
   onDownload: (uri: string) => void
@@ -1284,13 +1290,26 @@ export function ModelsView({
         }
       />
 
+      <section className="single-model-notice" aria-label="One-model mode">
+        <span className="single-model-notice-icon" aria-hidden="true">
+          <ShieldCheck size={18} />
+        </span>
+        <div>
+          <strong>One-model mode</strong>
+          <p>
+            PowerStation keeps one chat model at a time. Downloading or importing another model replaces the current
+            one; files owned by Ollama or LM Studio remain managed by those apps.
+          </p>
+        </div>
+      </section>
+
       <section className="starter-catalog">
         <div className="starter-catalog-head">
           <span>Matched to this machine</span>
           <h2>Model catalog</h2>
           <p>
             Every card shows whether the model fits this machine's memory and what it's honestly good at. Downloads
-            install into PowerStation's local model folder and are selected automatically when they finish.
+            replace the current PowerStation model and are selected automatically when they finish.
           </p>
         </div>
         <CatalogGrid
@@ -1338,7 +1357,7 @@ export function ModelsView({
                   ) : (
                     <button className="secondary-button compact" type="button" onClick={() => onImportOllama(model.name)}>
                       <FileDown size={14} />
-                      Use in PowerStation
+                      {selectedModel ? 'Replace current' : 'Use in PowerStation'}
                     </button>
                   )}
                 </div>
@@ -1376,7 +1395,7 @@ export function ModelsView({
                   ) : (
                     <button className="secondary-button compact" type="button" onClick={() => onImportLmStudio(model.path)}>
                       <FileDown size={14} />
-                      Use in PowerStation
+                      {selectedModel ? 'Replace current' : 'Use in PowerStation'}
                     </button>
                   )}
                 </div>
@@ -1389,11 +1408,7 @@ export function ModelsView({
       <div className="model-actions">
         <button className="secondary-button" type="button" onClick={onImportFile}>
           <FileDown size={15} />
-          Import .gguf file
-        </button>
-        <button className="secondary-button" type="button" onClick={onAddFolder}>
-          <FolderSearch size={15} />
-          Add models folder
+          {selectedModel ? 'Replace with .gguf' : 'Import .gguf file'}
         </button>
         {models.length >= 2 ? (
           <button
@@ -1426,7 +1441,7 @@ export function ModelsView({
         />
         <button className="primary-button" type="submit" disabled={!uri.trim() || Boolean(download)}>
           <Download size={15} />
-          Download
+          {selectedModel ? 'Download & replace' : 'Download'}
         </button>
       </form>
 
@@ -1456,8 +1471,8 @@ export function ModelsView({
           <Database size={28} />
           <h3>No models yet</h3>
           <p>
-            Download one from the catalog above, import a <code>.gguf</code> file, or add a folder of models. Models
-            run fully on-device — nothing leaves your machine.
+            Download one from the catalog above or import a <code>.gguf</code> file. Models run fully on-device —
+            nothing leaves your machine.
           </p>
         </div>
       ) : (

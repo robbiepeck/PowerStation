@@ -27,6 +27,7 @@
     "test:packaged": "node scripts/smoke-packaged.mjs",
     "test:monitor-ui": "npm run build && node scripts/smoke-monitor.mjs",
     "test:about-ui": "npm run build && node scripts/smoke-about.mjs",
+    "test:models-ui": "npm run build && node scripts/smoke-models.mjs",
     "test:schedules-ui": "npm run build && node scripts/smoke-schedules.mjs",
     "package:mac": "npm run build && electron-builder --mac --universal -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",
     "package:mac:dir": "npm run build && electron-builder --mac --universal --dir -c.mac.identity=- -c.mac.hardenedRuntime=false -c.mac.notarize=false",

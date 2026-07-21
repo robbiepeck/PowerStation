@@ -17,7 +17,7 @@ Windows and Linux support remains beta.
 
 | Guide | Purpose |
 | --- | --- |
-| [Models and devices](models-and-devices.md) | Supported hardware, catalogue models, imports, benchmarks, and model comparison. |
+| [Models and devices](models-and-devices.md) | Supported hardware, catalogue models, one-model replacement, and benchmarks. |
 | [Agent harness](agent-harness.md) | Skills, MCP connectors, permissions, capability gating, audit logs, and loop guards. |
 | [Projects and backup](projects.md) | Reusable workspace context and portable local backups. |
 | [Agents](agents.md) | Reusable assistants with instructions, knowledge folders, and connector scope. |

@@ -56,8 +56,9 @@ prerequisites and limitations.
 5. Select **Download & set up**. PowerStation downloads the model into its managed data directory,
    loads it, and opens a new chat.
 
-The **Models** view can also import existing GGUF models or models already managed by Ollama or
-LM Studio. Imported models still pass admission control before loading.
+The **Models** view can also replace the current model with an existing GGUF model or one already
+managed by Ollama or LM Studio. PowerStation keeps one chat model at a time, and imported models
+still pass admission control before loading.
 
 ## Try local retrieval
 
@@ -91,7 +92,7 @@ as estimated or derived.
 
 - Create a reusable workspace with [Projects](projects.md).
 - Configure a reusable assistant with [Agents](agents.md).
-- Compare installed models using [Models and devices](models-and-devices.md).
+- Review model fit and replacement guidance in [Models and devices](models-and-devices.md).
 - Run bounded recurring prompts with [Schedules](schedules.md).
 - Connect local scripts through the [local API server](api-server.md).
 - Inspect model health and storage use with [Repair](repair.md).

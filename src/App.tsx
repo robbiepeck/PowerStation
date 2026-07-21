@@ -1176,10 +1176,16 @@ function App() {
   const handleSelectModel = useCallback(
     async (path: string | null) => {
       if (path === selectedPath) return
-      await select(path)
+      if (path === null) {
+        await select(null)
+      } else {
+        const result = await bridge.models.replace(path)
+        if (!result.replaced) return
+        await refresh()
+      }
       chat.reset()
     },
-    [chat, select, selectedPath],
+    [chat, refresh, select, selectedPath],
   )
 
   const handleDownload = useCallback(async (uri: string) => {
@@ -1199,11 +1205,6 @@ function App() {
 
   const handleImportFile = useCallback(async () => {
     await bridge.models.pickFile()
-    await refresh()
-  }, [refresh])
-
-  const handleAddFolder = useCallback(async () => {
-    await bridge.models.pickFolder()
     await refresh()
   }, [refresh])
 
@@ -1536,7 +1537,6 @@ function App() {
               lmstudio={lmstudio.status}
               onOpenCompare={() => setShowCompare(true)}
               ollama={ollama.status}
-              onAddFolder={handleAddFolder}
               onBenchmark={(model) => void handleBenchmark(model)}
               onImportLmStudio={(path) => void handleImportLmStudio(path)}
               onImportOllama={(name) => void handleImportOllama(name)}

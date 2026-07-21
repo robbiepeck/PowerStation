@@ -1,6 +1,6 @@
 # Models and devices
 
-This guide describes supported hardware, memory tiers, catalogue models, imported models, and
+This guide describes supported hardware, memory tiers, catalogue models, model replacement, and
 performance measurement. [`catalog/models.json`](../catalog/models.json) is the machine-readable
 source of truth if the tables in this page fall out of date.
 
@@ -181,30 +181,29 @@ minimum RAM and capability notes. To propose a model, see [Contributing](../CONT
 
 ## Bring your own model
 
-Not limited to the catalogue — import any `.gguf` file or point PowerStation at a folder of models
-from the **Models** tab. Imported models still get admission control (sized from the GGUF header),
-and their tool-calling tier is inferred from the embedded chat template. You are responsible for
-reviewing and complying with each model's licence.
+Not limited to the catalogue — replace the current model with any `.gguf` file from the **Models**
+tab. Imported models still get admission control (sized from the GGUF header), and their tool-calling
+tier is inferred from the embedded chat template. You are responsible for reviewing and complying
+with each model's licence.
 
-**Removing a model.** Each model in the Models view has a **Delete** button that permanently
-removes it from disk to free up space (multi-part models delete every part; the currently-loaded
-model is unloaded first). For an *imported* file you can instead **Remove** it — that only
-unregisters it from PowerStation and leaves the file where it is.
+**One-model replacement.** PowerStation keeps one chat model at a time. A successful download or
+import becomes current and removes the previous entry. Previous files downloaded into PowerStation's
+managed model folder are deleted; externally owned files are disconnected without being deleted.
+The current model still has a **Delete** button for explicitly removing it from disk.
 
-**Already using Ollama or LM Studio?** PowerStation detects models both apps have on disk and
-registers them **in place** with one click — no re-download, no extra disk. They run in
-PowerStation's own runtime with the same admission checks as any other model (split GGUF series
-are priced as the whole set).
+**Already using Ollama or LM Studio?** PowerStation detects models both apps have on disk and uses
+the one you choose **in place** — no re-download, no extra disk. It replaces the current PowerStation
+model, but the source file remains managed by Ollama or LM Studio. It runs in PowerStation's own
+runtime with the same admission checks as any other model.
 
 ## Choosing between models
 
-PowerStation provides three ways to compare models on the current computer:
+PowerStation helps you choose before replacing the current model:
 
-- **Benchmarks** — one click per model measures real write speed *and* prompt-ingestion (read)
-  speed on your exact machine; results appear on every card and recommendation.
-- **Compare two models** — one prompt, both models, side by side with write speed, first-token
-  latency, and total time. Runs are sequential by design (one model in memory at a time), so each
-  candidate gets the whole machine — fair timings, no memory gamble.
+- **Fit and capability guidance** — catalogue cards show memory fit, likely speed, strengths, and
+  limitations before a download changes anything.
+- **Benchmarks** — one click measures the current model's real write speed and prompt-ingestion
+  speed on the current machine.
 - **"Why this over that"** — every alternate recommendation explains itself against the top pick
   on the axes that differ: fit, measured or likely speed, knowledge capacity, and tool-calling
   strength, including cases where the alternate is stronger on a particular axis.
