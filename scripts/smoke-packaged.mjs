@@ -65,6 +65,9 @@ async function removeProfile() {
 let failure = null
 try {
   const window = await desktop.firstWindow({ timeout: 60_000 })
+  // GitHub's Windows runner can pause Electron interactions while Defender scans
+  // the freshly installed unsigned package. Keep strict defaults elsewhere.
+  if (process.platform === 'win32') window.setDefaultTimeout(120_000)
   await window.getByRole('button', { name: 'PowerStation home' }).waitFor({ timeout: 30_000 })
   if ((await window.title()) !== 'PowerStation') throw new Error(`Unexpected window title: ${await window.title()}`)
   console.log('Packaged window and preload bridge are ready.')
@@ -119,10 +122,11 @@ try {
 
   // Keep process enumeration last: slow Windows process-table collection can continue in the
   // background after its bounded fallback, and must not interfere with unrelated UI assertions.
-  const processSnapshot = await window.evaluate(() => Promise.race([
+  const processTelemetryTimeout = process.platform === 'win32' ? 120_000 : 30_000
+  const processSnapshot = await window.evaluate((timeoutMs) => Promise.race([
     globalThis.powerStation.telemetry.processes('ram'),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Process telemetry IPC timed out.')), 30_000)),
-  ]))
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Process telemetry IPC timed out.')), timeoutMs)),
+  ]), processTelemetryTimeout)
   if (
     typeof processSnapshot.supported !== 'boolean' ||
     processSnapshot.metric !== 'ram' ||
