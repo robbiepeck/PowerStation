@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bot,
   CalendarClock,
+  CircleHelp,
   BrainCircuit,
   FolderKanban,
   FolderSearch,
@@ -39,6 +40,7 @@ import { AgentsView, ImpactView, ModelsView, MonitorView, RepairView, SettingsVi
 import { SchedulesView } from './schedules'
 import type { DownloadState, MetricSeries } from './views'
 import { OnboardingFlow } from './onboarding'
+import { AboutView } from './about'
 import { CopyButton, formatBytes, formatNumber } from './ui'
 import type {
   AgentBadge,
@@ -79,7 +81,7 @@ import type {
 } from './types'
 import './App.css'
 
-type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'schedules' | 'impact' | 'settings' | 'repair'
+type ViewId = 'chat' | 'monitor' | 'models' | 'utilities' | 'agents' | 'schedules' | 'impact' | 'settings' | 'repair' | 'about'
 
 const bridge = getDesktop()
 const hostNoun = bridge.platform === 'darwin' ? 'Mac' : 'PC'
@@ -98,6 +100,7 @@ const navItems: NavItem[] = [
   { id: 'impact', label: 'Impact', emoji: '🍃' },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
   { id: 'repair', label: 'Repair', icon: LifeBuoy },
+  { id: 'about', label: 'About', icon: CircleHelp },
 ]
 
 const STARTER_PROMPTS: Array<{ label: string; prompt: string }> = [
@@ -1188,7 +1191,7 @@ function App() {
     }
   }, [])
 
-  const handleOpenModelWebsite = useCallback((url: string) => {
+  const handleOpenExternal = useCallback((url: string) => {
     void bridge.app.openExternal(url).catch((error) => {
       window.alert(error instanceof Error ? error.message : String(error))
     })
@@ -1539,7 +1542,7 @@ function App() {
               onImportOllama={(name) => void handleImportOllama(name)}
               onDelete={handleDelete}
               onDownload={handleDownload}
-              onOpenWebsite={handleOpenModelWebsite}
+              onOpenWebsite={handleOpenExternal}
               onImportFile={handleImportFile}
               onRefreshCatalog={() => void refreshCatalog()}
               onRemove={handleRemove}
@@ -1579,6 +1582,11 @@ function App() {
                 settings={settings}
               />
             ) : null}
+          </div>
+        )}
+        {visibleView === 'about' && (
+          <div className="scroll-view">
+            <AboutView onOpenExternal={handleOpenExternal} version={updateState?.currentVersion ?? null} />
           </div>
         )}
       </main>
