@@ -75,6 +75,7 @@ try {
     ['Schedules', 'Quiet automation'],
     ['Settings', 'Runtime & generation'],
     ['Repair', 'Storage & health'],
+    ['About', 'Local AI, made legible.'],
   ]
   for (const [button, heading] of destinations) {
     await window.getByRole('button', { name: button, exact: true }).click()
