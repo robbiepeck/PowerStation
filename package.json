@@ -70,6 +70,9 @@
     "vitest": "^4.1.9",
     "wait-on": "^9.0.10"
   },
+  "overrides": {
+    "shell-quote": "1.10.0"
+  },
   "build": {
     "appId": "com.powerstation.desktop",
     "productName": "PowerStation",
