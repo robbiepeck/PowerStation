@@ -1,8 +1,9 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { readGgufFileInfo } from 'node-llama-cpp'
-import { getState, mutate } from './config.js'
+import { getState, managedModelsDir, mutate } from './config.js'
 import type { KvGeometry } from './admission.js'
+import { replacementDisposition } from './modelReplacement.js'
 
 export type ModelInfo = {
   path: string
@@ -19,6 +20,13 @@ export type ModelInfo = {
   geometry: KvGeometry | null
 
   templateSupportsTools: boolean | null
+}
+
+export type ModelReplacementResult = {
+  replaced: boolean
+  freedBytes: number
+  removedCount: number
+  detachedExternalCount: number
 }
 
 const SPLIT_PART = /-(\d{5})-of-(\d{5})\.gguf$/i
@@ -212,6 +220,49 @@ export async function importModelFile(filePath: string): Promise<void> {
   await mutate((state) => {
     if (!state.importedModelPaths.includes(resolved)) state.importedModelPaths.push(resolved)
   })
+}
+
+/**
+ * Makes one model the sole model visible to PowerStation. Files downloaded into
+ * PowerStation's managed model directory are deleted; files owned by another
+ * application are only detached from PowerStation.
+ */
+export async function replaceWithModel(filePath: string): Promise<ModelReplacementResult> {
+  const resolved = path.resolve(filePath)
+  const stat = await fs.stat(resolved)
+  if (!stat.isFile()) throw new Error('Model path is not a file.')
+
+  const [knownModels, managedRoot] = await Promise.all([
+    listModels(),
+    fs.realpath(managedModelsDir()).catch(() => path.resolve(managedModelsDir())),
+  ])
+  const targetReal = await fs.realpath(resolved)
+  let freedBytes = 0
+  let removedCount = 0
+  let detachedExternalCount = 0
+
+  for (const model of knownModels) {
+    const modelReal = await fs.realpath(model.path).catch(() => path.resolve(model.path))
+    const disposition = replacementDisposition(managedRoot, modelReal, targetReal)
+    if (disposition === 'keep') continue
+    if (disposition === 'delete') {
+      const result = await deleteModelFile(model.path)
+      if (result.deleted) {
+        freedBytes += result.freedBytes
+        removedCount += 1
+      }
+    } else {
+      detachedExternalCount += 1
+    }
+  }
+
+  await mutate((state) => {
+    state.modelFolders = [managedModelsDir()]
+    state.importedModelPaths = [resolved]
+    state.selectedModelPath = resolved
+  })
+
+  return { replaced: true, freedBytes, removedCount, detachedExternalCount }
 }
 
 export async function addModelFolder(dir: string): Promise<void> {

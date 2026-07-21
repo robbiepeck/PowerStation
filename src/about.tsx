@@ -42,8 +42,8 @@ const GUIDE_SECTIONS: GuideSection[] = [
   {
     title: 'Models',
     icon: BrainCircuit,
-    description: 'The control room for finding, downloading, importing, comparing, benchmarking, and selecting local models.',
-    usage: 'Review the fit assessment before downloading a model. Select one as current, or import compatible GGUF, Ollama, and LM Studio models you already have.',
+    description: 'The control room for finding, downloading, importing, benchmarking, and replacing your current local model.',
+    usage: 'Review the fit assessment before replacing your model. PowerStation keeps one chat model at a time and can use compatible GGUF, Ollama, and LM Studio models.',
   },
   {
     title: 'Utilities',

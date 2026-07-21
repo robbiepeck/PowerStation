@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('powerStation', {
     pickFile: () => ipcRenderer.invoke('models:pickFile'),
     pickFolder: () => ipcRenderer.invoke('models:pickFolder'),
     select: (filePath) => ipcRenderer.invoke('models:select', filePath),
+    replace: (filePath) => ipcRenderer.invoke('models:replace', filePath),
     getSelected: () => ipcRenderer.invoke('models:getSelected'),
     remove: (filePath) => ipcRenderer.invoke('models:remove', filePath),
     deleteFile: (filePath) => ipcRenderer.invoke('models:deleteFile', filePath),
