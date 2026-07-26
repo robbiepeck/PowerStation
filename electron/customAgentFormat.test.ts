@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AGENT_SHARE_FORMAT,
+  AGENT_SHARE_VERSION,
   buildAgentShare,
   DEFAULT_AGENT_EMOJI,
   isValidAgentId,
@@ -73,10 +75,25 @@ describe('sanitizeCustomAgent', () => {
 })
 
 describe('agent share format', () => {
-  it('round-trips a valid export', () => {
-    const agent = sanitizeCustomAgent({ name: 'Docs bot', mcpServerIds: ['mcp-1'] }, ID)!
+  it('round-trips content without transferring local folder or connector authority', () => {
+    const agent = sanitizeCustomAgent({ name: 'Docs bot', knowledge: [FOLDER], mcpServerIds: ['mcp-1'] }, ID)!
     const raw = parseAgentShare(buildAgentShare(agent))
-    expect(sanitizeCustomAgent(raw, ID)?.name).toBe('Docs bot')
+    const imported = sanitizeCustomAgent(raw, ID)
+    expect(imported?.name).toBe('Docs bot')
+    expect(imported?.knowledge).toEqual([])
+    expect(imported?.mcpServerIds).toEqual([])
+  })
+
+  it('strips local capabilities from older or hand-edited agent files', () => {
+    const raw = parseAgentShare(
+      JSON.stringify({
+        format: AGENT_SHARE_FORMAT,
+        version: AGENT_SHARE_VERSION,
+        agent: { name: 'Untrusted', knowledge: [FOLDER], mcpServerIds: ['existing-local-server'] },
+      }),
+    )
+    expect(raw.knowledge).toEqual([])
+    expect(raw.mcpServerIds).toEqual([])
   })
 
   it('rejects non-agent files with readable messages', () => {

@@ -26,24 +26,25 @@ user-data directory. Project files can be revealed and inspected outside the app
 
 Open **Settings → Backup & restore** to write one versioned JSON archive containing:
 
-- settings and tool permissions;
-- model registrations and benchmark records, but not model weights;
-- skills, chats, projects, and agents;
+- portable settings, without API tokens or remembered tool approvals;
+- skills and chats;
+- project and agent content, without local folder or connector assignments;
 - scheduled-job definitions, but not scheduled run history.
 
-Knowledge-folder indexes are derived, machine-specific data and are not included. PowerStation
-rebuilds an index when the referenced folder is available on the restored computer.
+Model registrations, model weights, benchmark records, and knowledge-folder indexes are
+machine-specific and are not included.
 
 ## Restore behaviour
 
 Restore applies the following merge rules:
 
-- settings and tool permissions are replaced by the archive values;
+- portable settings are replaced by the archive values;
+- remembered tool approvals reset to Ask and the local API remains off;
 - chats, skills, projects, and agents with matching IDs are overwritten;
 - unrelated existing items remain in place;
 - scheduled jobs are imported with new IDs;
-- jobs whose pinned model is unavailable are restored in a paused state;
-- model registrations reappear when their referenced files exist locally.
+- every imported job remains paused until reviewed;
+- existing local model registrations remain in place.
 
 Every restored value passes the same validation and sanitisation used for normal configuration
 reads. Hand-editing an archive cannot introduce an unsupported application state through fields the
@@ -51,12 +52,13 @@ parser rejects.
 
 ## Security and portability
 
-A backup may contain sensitive chats, instructions, attachment text, permissions, and configuration.
+A backup may contain sensitive chats, instructions, attachment text, and configuration.
 Store and transmit it as a sensitive file. PowerStation does not independently encrypt backup
 archives.
 
-Folder paths, imported model paths, and connector IDs may not resolve on another computer. Missing
-resources degrade safely: indexes can be rebuilt, models can be downloaded or re-imported, and
-connectors can be configured again.
+Backups deliberately exclude API bearer tokens, local folder and model paths, connector assignments,
+and remembered tool approvals. Restoring leaves the local API off, resets tools to Ask, and requires
+local resources to be attached again. Scheduled jobs retain their model reference only to help the
+user reselect a model, and every restored job stays paused until reviewed.
 
 See [Agents](agents.md), [Schedules](schedules.md), and [Security](../SECURITY.md).

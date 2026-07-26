@@ -28,12 +28,14 @@ For macOS:
 
 1. Build the universal release with `npm run package:mac:signed` on a configured signing machine.
 2. Notarize and staple the resulting `.app`/DMG according to your Apple Developer process.
-3. Verify it with `codesign --verify --deep --strict` and `spctl --assess --type execute`.
+3. Verify it with `codesign --verify --deep --strict` and `spctl --assess --type execute`. Confirm
+   that `codesign -dv --verbose=4` reports the same `TeamIdentifier` as the previous stable release.
 4. Create a non-draft, non-prerelease GitHub Release for `vX.Y.Z` and attach the signed notarized
    `PowerStation-X.Y.Z-macOS-universal.dmg` or `.zip` asset.
 
-The macOS app checks GitHub's latest stable release, validates the downloaded bundle's identity and
-Gatekeeper assessment, replaces the installed application, and restarts. GitHub prereleases are
+The macOS app checks GitHub's latest stable release, validates the downloaded bundle's identity,
+Gatekeeper assessment, and Apple Developer Team continuity, then replaces the installed application
+and restarts. Source-built ad-hoc-signed installs stay on the source updater. GitHub prereleases are
 excluded, so Nightlies can never enter that path.
 
 For Windows, attach the signed NSIS installer and its `latest.yml` metadata from the same Electron

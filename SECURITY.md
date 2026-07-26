@@ -40,6 +40,8 @@ PowerStation uses the following core controls:
 
 - The React renderer runs with `contextIsolation`, sandboxing, and no Node.js integration.
 - A narrow preload allowlist exposes typed operations to the renderer.
+- Production packages disable Electron's Run-as-Node, `NODE_OPTIONS`, and command-line inspector
+  fuses, validate the embedded ASAR, and load application code only from that ASAR.
 - Native model inference runs in a separate Electron utility process.
 - Remote catalogue data is validated before use, and model downloads are restricted to approved
   Hugging Face URLs.
@@ -48,7 +50,9 @@ PowerStation uses the following core controls:
 - Built-in cleanup operations resolve fixed identifiers in the main process and enforce real-path
   containment within PowerStation-owned data.
 - The optional API server is disabled by default, bound to `127.0.0.1`, and protected by a generated
-  bearer token.
+  bearer token. It also rejects non-loopback Host and browser Origin headers.
+- Backups and shared agents exclude API tokens, remembered tool approvals, local paths, and local
+  connector assignments; restored authority must be granted again on the destination computer.
 
 These controls reduce risk but do not make untrusted models, documents, or MCP servers safe by
 themselves. Review the [threat model](THREAT_MODEL.md) for assumptions and residual risks.
@@ -68,8 +72,8 @@ trust and grant each tool the minimum authority required.
 
 Application data is not independently encrypted at rest. It relies on operating-system account
 security and full-disk encryption such as FileVault or BitLocker. Backups may contain chats,
-settings, permissions, skills, projects, agents, and scheduled-job definitions; protect them as
-sensitive files.
+settings, skills, projects, agents, and scheduled-job definitions; protect them as sensitive files
+even though local tokens, paths, connector assignments, and tool approvals are excluded.
 
 ## Security-related contributions
 

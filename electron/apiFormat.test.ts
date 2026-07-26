@@ -32,6 +32,24 @@ describe('parseChatBody', () => {
     expect(p.temperature).toBe(0.2)
   })
 
+  it('bounds generation controls supplied by local API clients', () => {
+    const parsed = parseChatBody({
+      messages: [{ role: 'user', content: 'hello' }],
+      temperature: 99,
+      max_tokens: 1_000_000,
+    })
+    expect(parsed.temperature).toBe(2)
+    expect(parsed.maxTokens).toBe(4096)
+
+    const minimums = parseChatBody({
+      messages: [{ role: 'user', content: 'hello' }],
+      temperature: -5,
+      max_completion_tokens: -10,
+    })
+    expect(minimums.temperature).toBe(0)
+    expect(minimums.maxTokens).toBe(1)
+  })
+
   it('handles a single user message with no system', () => {
     const p = parseChatBody({ messages: [{ role: 'user', content: 'Yo' }] })
     expect(p.systemPrompt).toBeUndefined()
@@ -52,7 +70,18 @@ describe('parseChatBody', () => {
     expect(() => parseChatBody(null)).toThrow('JSON object')
     expect(() => parseChatBody({})).toThrow('messages')
     expect(() => parseChatBody({ messages: [] })).toThrow('non-empty')
-    expect(() => parseChatBody({ messages: [{ role: 'system', content: 'only system' }] })).toThrow('user or assistant')
+    expect(() => parseChatBody({ messages: [{ role: 'system', content: 'only system' }] })).toThrow('user message')
+    expect(() => parseChatBody({ messages: [{ role: 'tool', content: 'untrusted tool output' }] })).toThrow(
+      'Unsupported message role',
+    )
+    expect(() =>
+      parseChatBody({
+        messages: [
+          { role: 'user', content: 'hello' },
+          { role: 'assistant', content: 'response' },
+        ],
+      }),
+    ).toThrow('final message')
   })
 })
 
@@ -89,5 +118,9 @@ describe('embeddingInputs', () => {
     expect(embeddingInputs({ input: 'hi' })).toEqual(['hi'])
     expect(embeddingInputs({ input: ['a', 2, 'b', ''] })).toEqual(['a', 'b'])
     expect(embeddingInputs({})).toEqual([])
+  })
+
+  it('caps embedding batches to the worker limit', () => {
+    expect(embeddingInputs({ input: Array.from({ length: 100 }, (_, index) => `item-${index}`) })).toHaveLength(64)
   })
 })

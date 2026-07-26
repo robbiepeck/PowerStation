@@ -24,6 +24,56 @@ const MAX_CHATS = 500
 const MAX_PROJECTS = 50
 const SLUG_PATTERN = /^[a-z0-9-]{1,60}$/
 
+function recordOf(value: unknown): Record<string, unknown> {
+  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+}
+
+function sanitizePortableState(value: unknown): Record<string, unknown> {
+  const state = recordOf(value)
+  const settings = recordOf(state.settings)
+  const utilities = recordOf(settings.utilities)
+  const mcpServers = Array.isArray(utilities.mcpServers)
+    ? utilities.mcpServers.map((item) => ({ ...recordOf(item), enabled: false }))
+    : []
+  const apiServer = recordOf(state.apiServer)
+  return {
+    ...state,
+    modelFolders: [],
+    importedModelPaths: [],
+    selectedModelPath: null,
+    benchmarks: {},
+    toolPermissions: {},
+    activeProjectId: null,
+    settings: {
+      ...settings,
+      utilities: { ...utilities, mcpServers },
+    },
+    apiServer: { ...apiServer, enabled: false, token: '' },
+  }
+}
+
+function sanitizePortableProject(value: unknown): Record<string, unknown> {
+  return { ...recordOf(value), modelPath: null, knowledge: null, mcpServerIds: [] }
+}
+
+function sanitizePortableAgent(value: unknown): Record<string, unknown> {
+  return { ...recordOf(value), knowledge: [], mcpServerIds: [] }
+}
+
+function sanitizePortableSchedule(value: unknown): Record<string, unknown> {
+  const schedule = recordOf(value)
+  const rawModelPath = typeof schedule.modelPath === 'string' ? schedule.modelPath : ''
+  const modelReference = rawModelPath.replaceAll('\\', '/').split('/').filter(Boolean).at(-1)?.slice(0, 512) ?? ''
+  return {
+    ...schedule,
+    enabled: false,
+    modelPath: modelReference,
+    nextRunAt: null,
+    lastRunAt: null,
+    lastScheduledFor: null,
+  }
+}
+
 export function buildBackupJson(parts: {
   appVersion: string
   state: Record<string, unknown>
@@ -38,12 +88,12 @@ export function buildBackupJson(parts: {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     appVersion: parts.appVersion,
-    state: parts.state,
+    state: sanitizePortableState(parts.state),
     skills: parts.skills.slice(0, MAX_SKILLS),
     chats: parts.chats.slice(0, MAX_CHATS),
-    projects: parts.projects.slice(0, MAX_PROJECTS),
-    agents: (parts.agents ?? []).slice(0, MAX_PROJECTS),
-    schedules: (parts.schedules ?? []).slice(0, MAX_PROJECTS),
+    projects: parts.projects.slice(0, MAX_PROJECTS).map(sanitizePortableProject),
+    agents: (parts.agents ?? []).slice(0, MAX_PROJECTS).map(sanitizePortableAgent),
+    schedules: (parts.schedules ?? []).slice(0, MAX_PROJECTS).map(sanitizePortableSchedule),
   }
   return JSON.stringify(archive, null, 1)
 }
@@ -77,11 +127,15 @@ export function parseBackupJson(text: string): BackupArchive {
     version: BACKUP_VERSION,
     exportedAt: typeof record.exportedAt === 'string' ? record.exportedAt : '',
     appVersion: typeof record.appVersion === 'string' ? record.appVersion : '',
-    state: typeof record.state === 'object' && record.state !== null ? (record.state as Record<string, unknown>) : {},
+    state: sanitizePortableState(record.state),
     skills,
     chats: (Array.isArray(record.chats) ? record.chats : []).slice(0, MAX_CHATS),
-    projects: (Array.isArray(record.projects) ? record.projects : []).slice(0, MAX_PROJECTS),
-    agents: (Array.isArray(record.agents) ? record.agents : []).slice(0, MAX_PROJECTS),
-    schedules: (Array.isArray(record.schedules) ? record.schedules : []).slice(0, MAX_PROJECTS),
+    projects: (Array.isArray(record.projects) ? record.projects : [])
+      .slice(0, MAX_PROJECTS)
+      .map(sanitizePortableProject),
+    agents: (Array.isArray(record.agents) ? record.agents : []).slice(0, MAX_PROJECTS).map(sanitizePortableAgent),
+    schedules: (Array.isArray(record.schedules) ? record.schedules : [])
+      .slice(0, MAX_PROJECTS)
+      .map(sanitizePortableSchedule),
   }
 }

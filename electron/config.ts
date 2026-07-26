@@ -414,7 +414,23 @@ export async function patchSettings(patch: Partial<Settings>): Promise<Settings>
 
 export async function applyRestoredState(restored: Partial<PersistedState>): Promise<void> {
   const current = await getState()
-  state = normalize({ ...current, ...restored, lastSeenVersion: current.lastSeenVersion })
+  state = normalize({
+    ...current,
+    ...restored,
+    modelFolders: current.modelFolders,
+    importedModelPaths: current.importedModelPaths,
+    selectedModelPath: current.selectedModelPath,
+    benchmarks: current.benchmarks,
+    toolPermissions: {},
+    activeProjectId: null,
+    lastSeenVersion: current.lastSeenVersion,
+    apiServer: {
+      port: current.apiServer.port,
+      ...(typeof restored.apiServer === 'object' && restored.apiServer !== null ? restored.apiServer : {}),
+      enabled: false,
+      token: current.apiServer.token,
+    },
+  })
   await saveState()
 }
 

@@ -8,6 +8,16 @@ Silicon is the primary platform and Windows/Linux support remains beta.
 
 ## Unreleased
 
+- **Public-release security hardening** — dependency advisories are resolved, Electron is current,
+  production fuses enforce ASAR integrity and disable Node/debug escape hatches, the localhost API
+  rejects DNS-rebinding/browser-origin abuse and bounds requests, and macOS updates require Apple
+  Developer Team continuity.
+- **Portable content, local authority** — backups and agent exports no longer carry API tokens,
+  remembered tool approvals, local paths, or connector assignments. Restores keep the API off,
+  reset tools to Ask, and import schedules paused for review.
+- **Safer model removal** — permanent deletion now requires a native main-process confirmation and
+  is limited to exact model files inside PowerStation-managed storage. Ollama, LM Studio, and other
+  externally owned files can be detached but not erased by PowerStation.
 - **Process-level Monitor insights** — CPU, RAM, GPU, VRAM, and Storage cards now open a live,
   read-only ranking of the applications using that resource. App groups expand into individual
   processes and PIDs, PowerStation's child processes stay grouped together, and unsupported

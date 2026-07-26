@@ -81,7 +81,8 @@ private user-data directory. Writes are atomic and the file is permissioned for 
 **Show data** reveals it in the file manager.
 
 Prompts and results stay local. A standard PowerStation backup includes job definitions but not run
-history; restored jobs whose model is missing are paused. Model weights are never included.
+history; every restored job is paused until the user reviews and enables it. Model weights are never
+included.
 
 Scheduled outputs can contain sensitive material. Review the ledger before sharing screenshots or
 support material. PowerStation's privacy-safe diagnostics exclude schedule prompts and results.

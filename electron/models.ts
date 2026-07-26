@@ -16,6 +16,7 @@ export type ModelInfo = {
 
   sizeBytes: number
   source: 'folder' | 'imported'
+  managed: boolean
 
   geometry: KvGeometry | null
 
@@ -116,7 +117,7 @@ function extractGeometry(archMeta: Record<string, unknown>): KvGeometry | null {
   return { nLayers, nKvHeads, headDim }
 }
 
-type ModelMetadata = Omit<ModelInfo, 'path' | 'fileName' | 'sizeBytes' | 'source'>
+type ModelMetadata = Omit<ModelInfo, 'path' | 'fileName' | 'sizeBytes' | 'source' | 'managed'>
 
 const metadataCache = new Map<string, { mtimeMs: number; size: number; meta: ModelMetadata }>()
 
@@ -168,6 +169,7 @@ async function readMetadataCached(filePath: string, stat: { mtimeMs: number; siz
 export async function listModels(): Promise<ModelInfo[]> {
   const state = await getState()
   const fromFolders = new Map<string, 'folder' | 'imported'>()
+  const managedRoot = path.resolve(managedModelsDir())
 
   for (const folder of state.modelFolders) {
     const found: string[] = []
@@ -191,7 +193,8 @@ export async function listModels(): Promise<ModelInfo[]> {
         totalSizeWithSplitParts(filePath, stat.size),
         readMetadataCached(filePath, stat),
       ])
-      return { path: filePath, fileName: path.basename(filePath), sizeBytes, source, ...meta } satisfies ModelInfo
+      const managed = filePath === managedRoot || filePath.startsWith(managedRoot + path.sep)
+      return { path: filePath, fileName: path.basename(filePath), sizeBytes, source, managed, ...meta } satisfies ModelInfo
     }),
   )
 
@@ -210,7 +213,9 @@ export async function getModelInfo(filePath: string): Promise<ModelInfo | null> 
     totalSizeWithSplitParts(resolved, stat.size),
     readMetadataCached(resolved, stat),
   ])
-  return { path: resolved, fileName: path.basename(resolved), sizeBytes, source: 'folder', ...meta }
+  const managedRoot = path.resolve(managedModelsDir())
+  const managed = resolved === managedRoot || resolved.startsWith(managedRoot + path.sep)
+  return { path: resolved, fileName: path.basename(resolved), sizeBytes, source: 'folder', managed, ...meta }
 }
 
 export async function importModelFile(filePath: string): Promise<void> {
@@ -298,22 +303,47 @@ export async function isKnownModelPath(filePath: string): Promise<boolean> {
 }
 
 export async function deleteModelFile(filePath: string): Promise<{ deleted: boolean; freedBytes: number; reason?: string }> {
-  const resolved = path.resolve(filePath)
-  const known = await isKnownModelPath(resolved)
-  if (!known) return { deleted: false, freedBytes: 0, reason: 'File is outside any known model folder' }
-
-  const parts = await modelFilePaths(resolved)
-  let freedBytes = 0
-  for (const part of parts) {
-    try {
-      freedBytes += (await fs.stat(part)).size
-    } catch {
-      void 0
-    }
-    await fs.rm(part, { force: true })
+  if (typeof filePath !== 'string' || !filePath) {
+    return { deleted: false, freedBytes: 0, reason: 'Invalid model path.' }
   }
-  await removeImported(resolved)
-  return { deleted: true, freedBytes }
+  const resolved = path.resolve(filePath)
+  const [candidate, listed, managedRoot] = await Promise.all([
+    fs.realpath(resolved).catch(() => null),
+    listModels(),
+    fs.realpath(managedModelsDir()).catch(() => path.resolve(managedModelsDir())),
+  ])
+  if (!candidate) return { deleted: false, freedBytes: 0, reason: 'The model file no longer exists.' }
+  const listedModel = await Promise.all(
+    listed.map(async (model) => ({
+      model,
+      real: await fs.realpath(model.path).catch(() => null),
+    })),
+  ).then((entries) => entries.find((entry) => entry.real === candidate)?.model)
+  if (!listedModel) {
+    return { deleted: false, freedBytes: 0, reason: 'The file is not an exact model currently listed by PowerStation.' }
+  }
+  if (!(candidate === managedRoot || candidate.startsWith(managedRoot + path.sep))) {
+    return {
+      deleted: false,
+      freedBytes: 0,
+      reason: 'PowerStation only deletes models it downloaded. Remove externally managed models from the list instead.',
+    }
+  }
+
+  const parts = await modelFilePaths(listedModel.path)
+  const validatedParts: Array<{ path: string; size: number }> = []
+  for (const part of parts) {
+    const partReal = await fs.realpath(part).catch(() => null)
+    if (!partReal || !(partReal === managedRoot || partReal.startsWith(managedRoot + path.sep))) {
+      return { deleted: false, freedBytes: 0, reason: 'A model part resolved outside PowerStation storage.' }
+    }
+    const stat = await fs.stat(part).catch(() => null)
+    if (!stat?.isFile()) return { deleted: false, freedBytes: 0, reason: 'A model part is no longer a regular file.' }
+    validatedParts.push({ path: part, size: stat.size })
+  }
+  for (const part of validatedParts) await fs.rm(part.path, { force: true })
+  await removeImported(listedModel.path)
+  return { deleted: true, freedBytes: validatedParts.reduce((sum, part) => sum + part.size, 0) }
 }
 
 export async function selectModel(filePath: string | null): Promise<string | null> {

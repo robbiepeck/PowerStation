@@ -57,9 +57,9 @@ Select **Export** in the agent editor to create a versioned `*.agent.json` file.
 the Agents view to add an exported definition. Import assigns a new internal ID and never overwrites an
 existing agent.
 
-Folder references and connector IDs are included. On another computer, unavailable folders return no
-retrieval results and unknown connectors remain inactive until matching resources are configured. The
-export does not include model weights or folder contents.
+Folder references and connector IDs are deliberately excluded because they grant access to local
+resources. After importing, use the native folder picker and connector controls to attach resources
+on that computer. The export does not include model weights or folder contents.
 
 Treat imported agent files as untrusted configuration. PowerStation validates them through the same
 format parser used for stored definitions.
@@ -77,8 +77,8 @@ whole. Review the proposed scope carefully, especially for file-writing or netwo
 ## Storage and backup
 
 Agents are stored as individual JSON files in the `agents/` directory under PowerStation's user-data
-directory. They can be revealed from the application, are included in normal backups, and can be
-edited outside the app if their schema is preserved.
+directory. They can be revealed from the application, are included in normal backups without local
+folder or connector authority, and can be edited outside the app if their schema is preserved.
 
 See [Projects and backup](projects.md), [Agent harness](agent-harness.md), and
 [Security](../SECURITY.md).
