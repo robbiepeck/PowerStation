@@ -8,6 +8,7 @@ import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import type { ProgressInfo, UpdateInfo } from 'electron-updater'
+import { isSafeZipEntry, parseTeamIdentifier } from './updateSecurity.js'
 
 const require = createRequire(import.meta.url)
 const { autoUpdater } = require('electron-updater') as typeof import('electron-updater')
@@ -83,7 +84,9 @@ let state: UpdateState = {
   message: updatesSupported ? undefined : unsupportedUpdateMessage,
 }
 let installAfterDownload = false
-let manualMacUpdate: { version: string; releaseName?: string; asset: ManualUpdateAsset } | null = null
+let manualMacUpdate:
+  | { version: string; releaseName?: string; asset: ManualUpdateAsset; teamIdentifier: string }
+  | null = null
 let sourceUpdateUrl: string | null = null
 
 function cleanInfo(info?: UpdateInfo): Pick<UpdateState, 'latestVersion' | 'releaseName'> {
@@ -269,6 +272,35 @@ function execFileAsync(command: string, args: string[]): Promise<void> {
   })
 }
 
+function readMacTeamIdentifier(appPath: string): Promise<string | null> {
+  return new Promise((resolve, reject) => {
+    execFile('/usr/bin/codesign', ['-dv', '--verbose=4', appPath], (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || stdout.trim() || error.message))
+        return
+      }
+      resolve(parseTeamIdentifier(`${stdout}\n${stderr}`))
+    })
+  })
+}
+
+function validateZipEntries(filePath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    execFile('/usr/bin/unzip', ['-Z1', filePath], { maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        reject(new Error(stderr.trim() || stdout.trim() || error.message))
+        return
+      }
+      const entries = stdout.split(/\r?\n/).filter(Boolean)
+      if (!entries.length || entries.length > 20_000 || entries.some((entry) => !isSafeZipEntry(entry))) {
+        reject(new Error('Downloaded update ZIP contains unsafe or excessive archive paths.'))
+        return
+      }
+      resolve()
+    })
+  })
+}
+
 async function findExtractedApp(dir: string): Promise<string> {
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const direct = entries.find((entry) => entry.isDirectory() && entry.name === 'PowerStation.app')
@@ -291,7 +323,7 @@ function currentAppBundlePath(): string {
   return path.resolve(process.execPath, '../../..')
 }
 
-async function validateExtractedApp(appPath: string): Promise<void> {
+async function validateExtractedApp(appPath: string, expectedTeamIdentifier: string): Promise<void> {
   const plistPath = path.join(appPath, 'Contents/Info.plist')
   const identifier = await new Promise<string>((resolve, reject) => {
     execFile('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', plistPath], (error, stdout, stderr) => {
@@ -307,6 +339,10 @@ async function validateExtractedApp(appPath: string): Promise<void> {
   }
   await execFileAsync('/usr/bin/codesign', ['--verify', '--deep', '--strict', appPath])
   await execFileAsync('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=4', appPath])
+  const downloadedTeamIdentifier = await readMacTeamIdentifier(appPath)
+  if (!downloadedTeamIdentifier || downloadedTeamIdentifier !== expectedTeamIdentifier) {
+    throw new Error('Downloaded update was not signed by the same Apple Developer team as the installed app.')
+  }
 }
 
 async function installExtractedAppAndRestart(
@@ -386,7 +422,8 @@ async function checkManualMacUpdate(getWindow: () => BrowserWindow | null): Prom
   }
 
   const asset = chooseMacAsset(release)
-  if (!asset) {
+  const currentTeamIdentifier = await readMacTeamIdentifier(currentAppBundlePath()).catch(() => null)
+  if (!asset || !currentTeamIdentifier) {
     manualMacUpdate = null
     sourceUpdateUrl = SOURCE_UPDATE_GUIDE
     return setState(
@@ -395,7 +432,7 @@ async function checkManualMacUpdate(getWindow: () => BrowserWindow | null): Prom
         latestVersion: version,
         releaseName: release.name,
         lastCheckedAt: Date.now(),
-        message: `PowerStation ${version} is available as a source release. Open the update guide to install it locally.`,
+        message: `PowerStation ${version} is available through the source installer. Open the update guide to install it locally.`,
         sourceOnly: true,
       },
       getWindow,
@@ -403,7 +440,7 @@ async function checkManualMacUpdate(getWindow: () => BrowserWindow | null): Prom
   }
 
   sourceUpdateUrl = null
-  manualMacUpdate = { version, releaseName: release.name, asset }
+  manualMacUpdate = { version, releaseName: release.name, asset, teamIdentifier: currentTeamIdentifier }
   return setState({ phase: 'available', latestVersion: version, releaseName: release.name, message: undefined, sourceOnly: false }, getWindow)
 }
 
@@ -439,6 +476,7 @@ async function installManualMacUpdate(getWindow: () => BrowserWindow | null): Pr
 
     let extractedApp: string
     if (update.asset.kind === 'zip') {
+      await validateZipEntries(artifactPath)
       await execFileAsync('/usr/bin/ditto', ['-x', '-k', artifactPath, extractDir])
       extractedApp = await findExtractedApp(extractDir)
     } else {
@@ -448,7 +486,7 @@ async function installManualMacUpdate(getWindow: () => BrowserWindow | null): Pr
       mounted = true
       extractedApp = await findExtractedApp(mountDir)
     }
-    await validateExtractedApp(extractedApp)
+    await validateExtractedApp(extractedApp, update.teamIdentifier)
     await installExtractedAppAndRestart(extractedApp, tempDir, mountDir, getWindow)
     handedOff = true
     return state

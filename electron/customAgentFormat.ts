@@ -83,7 +83,15 @@ export function sanitizeCustomAgent(raw: unknown, id: string): CustomAgent | nul
 }
 
 export function buildAgentShare(agent: CustomAgent): string {
-  return JSON.stringify({ format: AGENT_SHARE_FORMAT, version: AGENT_SHARE_VERSION, agent }, null, 1)
+  return JSON.stringify(
+    {
+      format: AGENT_SHARE_FORMAT,
+      version: AGENT_SHARE_VERSION,
+      agent: { ...agent, knowledge: [], mcpServerIds: [] },
+    },
+    null,
+    1,
+  )
 }
 
 export function parseAgentShare(text: string): Record<string, unknown> {
@@ -101,5 +109,5 @@ export function parseAgentShare(text: string): Record<string, unknown> {
     throw new Error(`Unsupported agent version ${String(record.version)} — this build reads version ${AGENT_SHARE_VERSION}.`)
   }
   if (typeof record.agent !== 'object' || record.agent === null) throw new Error('The agent export is missing its agent data.')
-  return record.agent as Record<string, unknown>
+  return { ...(record.agent as Record<string, unknown>), knowledge: [], mcpServerIds: [] }
 }

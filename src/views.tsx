@@ -1523,15 +1523,17 @@ export function ModelsView({
                       Remove
                     </button>
                   ) : null}
-                  <button
-                    className="ghost-button danger"
-                    type="button"
-                    title={`Delete "${model.name}" from this computer (${formatBytes(model.sizeBytes)}) to free up space`}
-                    onClick={() => onDelete(model)}
-                  >
-                    <Trash2 size={13} />
-                    Delete
-                  </button>
+                  {model.managed ? (
+                    <button
+                      className="ghost-button danger"
+                      type="button"
+                      title={`Delete "${model.name}" from this computer (${formatBytes(model.sizeBytes)}) to free up space`}
+                      onClick={() => onDelete(model)}
+                    >
+                      <Trash2 size={13} />
+                      Delete
+                    </button>
+                  ) : null}
                 </div>
               </div>
             )
@@ -2445,9 +2447,9 @@ export function SettingsView({
         <section className="settings-section">
           <h3>Backup & restore</h3>
           <p className="policy-note subtle">
-            One JSON file with your settings, tool permissions, benchmarks, skills, chats, projects, agents, and
-            scheduled-job definitions — readable, local, yours. Run history and model weights don't travel;
-            schedules whose pinned model is missing restore paused.
+            One JSON file with your portable settings, skills, chats, projects, agents, and scheduled-job definitions
+            — readable, local, yours. Run history, model weights, API keys, local paths and remembered tool approvals
+            don't travel; restored schedules stay paused until you review and enable them.
           </p>
           <div className="settings-actions">
             <button className="secondary-button compact" type="button" onClick={onExportBackup}>
@@ -2458,8 +2460,9 @@ export function SettingsView({
             </button>
           </div>
           <p className="policy-note subtle">
-            Restoring replaces settings and permissions with the backup's; chats, skills and projects overwrite items
-            with the same id, while schedules import as new jobs.
+            Restoring resets remembered tool approvals to Ask and leaves the local API off. Chats, skills and projects
+            overwrite items with the same id, schedules import as paused new jobs, and local models, folders and
+            connectors must be reattached.
           </p>
         </section>
 

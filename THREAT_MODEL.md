@@ -106,6 +106,8 @@ Controls:
 
 - `contextIsolation`, renderer sandboxing, and `nodeIntegration: false`;
 - a fixed preload API rather than general IPC access;
+- production fuses disable Run-as-Node, Node environment options, and command-line inspection, and
+  enforce ASAR integrity and ASAR-only application loading;
 - navigation away from the bundled application is blocked;
 - external link handling is allowlisted and validated;
 - rendered artifacts are sandboxed from the application.
@@ -124,6 +126,7 @@ Controls:
 - a bundled catalogue is available as an offline fallback;
 - locked npm dependencies are used for reproducible installs;
 - catalogue targets are checked by scheduled CI.
+- Dependabot and CodeQL continuously check dependency and source-code risk.
 
 Residual risk: the project ultimately trusts GitHub, Hugging Face, npm, and the dependency supply
 chain. HTTPS and schema validation do not establish that an upstream artifact is benign.
@@ -137,6 +140,8 @@ Controls:
 
 - the API is disabled by default and binds only to `127.0.0.1`;
 - every request requires a generated bearer token;
+- requests with non-loopback Host or browser Origin headers are rejected;
+- body size, generation parameters, concurrency, and execution time are bounded;
 - regenerating the token immediately revokes the previous value;
 - requests are logged and pass normal admission control.
 
@@ -154,9 +159,27 @@ Controls:
 - chat persistence can be disabled and stored chats can be deleted;
 - privacy-safe diagnostics exclude content, identifiers, secrets, and user paths;
 - scheduled result history and model weights are omitted from normal backups.
+- API tokens, local paths, local connector assignments, and remembered tool approvals are stripped
+  from both newly exported and imported backups; imported authority must be granted again.
 
 Residual risk: application data is stored in readable local files and relies on OS account controls
 and disk encryption. Backups must be protected by the user.
+
+### Application update substitution
+
+A compromised release channel may attempt to replace PowerStation with another application.
+
+Controls:
+
+- release metadata and assets are fetched only from approved GitHub HTTPS hosts;
+- bundle identifier, code-signing validity, Gatekeeper assessment, and Apple Developer Team
+  continuity are verified before a macOS update is installed;
+- ad-hoc-signed source installations remain on the source installer instead of crossing into the
+  signed in-app update channel.
+
+Residual risk: release infrastructure and platform signing credentials remain high-value supply
+chain targets. Linux packages do not have an equivalent Apple Team identity and rely on the
+documented release process and GitHub transport.
 
 ### Repair and cleanup operations
 

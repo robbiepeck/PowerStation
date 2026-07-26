@@ -34,14 +34,18 @@ export function parseChatBody(body: unknown): ParsedChatBody {
     if (role === 'system' || role === 'developer') {
       if (text) systemParts.push(text)
     } else if (role === 'assistant') {
-      turns.push({ role: 'assistant', text })
+      if (text) turns.push({ role: 'assistant', text })
+    } else if (role === 'user') {
+      if (text) turns.push({ role: 'user', text })
     } else {
-
-      turns.push({ role: 'user', text })
+      throw new Error(`Unsupported message role: ${role || '(missing)'}.`)
     }
   }
-  if (!turns.length) throw new Error('At least one user or assistant message is required.')
+  if (!turns.length || !turns.some((turn) => turn.role === 'user')) {
+    throw new Error('At least one non-empty user message is required.')
+  }
   const last = turns[turns.length - 1]
+  if (last.role !== 'user') throw new Error('The final message must be a non-empty user message.')
   const history = turns.slice(0, -1)
 
   const maxTokensRaw = record.max_completion_tokens ?? record.max_tokens
@@ -51,8 +55,14 @@ export function parseChatBody(body: unknown): ParsedChatBody {
     history,
     prompt: last.text,
     stream: record.stream === true,
-    temperature: typeof record.temperature === 'number' && Number.isFinite(record.temperature) ? record.temperature : undefined,
-    maxTokens: typeof maxTokensRaw === 'number' && Number.isFinite(maxTokensRaw) ? maxTokensRaw : undefined,
+    temperature:
+      typeof record.temperature === 'number' && Number.isFinite(record.temperature)
+        ? Math.min(2, Math.max(0, record.temperature))
+        : undefined,
+    maxTokens:
+      typeof maxTokensRaw === 'number' && Number.isFinite(maxTokensRaw)
+        ? Math.min(4096, Math.max(1, Math.round(maxTokensRaw)))
+        : undefined,
   }
 }
 
@@ -125,6 +135,6 @@ export function embeddingInputs(body: unknown): string[] {
   const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : null
   const input = record?.input
   if (typeof input === 'string') return input.length > 0 && input.length <= 50_000 ? [input] : []
-  if (Array.isArray(input)) return input.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 50_000).slice(0, 96)
+  if (Array.isArray(input)) return input.filter((s): s is string => typeof s === 'string' && s.length > 0 && s.length <= 50_000).slice(0, 64)
   return []
 }

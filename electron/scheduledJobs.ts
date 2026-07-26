@@ -435,7 +435,6 @@ export async function exportJobDefinitions(): Promise<ScheduledJob[]> {
 
 export async function importJobDefinitions(values: unknown[]): Promise<number> {
   const current = await loadStore()
-  const installedPaths = new Set((await models.listModels()).map((model) => path.resolve(model.path)))
   let count = 0
   for (const value of values.slice(0, MAX_JOBS)) {
     if (current.jobs.length >= MAX_JOBS) break
@@ -443,8 +442,7 @@ export async function importJobDefinitions(values: unknown[]): Promise<number> {
     try {
       const id = `schedule-${crypto.randomUUID()}`
       const job = sanitizeScheduledJob({ ...record, id: undefined, lastRunAt: null, lastScheduledFor: null }, id)
-      const installed = installedPaths.has(path.resolve(job.modelPath))
-      if (!installed) job.enabled = false
+      job.enabled = false
       current.jobs.push(job)
       count += 1
     } catch {

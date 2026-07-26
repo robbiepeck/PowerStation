@@ -12,6 +12,7 @@ When enabled:
 
 - the server binds to `127.0.0.1`, never `0.0.0.0`;
 - every request requires a generated bearer token;
+- non-loopback Host and browser Origin headers are rejected;
 - the default base URL is `http://127.0.0.1:4141/v1`;
 - the port can be changed in Settings;
 - requests appear in the Settings log with method, path, model, status, and duration.
@@ -64,7 +65,7 @@ Use the exact model ID returned by `GET /v1/models` when selecting an installed 
 ## Runtime behaviour
 
 - **Requested model:** when the request names an installed model, PowerStation loads and uses it.
-  An unknown model ID falls back to the model currently selected in the application.
+  An unknown model ID returns an error instead of silently using a different model.
 - **Raw inference:** application system prompts, skills, projects, agents, retrieval, and MCP tools
   are not added. The calling application controls the request messages.
 - **Serial execution:** API, chat, comparison, and scheduled inference share one worker and execute
@@ -72,11 +73,15 @@ Use the exact model ID returned by `GET /v1/models` when selecting an installed 
 - **Conversation isolation:** an API request does not modify the active in-app chat session.
 - **Admission control:** model and context requirements are checked before execution. Requests that
   do not fit return a clear error rather than loading unsafely.
+- **Resource bounds:** request bodies, embedding batches, generation tokens, concurrent requests,
+  and execution time are capped. Disconnecting a client stops its active generation.
 
 ## Security considerations
 
 Loopback binding prevents direct access from other computers, but any local process can attempt to
 connect to localhost. Keep the bearer token private and regenerate it if it may have been disclosed.
+Browser calls are accepted only from loopback HTTP(S) origins and receive an exact-origin CORS
+response; command-line and native clients may omit the `Origin` header.
 
 PowerStation does not provide TLS, remote authentication, user accounts, quotas, or public rate
 limiting. Placing a reverse proxy or tunnel in front of the server changes its threat model; the user

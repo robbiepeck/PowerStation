@@ -15,6 +15,9 @@ import { isTrustedExternalUrl, isTrustedRendererNavigation, trustedLoopbackDevUr
 
 if (process.platform === 'darwin') fixPath()
 const smokeTest = app.commandLine.hasSwitch('powerstation-smoke-test')
+if (app.isPackaged && smokeTest && !process.env.POWERSTATION_TEST_USER_DATA) {
+  throw new Error('Packaged smoke testing requires an isolated temporary user-data directory.')
+}
 if (process.env.POWERSTATION_TEST_USER_DATA && (!app.isPackaged || smokeTest)) {
   const requested = path.resolve(process.env.POWERSTATION_TEST_USER_DATA)
   const relativeToTemp = path.relative(path.resolve(os.tmpdir()), requested)
@@ -85,7 +88,7 @@ function createMainWindow() {
       }
       wasCritical = critical
     })
-    scheduleInitialUpdateCheck(() => mainWindow)
+    if (!smokeTest) scheduleInitialUpdateCheck(() => mainWindow)
   })
 
   mainWindow.on('closed', () => {
@@ -106,6 +109,44 @@ function createMainWindow() {
   mainWindow.webContents.on('will-navigate', guardNavigation)
   mainWindow.webContents.on('will-redirect', guardNavigation)
   mainWindow.webContents.on('will-attach-webview', (event) => event.preventDefault())
+
+  if (smokeTest && app.isPackaged) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      void mainWindow?.webContents
+        .executeJavaScript(`(async () => {
+          const deadline = Date.now() + 30000
+          while (!document.querySelector('button[aria-label="PowerStation home"]')) {
+            if (Date.now() > deadline) throw new Error('The packaged renderer did not become ready.')
+            await new Promise((resolve) => setTimeout(resolve, 100))
+          }
+          const bridge = globalThis.powerStation
+          if (!bridge?.schedules?.get || !bridge?.settings?.update) {
+            throw new Error('The packaged preload bridge is incomplete.')
+          }
+          const schedules = await bridge.schedules.get()
+          if (!Array.isArray(schedules.jobs) || !Array.isArray(schedules.runs)) {
+            throw new Error('The packaged scheduler IPC returned an invalid snapshot.')
+          }
+          const settings = await bridge.settings.update({ saveChats: false })
+          return {
+            title: document.title,
+            settingsPersisted: settings.saveChats === false,
+            primaryNavigationReady: Boolean(document.querySelector('button[aria-label="PowerStation home"]')),
+          }
+        })()`)
+        .then((result: { title?: string; settingsPersisted?: boolean; primaryNavigationReady?: boolean }) => {
+          if (result.title !== 'PowerStation' || !result.settingsPersisted || !result.primaryNavigationReady) {
+            throw new Error('The packaged renderer health check returned an invalid result.')
+          }
+          console.log('POWERSTATION_PACKAGED_SMOKE_OK')
+          app.exit(0)
+        })
+        .catch((error) => {
+          console.error(`POWERSTATION_PACKAGED_SMOKE_FAILED: ${error instanceof Error ? error.message : String(error)}`)
+          app.exit(1)
+        })
+    })
+  }
 
   if (devServerUrl) {
     void mainWindow.loadURL(devServerUrl)

@@ -15,6 +15,7 @@ import {
   modelsList,
   parseChatBody,
 } from './apiFormat.js'
+import { isTrustedApiBrowserRequest, isTrustedApiHostHeader, trustedApiOrigin } from './apiSecurity.js'
 
 export type ApiRequestLog = {
   id: number
@@ -97,8 +98,14 @@ function record(entry: Omit<ApiRequestLog, 'id' | 'timestamp'>): void {
   logListener?.(full)
 }
 
-function cors(res: http.ServerResponse): void {
-  res.setHeader('Access-Control-Allow-Origin', '*')
+function setResponseSecurityHeaders(req: http.IncomingMessage, res: http.ServerResponse): void {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  const origin = trustedApiOrigin(req.headers.origin)
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Vary', 'Origin')
+  }
   res.setHeader('Access-Control-Allow-Headers', 'authorization, content-type')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
 }
@@ -136,6 +143,7 @@ async function resolveModelPath(requested: string | null): Promise<{ path: strin
       return fn === want || fn.replace(/\.gguf$/, '') === want || m.name.toLowerCase() === want
     })
     if (match) return { path: match.path, id: match.fileName }
+    return null
   }
   const state = await getState()
   const selected = state.selectedModelPath
@@ -163,7 +171,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
   }
 
   const state = await getState()
-  const requestId = `api-${nextRequestId}`
+  const requestId = `api-${crypto.randomBytes(12).toString('hex')}`
   const id = `chatcmpl-${crypto.randomBytes(8).toString('hex')}`
   const created = Math.floor(Date.now() / 1000)
   const chatOptions = {
@@ -178,6 +186,15 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
     autoCompact: false,
     isolated: true,
   }
+  let generationActive = true
+  const stopOnDisconnect = () => {
+    if (generationActive) llm.stopChat(requestId)
+  }
+  const finishGeneration = () => {
+    generationActive = false
+    res.off('close', stopOnDisconnect)
+  }
+  res.once('close', stopOnDisconnect)
 
   if (parsed.stream) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' })
@@ -190,6 +207,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
         onToolCall: () => {},
         onCompacted: () => {},
       })
+      finishGeneration()
       void impact.recordGeneration({
         source: 'api',
         modelPath: resolved.path,
@@ -202,6 +220,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
       res.end()
       return { status: 200, model: resolved.id }
     } catch (error) {
+      finishGeneration()
       const message = error instanceof Error ? error.message : String(error)
       res.write(`data: ${JSON.stringify({ error: { message, type: 'server_error' } })}\n\n`)
       res.write('data: [DONE]\n\n')
@@ -212,6 +231,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
 
   try {
     const result = await llm.chat({ ...chatOptions, onToken: () => {}, onStatus: () => {}, onToolCall: () => {}, onCompacted: () => {} })
+    finishGeneration()
     void impact.recordGeneration({
       source: 'api',
       modelPath: resolved.path,
@@ -222,6 +242,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
     sendJson(res, 200, chatCompletion({ id, created, model: resolved.id, content: result.text, promptText: parsed.prompt }))
     return { status: 200, model: resolved.id }
   } catch (error) {
+    finishGeneration()
     const message = error instanceof Error ? error.message : String(error)
     sendJson(res, 500, apiError(message, 'server_error'))
     return { status: 500, model: resolved.id, error: message }
@@ -232,7 +253,17 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
   const started = Date.now()
   const method = req.method ?? 'GET'
   const path = (req.url ?? '').split('?')[0]
-  cors(res)
+  setResponseSecurityHeaders(req, res)
+  if (!isTrustedApiHostHeader(req.headers.host)) {
+    sendJson(res, 421, apiError('The local API accepts only loopback Host headers.', 'invalid_host'))
+    record({ method, path, model: null, status: 421, durationMs: Date.now() - started, error: 'invalid host' })
+    return
+  }
+  if (!isTrustedApiBrowserRequest(req.headers.origin)) {
+    sendJson(res, 403, apiError('Browser requests must come from a loopback origin.', 'origin_forbidden'))
+    record({ method, path, model: null, status: 403, durationMs: Date.now() - started, error: 'untrusted origin' })
+    return
+  }
   if (method === 'OPTIONS') {
     res.writeHead(204)
     res.end()
@@ -259,13 +290,29 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
       return
     }
     if (method === 'POST' && path === '/v1/chat/completions') {
-      const body = JSON.parse((await readBody(req)) || '{}')
+      let body: unknown
+      try {
+        body = JSON.parse((await readBody(req)) || '{}')
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error
+        sendJson(res, 400, apiError('Request body is not valid JSON.'))
+        record({ method, path, model: null, status: 400, durationMs: Date.now() - started, error: 'invalid JSON' })
+        return
+      }
       const outcome = await handleChat(res, body)
       record({ method, path, model: outcome.model, status: outcome.status, durationMs: Date.now() - started, error: outcome.error })
       return
     }
     if (method === 'POST' && path === '/v1/embeddings') {
-      const body = JSON.parse((await readBody(req)) || '{}')
+      let body: unknown
+      try {
+        body = JSON.parse((await readBody(req)) || '{}')
+      } catch (error) {
+        if (!(error instanceof SyntaxError)) throw error
+        sendJson(res, 400, apiError('Request body is not valid JSON.'))
+        record({ method, path, model: null, status: 400, durationMs: Date.now() - started, error: 'invalid JSON' })
+        return
+      }
       const inputs = embeddingInputs(body)
       if (!inputs.length) {
         sendJson(res, 400, apiError('`input` must be a non-empty string or array of strings.'))
@@ -311,13 +358,21 @@ export async function startApiServer(): Promise<void> {
     server = null
     statusListener?.()
   })
-  await new Promise<void>((resolve) => {
-
-    server!.listen(apiServer.port, '127.0.0.1', () => {
+  const startingServer = server
+  await new Promise<void>((resolve, reject) => {
+    const rejectStartup = (error: Error) => {
+      startingServer.off('listening', resolveStartup)
+      reject(error)
+    }
+    const resolveStartup = () => {
+      startingServer.off('error', rejectStartup)
       running = true
       statusListener?.()
       resolve()
-    })
+    }
+    startingServer.once('error', rejectStartup)
+    startingServer.once('listening', resolveStartup)
+    startingServer.listen(apiServer.port, '127.0.0.1')
   })
 }
 

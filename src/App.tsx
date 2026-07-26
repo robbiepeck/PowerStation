@@ -1218,16 +1218,10 @@ function App() {
 
   const handleDelete = useCallback(
     async (model: ModelInfo) => {
-      const confirmed = window.confirm(
-        `Delete "${model.name}" from this computer?\n\nThis permanently removes ${formatBytes(model.sizeBytes)} (${model.fileName}${
-          model.fileName.match(/-00001-of-/i) ? ' and all its parts' : ''
-        }) from disk to free up space. This cannot be undone.`,
-      )
-      if (!confirmed) return
       const wasSelected = model.path === selectedPath
       const result = await bridge.models.deleteFile(model.path)
       if (!result.deleted) {
-        window.alert(result.reason ?? 'The model file could not be deleted.')
+        if (result.reason !== 'Deletion cancelled.') window.alert(result.reason ?? 'The model file could not be deleted.')
         return
       }
 

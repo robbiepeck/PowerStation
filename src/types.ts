@@ -106,6 +106,7 @@ export type ModelInfo = {
 
   sizeBytes: number
   source: 'folder' | 'imported'
+  managed: boolean
   geometry: KvGeometry | null
   templateSupportsTools: boolean | null
 

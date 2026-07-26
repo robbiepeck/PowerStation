@@ -329,9 +329,31 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     }
     return replaceActiveModel(filePath)
   })
-  handle('models:remove', (_event, filePath: string) => models.removeImported(filePath))
+  handle('models:remove', async (_event, filePath: string) => {
+    if (typeof filePath !== 'string' || !(await models.isKnownModelPath(filePath))) {
+      throw new Error('Unknown model path.')
+    }
+    return models.removeImported(filePath)
+  })
   handle('models:deleteFile', async (_event, filePath: string) => {
-
+    if (typeof filePath !== 'string') return { deleted: false, freedBytes: 0, reason: 'Invalid model path.' }
+    const info = (await models.listModels()).find((model) => path.resolve(model.path) === path.resolve(filePath))
+    if (!info) return { deleted: false, freedBytes: 0, reason: 'Unknown model path.' }
+    if (!info.managed) {
+      return {
+        deleted: false,
+        freedBytes: 0,
+        reason: 'PowerStation only deletes models it downloaded. Remove externally managed models from the list instead.',
+      }
+    }
+    const confirmation = await showSecurityPrompt(getWindow(), {
+      buttons: ['Cancel', 'Delete model'],
+      defaultId: 0,
+      cancelId: 0,
+      message: `Permanently delete “${info.name}”?`,
+      detail: `${info.fileName}${info.fileName.match(/-00001-of-/i) ? ' and all of its parts' : ''} will be removed from PowerStation storage, freeing about ${(info.sizeBytes / 1e9).toFixed(2)} GB. This cannot be undone.`,
+    })
+    if (confirmation !== 1) return { deleted: false, freedBytes: 0, reason: 'Deletion cancelled.' }
     const loaded = llm.getLoadedPath()
     if (loaded && path.resolve(loaded) === path.resolve(filePath)) await llm.unloadModel().catch(() => undefined)
     return models.deleteModelFile(filePath)
@@ -631,11 +653,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         cancelId: 1,
         message: 'Restore from this backup?',
         detail:
-          'Settings and permissions will be replaced by the backup. Chats, skills and projects overwrite matching items; scheduled jobs are imported as new jobs. Model files do not travel — schedules whose models are missing are restored paused.',
+          'Portable settings will be restored, but tool approvals reset to Ask, the local API stays off, and imported schedules stay paused for review. Chats, skills and projects overwrite matching items. Local model, folder and connector access must be reattached.',
       })
       if (confirm.response !== 0) return null
     const filePath = picked.filePaths[0]
     const summary = await backup.restoreBackup(filePath)
+    await apiServer.syncApiServer()
     await reconcileMcpServers()
     return summary
   })
