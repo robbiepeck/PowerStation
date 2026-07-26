@@ -81,9 +81,14 @@ function cleanStringArray(value: unknown, maxItems: number, maxLength: number): 
 }
 
 async function readJsonFileCapped(filePath: string, maxBytes: number): Promise<unknown> {
-  const stat = await fs.stat(filePath)
-  if (!stat.isFile() || stat.size > maxBytes) throw new Error('Catalog file is too large.')
-  return JSON.parse(await fs.readFile(filePath, 'utf8')) as unknown
+  const handle = await fs.open(filePath, 'r')
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile() || stat.size > maxBytes) throw new Error('Catalog file is too large.')
+    return JSON.parse(await handle.readFile('utf8')) as unknown
+  } finally {
+    await handle.close()
+  }
 }
 
 async function fetchJsonCapped(url: string, maxBytes: number): Promise<unknown> {

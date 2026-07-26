@@ -73,9 +73,16 @@ export async function exportBackup(filePath: string): Promise<BackupSummary> {
 }
 
 export async function restoreBackup(filePath: string): Promise<BackupSummary> {
-  const stat = await fs.stat(filePath)
-  if (!stat.isFile() || stat.size > 300 * 1024 * 1024) throw new Error('Backup file is too large.')
-  const archive = parseBackupJson(await fs.readFile(filePath, 'utf8'))
+  const handle = await fs.open(filePath, 'r')
+  let backupJson: string
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile() || stat.size > 300 * 1024 * 1024) throw new Error('Backup file is too large.')
+    backupJson = await handle.readFile('utf8')
+  } finally {
+    await handle.close()
+  }
+  const archive = parseBackupJson(backupJson)
 
   let skillCount = 0
   await fs.mkdir(skillsDir(), { recursive: true, mode: 0o700 })

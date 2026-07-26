@@ -86,14 +86,19 @@ async function collectFiles(folder: string): Promise<string[]> {
 }
 
 async function readIndex(folderId: string): Promise<StoredIndex | null> {
+  let handle: import('node:fs/promises').FileHandle | null = null
   try {
     const filePath = path.join(ragDir(), `${folderId}.json`)
-    const stat = await fs.stat(filePath)
+    handle = await fs.open(filePath, 'r')
+    const stat = await handle.stat()
+    if (!stat.isFile()) return null
     if (stat.size > MAX_INDEX_BYTES) return null
-    const raw = await fs.readFile(filePath, 'utf8')
+    const raw = await handle.readFile('utf8')
     return JSON.parse(raw) as StoredIndex
   } catch {
     return null
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }
 

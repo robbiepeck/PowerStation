@@ -25,10 +25,8 @@ export function isSupportedFile(filePath: string): boolean {
   return ext === '.pdf' || TEXT_EXTENSIONS.has(ext)
 }
 
-async function extractPdfText(filePath: string): Promise<string> {
-
+async function extractPdfText(data: Uint8Array): Promise<string> {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
-  const data = new Uint8Array(await fs.readFile(filePath))
   const task = getDocument({ data, useSystemFonts: true })
   const doc = await task.promise
   try {
@@ -56,21 +54,26 @@ export async function extractFile(filePath: string): Promise<ExtractedFile> {
   if (!isSupportedFile(resolved)) {
     throw new Error(`Unsupported file type: ${ext || 'no extension'}. Text, code, markdown and PDF files work.`)
   }
-  const stat = await fs.stat(resolved)
-  if (!stat.isFile()) throw new Error('Not a file.')
-
+  const handle = await fs.open(resolved, 'r')
   let text: string
-  if (ext === '.pdf') {
-    if (stat.size > MAX_PDF_BYTES) throw new Error('PDF is too large (maximum 64 MB).')
-    text = await extractPdfText(resolved)
-    if (!text.trim()) {
-      throw new Error('No extractable text in this PDF — it may be a scan without OCR.')
+  try {
+    const stat = await handle.stat()
+    if (!stat.isFile()) throw new Error('Not a file.')
+
+    if (ext === '.pdf') {
+      if (stat.size > MAX_PDF_BYTES) throw new Error('PDF is too large (maximum 64 MB).')
+      text = await extractPdfText(new Uint8Array(await handle.readFile()))
+      if (!text.trim()) {
+        throw new Error('No extractable text in this PDF — it may be a scan without OCR.')
+      }
+    } else {
+      if (stat.size > MAX_TEXT_BYTES) {
+        throw new Error(`File is too large (${(stat.size / 1e6).toFixed(1)} MB). The limit is 2 MB of text.`)
+      }
+      text = await handle.readFile('utf8')
     }
-  } else {
-    if (stat.size > MAX_TEXT_BYTES) {
-      throw new Error(`File is too large (${(stat.size / 1e6).toFixed(1)} MB). The limit is 2 MB of text.`)
-    }
-    text = await fs.readFile(resolved, 'utf8')
+  } finally {
+    await handle.close()
   }
 
   const truncated = text.length > MAX_CHARS

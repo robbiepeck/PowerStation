@@ -10,7 +10,15 @@ updates:
     open-pull-requests-limit: 5
     labels:
       - dependencies
-      - security
+    ignore:
+      # Keep compiler and Node types aligned with the versions supported by
+      # typescript-eslint and Electron. Major upgrades are reviewed together.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
+      - dependency-name: '@types/node'
+        update-types:
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: /
@@ -22,4 +30,3 @@ updates:
     open-pull-requests-limit: 3
     labels:
       - dependencies
-      - security
