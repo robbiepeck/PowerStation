@@ -95,7 +95,7 @@ async function checkConnectors() {
       failures.push(`**${connector.id}** must pin an exact npm version: ${connector.npmPackage}`)
       continue
     }
-    const encoded = connector.npmPackage.replace('/', '%2F')
+    const encoded = encodeURIComponent(connector.npmPackage)
     try {
       const res = await fetch(`https://registry.npmjs.org/${encoded}/latest`, {
         signal: AbortSignal.timeout(TIMEOUT_MS),

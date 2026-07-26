@@ -19,13 +19,17 @@ export type ToolPreview =
 const MAX_PREVIEW_BYTES = 200_000
 
 async function readTextIfSmall(filePath: string): Promise<{ text: string; note: string | null } | null> {
+  let handle: import('node:fs/promises').FileHandle | null = null
   try {
-    const stat = await fs.stat(filePath)
+    handle = await fs.open(filePath, 'r')
+    const stat = await handle.stat()
     if (!stat.isFile()) return null
     if (stat.size > MAX_PREVIEW_BYTES) return { text: '', note: 'File too large to preview — showing the new content only.' }
-    return { text: await fs.readFile(filePath, 'utf8'), note: null }
+    return { text: await handle.readFile('utf8'), note: null }
   } catch {
     return null
+  } finally {
+    await handle?.close().catch(() => undefined)
   }
 }
 

@@ -18,6 +18,10 @@ Silicon is the primary platform and Windows/Linux support remains beta.
 - **Safer model removal** — permanent deletion now requires a native main-process confirmation and
   is limited to exact model files inside PowerStation-managed storage. Ollama, LM Studio, and other
   externally owned files can be detached but not erased by PowerStation.
+- **Safer local file handling** — backup restore, catalogue loading, document extraction, retrieval
+  indexes, and tool previews now validate and read through one open file handle, preventing a file
+  or link from being swapped between the size/type check and the read. Local API failures no longer
+  return internal runtime details to callers.
 - **Process-level Monitor insights** — CPU, RAM, GPU, VRAM, and Storage cards now open a live,
   read-only ranking of the applications using that resource. App groups expand into individual
   processes and PIDs, PowerStation's child processes stay grouped together, and unsupported

@@ -222,7 +222,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
     } catch (error) {
       finishGeneration()
       const message = error instanceof Error ? error.message : String(error)
-      res.write(`data: ${JSON.stringify({ error: { message, type: 'server_error' } })}\n\n`)
+      res.write(`data: ${JSON.stringify({ error: { message: 'Generation failed.', type: 'server_error' } })}\n\n`)
       res.write('data: [DONE]\n\n')
       res.end()
       return { status: 500, model: resolved.id, error: message }
@@ -244,7 +244,7 @@ async function handleChat(res: http.ServerResponse, body: unknown): Promise<{ st
   } catch (error) {
     finishGeneration()
     const message = error instanceof Error ? error.message : String(error)
-    sendJson(res, 500, apiError(message, 'server_error'))
+    sendJson(res, 500, apiError('Generation failed.', 'server_error'))
     return { status: 500, model: resolved.id, error: message }
   }
 }
@@ -328,7 +328,7 @@ async function handleRequest(req: http.IncomingMessage, res: http.ServerResponse
     record({ method, path, model: null, status: 404, durationMs: Date.now() - started })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (!res.headersSent) sendJson(res, 500, apiError(message, 'server_error'))
+    if (!res.headersSent) sendJson(res, 500, apiError('The request could not be completed.', 'server_error'))
     else res.end()
     record({ method, path, model: null, status: 500, durationMs: Date.now() - started, error: message })
   }
