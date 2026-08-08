@@ -45,7 +45,7 @@
     "fix-path": "^5.0.0",
     "lucide-react": "^1.17.0",
     "node-llama-cpp": "^3.19.0",
-    "pdfjs-dist": "^6.1.200",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "systeminformation": "^5.31.16"
